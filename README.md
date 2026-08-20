@@ -121,3 +121,5 @@ npm run lint
 ## License
 
 MIT
+
+<!-- deployment verified 2026-08-20 -->
