@@ -30,3 +30,4 @@ node_modules/
 
 # Ad-hoc local backup snapshots
 _backup_*/
+.vercel

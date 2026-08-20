@@ -123,3 +123,5 @@ npm run lint
 MIT
 
 <!-- deployment verified 2026-08-20 -->
+
+<!-- vercel auto-deploy retest -->
