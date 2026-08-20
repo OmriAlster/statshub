@@ -1,0 +1,36 @@
+name: Deploy frontend to Vercel
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - "frontend/**"
+      - ".github/workflows/deploy-frontend.yml"
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: team_DDmNq5PSmnKNgzTQ3N2WeFcy
+      VERCEL_PROJECT_ID: prj_c1DjGech4pT6pyYntuxQNmZqHPIj
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Vercel CLI
+        run: npm install --global vercel
+
+      - name: Pull Vercel project settings
+        run: vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
+
+      - name: Build
+        run: vercel build --prod --token="$VERCEL_TOKEN"
+
+      - name: Deploy prebuilt output
+        id: deploy
+        run: |
+          url=$(vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN")
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+
+      - name: Point statshub-app.vercel.app at the new deployment
+        run: vercel alias set "${{ steps.deploy.outputs.url }}" statshub-app.vercel.app --token="$VERCEL_TOKEN"
