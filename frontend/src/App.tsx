@@ -5,6 +5,7 @@ import { useAuth } from './auth/AuthContext'
 import IconSprite from './components/IconSprite'
 import Layout from './components/Layout'
 import { LiveGameProvider } from './live/LiveGameContext'
+import { Analytics } from '@vercel/analytics/react'
 
 const Dashboard = lazy(() => import('./pages/Dashboard'))
 const Stats = lazy(() => import('./pages/Stats'))
@@ -35,6 +36,7 @@ function App() {
   return (
     <LiveGameProvider>
     <IconSprite />
+    <Analytics />
     <Suspense fallback={<div className="app-loading">Loading...</div>}>
     <Routes>
       <Route path="/login" element={<Login />} />
