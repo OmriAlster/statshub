@@ -1,12 +1,16 @@
 # syntax=docker/dockerfile:1
+#
+# Built with the repo root as the Docker context (see railway.json's
+# dockerfilePath) so Railway's GitHub-connected auto-deploys work from this
+# monorepo without a separate "root directory" setting.
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
-COPY StatsHub.Api.csproj .
-RUN dotnet restore StatsHub.Api.csproj
+COPY backend/StatsHub.Api/StatsHub.Api.csproj backend/StatsHub.Api/
+RUN dotnet restore backend/StatsHub.Api/StatsHub.Api.csproj
 
-COPY . .
-RUN dotnet publish StatsHub.Api.csproj -c Release -o /app --no-restore
+COPY backend/StatsHub.Api/ backend/StatsHub.Api/
+RUN dotnet publish backend/StatsHub.Api/StatsHub.Api.csproj -c Release -o /app --no-restore
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 WORKDIR /app
