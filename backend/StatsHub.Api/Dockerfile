@@ -14,6 +14,15 @@ RUN dotnet publish backend/StatsHub.Api/StatsHub.Api.csproj -c Release -o /app -
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 WORKDIR /app
+
+# Npgsql (the Postgres driver) dynamically loads libgssapi during connection
+# negotiation even for password auth; the slim aspnet image doesn't ship it,
+# which surfaces as random 500s only on requests that open a fresh pooled
+# connection.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libgssapi-krb5-2 \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY --from=build /app .
 
 ENV ASPNETCORE_ENVIRONMENT=Production
