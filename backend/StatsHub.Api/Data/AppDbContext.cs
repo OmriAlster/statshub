@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using StatsHub.Api.Models;
 
 namespace StatsHub.Api.Data
@@ -17,6 +18,33 @@ namespace StatsHub.Api.Data
         public DbSet<GameStats> GameStats { get; set; }
         public DbSet<Shot> Shots { get; set; }
         public DbSet<ShareLink> ShareLinks { get; set; }
+
+        // SQLite never validated DateTime.Kind, so call sites across the app
+        // freely mix DateTime.UtcNow with Kind-less values (new DateTime(...),
+        // or dates deserialized from client JSON without a timezone). Postgres's
+        // timestamptz columns reject anything that isn't explicitly Utc, so every
+        // DateTime is normalized to Utc here rather than auditing every call site.
+        protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
+        {
+            configurationBuilder.Properties<DateTime>().HaveConversion<UtcDateTimeConverter>();
+            configurationBuilder.Properties<DateTime?>().HaveConversion<UtcNullableDateTimeConverter>();
+        }
+
+        private class UtcDateTimeConverter : ValueConverter<DateTime, DateTime>
+        {
+            public UtcDateTimeConverter() : base(
+                toProvider => DateTime.SpecifyKind(toProvider, DateTimeKind.Utc),
+                fromProvider => DateTime.SpecifyKind(fromProvider, DateTimeKind.Utc))
+            { }
+        }
+
+        private class UtcNullableDateTimeConverter : ValueConverter<DateTime?, DateTime?>
+        {
+            public UtcNullableDateTimeConverter() : base(
+                toProvider => toProvider.HasValue ? DateTime.SpecifyKind(toProvider.Value, DateTimeKind.Utc) : toProvider,
+                fromProvider => fromProvider.HasValue ? DateTime.SpecifyKind(fromProvider.Value, DateTimeKind.Utc) : fromProvider)
+            { }
+        }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
