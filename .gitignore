@@ -1,0 +1,32 @@
+.vs/
+bin/
+obj/
+*.user
+
+# IDE
+.vscode/settings.json
+.idea/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Logs
+logs/
+*.log
+
+# Local SQLite database
+*.db
+*.db-shm
+*.db-wal
+
+# Node
+node_modules/
+*.tsbuildinfo
+
+# Claude Code local config (skills, session state) - not app code
+.claude/
+
+# Ad-hoc local backup snapshots
+_backup_*/
