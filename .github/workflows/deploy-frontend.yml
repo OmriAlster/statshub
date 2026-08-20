@@ -2,7 +2,7 @@ name: Deploy frontend to Vercel
 
 on:
   push:
-    branches: [master]
+    branches: [master, develop]
     paths:
       - "frontend/**"
       - ".github/workflows/deploy-frontend.yml"
@@ -20,11 +20,21 @@ jobs:
       - name: Install Vercel CLI
         run: npm install --global vercel
 
-      - name: Deploy to production
+      # master -> production deployment; develop -> preview deployment.
+      # Both get a stable alias so the address never changes between pushes.
+      - name: Deploy
         id: deploy
         run: |
-          url=$(vercel deploy --prod --yes --token="$VERCEL_TOKEN")
+          if [ "${{ github.ref_name }}" = "master" ]; then
+            flag="--prod"
+            alias="statshub-app.vercel.app"
+          else
+            flag=""
+            alias="statshub-dev.vercel.app"
+          fi
+          url=$(vercel deploy $flag --yes --token="$VERCEL_TOKEN")
           echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "alias=$alias" >> "$GITHUB_OUTPUT"
 
-      - name: Point statshub-app.vercel.app at the new deployment
-        run: vercel alias set "${{ steps.deploy.outputs.url }}" statshub-app.vercel.app --token="$VERCEL_TOKEN"
+      - name: Point the stable alias at the new deployment
+        run: vercel alias set "${{ steps.deploy.outputs.url }}" "${{ steps.deploy.outputs.alias }}" --token="$VERCEL_TOKEN"
