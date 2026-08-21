@@ -157,6 +157,9 @@ function GamesTab({ player }: { player: PlayerDto }) {
                 <th>Type</th>
                 <th className="num">Score</th>
                 <th className="num">Pts</th>
+                <th className="num col-optional">2PT</th>
+                <th className="num col-optional">3PT</th>
+                <th className="num col-optional">FT</th>
                 <th className="num col-optional">Reb</th>
                 <th className="num col-optional">Ast</th>
                 <th className="num col-optional">Stl</th>
@@ -187,6 +190,9 @@ function GamesTab({ player }: { player: PlayerDto }) {
                           {game.teamScore}&ndash;{game.opponentScore}
                         </td>
                         <td className="num">{stats?.totalPoints ?? '-'}</td>
+                        <td className="num col-optional">{stats ? `${stats.fieldGoalsMade}/${stats.fieldGoalsAttempted}` : '-'}</td>
+                        <td className="num col-optional">{stats ? `${stats.threePointersMade}/${stats.threePointersAttempted}` : '-'}</td>
+                        <td className="num col-optional">{stats ? `${stats.freeThrowsMade}/${stats.freeThrowsAttempted}` : '-'}</td>
                         <td className="num col-optional">{stats?.totalRebounds ?? '-'}</td>
                         <td className="num col-optional">{stats?.assists ?? '-'}</td>
                         <td className="num col-optional">{stats?.steals ?? '-'}</td>
@@ -194,7 +200,7 @@ function GamesTab({ player }: { player: PlayerDto }) {
                         <td className="num col-optional">{stats?.turnovers ?? '-'}</td>
                       </>
                     ) : (
-                      <td className="games-table-status" colSpan={7}><GameStatusBadge status={game.status} /></td>
+                      <td className="games-table-status" colSpan={10}><GameStatusBadge status={game.status} /></td>
                     )}
                   </tr>
                 )

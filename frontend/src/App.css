@@ -2781,6 +2781,10 @@ select:focus {
   }
 
   .percentage-bar {
+    /* Reset the row layout's flex:1 (flex-basis:0%) - in this column
+       layout it collapses the bar's height toward 0 since there's no
+       extra vertical space to grow into. Keep the explicit height instead. */
+    flex: none;
     width: 100%;
   }
 }
