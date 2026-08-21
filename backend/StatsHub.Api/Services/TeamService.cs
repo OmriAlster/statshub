@@ -10,8 +10,9 @@ namespace StatsHub.Api.Services
         Task<List<TeamDto>> GetMyTeamsAsync(int userId);
         Task<TeamDto> CreateTeamAsync(int userId, CreateTeamDto dto);
         Task<bool> DeleteTeamAsync(int teamId, int userId);
-        Task<bool> AddPlayerToTeamAsync(int teamId, int playerId, int userId);
+        Task<bool> AddPlayerToTeamAsync(int teamId, int playerId, int userId, int? jerseyNumber);
         Task<bool> RemovePlayerFromTeamAsync(int teamId, int playerId, int userId);
+        Task<bool> UpdatePlayerTeamJerseyAsync(int teamId, int playerId, int jerseyNumber, int userId);
     }
 
     public class TeamService : ITeamService
@@ -81,7 +82,7 @@ namespace StatsHub.Api.Services
                 ));
         }
 
-        public async Task<bool> AddPlayerToTeamAsync(int teamId, int playerId, int userId)
+        public async Task<bool> AddPlayerToTeamAsync(int teamId, int playerId, int userId, int? jerseyNumber)
         {
             if (!await CanManageTeamAsync(teamId, userId)) return false;
 
@@ -95,6 +96,7 @@ namespace StatsHub.Api.Services
             {
                 TeamId = teamId,
                 PlayerId = playerId,
+                JerseyNumber = jerseyNumber ?? player.JerseyNumber,
                 CreatedAt = DateTime.UtcNow
             });
             await _context.SaveChangesAsync();
@@ -109,6 +111,18 @@ namespace StatsHub.Api.Services
             if (membership == null) return false;
 
             _context.PlayerTeams.Remove(membership);
+            await _context.SaveChangesAsync();
+            return true;
+        }
+
+        public async Task<bool> UpdatePlayerTeamJerseyAsync(int teamId, int playerId, int jerseyNumber, int userId)
+        {
+            if (!await CanManageTeamAsync(teamId, userId)) return false;
+
+            var membership = await _context.PlayerTeams.FirstOrDefaultAsync(pt => pt.TeamId == teamId && pt.PlayerId == playerId);
+            if (membership == null) return false;
+
+            membership.JerseyNumber = jerseyNumber;
             await _context.SaveChangesAsync();
             return true;
         }

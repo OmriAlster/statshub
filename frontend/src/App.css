@@ -742,6 +742,23 @@ select:focus {
   font-style: italic;
 }
 
+.team-chip-jersey {
+  width: 2.6rem;
+  background: rgba(63, 183, 255, 0.12);
+  border: 1px solid rgba(63, 183, 255, 0.3);
+  color: var(--color-info);
+  border-radius: var(--radius-sm);
+  font-size: 0.78rem;
+  font-weight: 700;
+  padding: 0.15rem 0.3rem;
+  text-align: center;
+}
+
+.team-chip-jersey:focus {
+  outline: none;
+  border-color: var(--color-info);
+}
+
 .add-team-btn {
   background: none;
   border: 1.5px dashed var(--color-border-strong);

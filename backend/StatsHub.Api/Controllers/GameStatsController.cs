@@ -43,6 +43,10 @@ namespace StatsHub.Api.Controllers
             {
                 return Forbid(ex.Message);
             }
+            catch (InvalidOperationException ex)
+            {
+                return Conflict(new { message = ex.Message });
+            }
         }
 
         [HttpPut("{id}")]

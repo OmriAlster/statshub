@@ -29,7 +29,9 @@ export default function PlayerProfile() {
 
   const [teamPickerOpenFor, setTeamPickerOpenFor] = useState<number | null>(null)
   const [newTeamName, setNewTeamName] = useState('')
+  const [pickerJerseyNumber, setPickerJerseyNumber] = useState('')
   const [teamBusy, setTeamBusy] = useState(false)
+  const [jerseyEdits, setJerseyEdits] = useState<Record<string, string>>({})
 
   useEffect(() => {
     load()
@@ -122,11 +124,11 @@ export default function PlayerProfile() {
     }
   }
 
-  const attachTeamToPlayer = (playerId: number, team: TeamDto) => {
+  const attachTeamToPlayer = (playerId: number, team: TeamDto, jerseyNumber?: number) => {
     setPlayers((prev) =>
       prev.map((p) =>
         p.id === playerId && !(p.teams ?? []).some((t) => t.id === team.id)
-          ? { ...p, teams: [...(p.teams ?? []), team] }
+          ? { ...p, teams: [...(p.teams ?? []), { ...team, jerseyNumber: jerseyNumber ?? team.jerseyNumber ?? p.jerseyNumber }] }
           : p
       )
     )
@@ -135,11 +137,13 @@ export default function PlayerProfile() {
   const addExistingTeam = async (playerId: number, teamId: number) => {
     const team = allTeams.find((t) => t.id === teamId)
     if (!team) return
+    const jerseyNumber = pickerJerseyNumber.trim() === '' ? undefined : Number(pickerJerseyNumber)
     setTeamBusy(true)
     try {
-      await api.post(`/teams/${teamId}/players/${playerId}`)
-      attachTeamToPlayer(playerId, team)
+      await api.post(`/teams/${teamId}/players/${playerId}`, { jerseyNumber })
+      attachTeamToPlayer(playerId, team, jerseyNumber)
       setTeamPickerOpenFor(null)
+      setPickerJerseyNumber('')
     } catch {
       setError('Could not add player to that team.')
     } finally {
@@ -149,13 +153,15 @@ export default function PlayerProfile() {
 
   const createAndAddTeam = async (playerId: number) => {
     if (!newTeamName.trim()) return
+    const jerseyNumber = pickerJerseyNumber.trim() === '' ? undefined : Number(pickerJerseyNumber)
     setTeamBusy(true)
     try {
       const { data: team } = await api.post<TeamDto>('/teams', { name: newTeamName.trim() })
-      await api.post(`/teams/${team.id}/players/${playerId}`)
+      await api.post(`/teams/${team.id}/players/${playerId}`, { jerseyNumber })
       setAllTeams((prev) => [...prev, team])
-      attachTeamToPlayer(playerId, team)
+      attachTeamToPlayer(playerId, team, jerseyNumber)
       setNewTeamName('')
+      setPickerJerseyNumber('')
       setTeamPickerOpenFor(null)
     } catch {
       setError('Could not create the team.')
@@ -170,6 +176,31 @@ export default function PlayerProfile() {
       setPlayers((prev) => prev.map((p) => (p.id === playerId ? { ...p, teams: (p.teams ?? []).filter((t) => t.id !== teamId) } : p)))
     } catch {
       setError('Could not remove player from that team.')
+    }
+  }
+
+  const editJerseyKey = (playerId: number, teamId: number) => `${playerId}-${teamId}`
+
+  const commitJerseyEdit = async (playerId: number, teamId: number) => {
+    const key = editJerseyKey(playerId, teamId)
+    const raw = jerseyEdits[key]
+    if (raw === undefined) return
+    const jerseyNumber = Number(raw)
+    setJerseyEdits((prev) => {
+      const next = { ...prev }
+      delete next[key]
+      return next
+    })
+    if (Number.isNaN(jerseyNumber)) return
+    try {
+      await api.put(`/teams/${teamId}/players/${playerId}`, { jerseyNumber })
+      setPlayers((prev) =>
+        prev.map((p) =>
+          p.id === playerId ? { ...p, teams: (p.teams ?? []).map((t) => (t.id === teamId ? { ...t, jerseyNumber } : t)) } : p
+        )
+      )
+    } catch {
+      setError("Could not update that team's jersey number.")
     }
   }
 
@@ -209,6 +240,20 @@ export default function PlayerProfile() {
                 {(player.teams ?? []).map((t) => (
                   <span className="team-chip" key={t.id}>
                     {t.name}
+                    {!isPlayerRole ? (
+                      <input
+                        type="number"
+                        className="team-chip-jersey"
+                        title={`Jersey number on ${t.name}`}
+                        value={jerseyEdits[editJerseyKey(player.id, t.id)] ?? String(t.jerseyNumber ?? 0)}
+                        onChange={(e) =>
+                          setJerseyEdits((prev) => ({ ...prev, [editJerseyKey(player.id, t.id)]: e.target.value }))
+                        }
+                        onBlur={() => commitJerseyEdit(player.id, t.id)}
+                      />
+                    ) : (
+                      <span className="player-card-number">#{t.jerseyNumber}</span>
+                    )}
                     {!isPlayerRole && (
                       <button className="team-chip-remove" onClick={() => removeTeam(player.id, t.id)} title="Remove from team">
                         ×
@@ -239,6 +284,13 @@ export default function PlayerProfile() {
                       )}
                       <div className="flex gap-1">
                         <input
+                          type="number"
+                          placeholder={`Jersey # (default ${player.jerseyNumber})`}
+                          value={pickerJerseyNumber}
+                          onChange={(e) => setPickerJerseyNumber(e.target.value)}
+                          style={{ maxWidth: '9rem' }}
+                        />
+                        <input
                           type="text"
                           placeholder="New team name (e.g. U16)"
                           value={newTeamName}
@@ -247,7 +299,7 @@ export default function PlayerProfile() {
                         <button className="submit-btn" disabled={teamBusy} onClick={() => createAndAddTeam(player.id)}>
                           Add
                         </button>
-                        <button className="nav-btn" onClick={() => { setTeamPickerOpenFor(null); setNewTeamName('') }}>
+                        <button className="nav-btn" onClick={() => { setTeamPickerOpenFor(null); setNewTeamName(''); setPickerJerseyNumber('') }}>
                           Cancel
                         </button>
                       </div>

@@ -49,6 +49,15 @@ namespace StatsHub.Api.Services
             if (!await CanWritePlayerAsync(dto.PlayerId, requestingUserId))
                 throw new UnauthorizedAccessException("Player not found or not owned by user");
 
+            // A player can only be tracked in one live game at a time - without
+            // this, a second "Start Live Game" (different tab, device, or a
+            // crashed session that never got cleaned up) would silently create
+            // a duplicate in-progress game for the same kid.
+            var hasActiveGame = await _context.GameStats
+                .AnyAsync(gs => gs.PlayerId == dto.PlayerId && gs.Game.Status == "In Progress");
+            if (hasActiveGame)
+                throw new InvalidOperationException("This player already has a live game in progress.");
+
             var gameStats = new GameStats
             {
                 GameId = dto.GameId,
@@ -131,11 +140,16 @@ namespace StatsHub.Api.Services
             var team = await _context.Teams.FindAsync(teamId);
             if (player == null || team == null) return null;
 
+            var jerseyNumber = await _context.PlayerTeams
+                .Where(pt => pt.PlayerId == playerId && pt.TeamId == teamId)
+                .Select(pt => (int?)pt.JerseyNumber)
+                .FirstOrDefaultAsync() ?? player.JerseyNumber;
+
             var gameStats = await _context.GameStats
                 .Where(gs => gs.PlayerId == playerId && gs.Game.TeamId == teamId)
                 .ToListAsync();
 
-            return BuildTeamStatsDto(player, team, gameStats);
+            return BuildTeamStatsDto(player, team, jerseyNumber, gameStats);
         }
 
         private async Task<List<PlayerTeamStatsDto>> ComputeStatsByPlayerAsync(int playerId)
@@ -143,25 +157,26 @@ namespace StatsHub.Api.Services
             var player = await _context.Players.FindAsync(playerId);
             if (player == null) return new List<PlayerTeamStatsDto>();
 
-            var teams = await _context.Teams
-                .Where(t => t.PlayerTeams.Any(pt => pt.PlayerId == playerId))
-                .OrderBy(t => t.Name)
+            var teamMemberships = await _context.PlayerTeams
+                .Where(pt => pt.PlayerId == playerId)
+                .Include(pt => pt.Team)
+                .OrderBy(pt => pt.Team.Name)
                 .ToListAsync();
 
             var result = new List<PlayerTeamStatsDto>();
-            foreach (var team in teams)
+            foreach (var membership in teamMemberships)
             {
                 var gameStats = await _context.GameStats
-                    .Where(gs => gs.PlayerId == playerId && gs.Game.TeamId == team.Id)
+                    .Where(gs => gs.PlayerId == playerId && gs.Game.TeamId == membership.TeamId)
                     .ToListAsync();
 
-                result.Add(BuildTeamStatsDto(player, team, gameStats));
+                result.Add(BuildTeamStatsDto(player, membership.Team, membership.JerseyNumber, gameStats));
             }
 
             return result;
         }
 
-        private static PlayerTeamStatsDto BuildTeamStatsDto(Player player, Team team, List<GameStats> gameStats)
+        private static PlayerTeamStatsDto BuildTeamStatsDto(Player player, Team team, int jerseyNumber, List<GameStats> gameStats)
         {
             var gamesPlayed = gameStats.Count;
             double PerGame(int total) => gamesPlayed > 0 ? Math.Round((double)total / gamesPlayed, 2) : 0;
@@ -181,7 +196,7 @@ namespace StatsHub.Api.Services
             {
                 PlayerId = player.Id,
                 PlayerName = $"{player.FirstName} {player.LastName}",
-                JerseyNumber = player.JerseyNumber,
+                JerseyNumber = jerseyNumber,
                 Position = player.Position,
                 TeamId = team.Id,
                 TeamName = team.Name,

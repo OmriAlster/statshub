@@ -215,7 +215,7 @@ namespace StatsHub.Api.Services
                         Weight = linkedPlayer.Weight,
                         DateOfBirth = linkedPlayer.DateOfBirth,
                         ProfilePictureUrl = linkedPlayer.ProfilePictureUrl,
-                        Teams = linkedPlayer.PlayerTeams.Select(pt => new TeamDto { Id = pt.Team.Id, Name = pt.Team.Name }).ToList(),
+                        Teams = linkedPlayer.PlayerTeams.Select(pt => new TeamDto { Id = pt.Team.Id, Name = pt.Team.Name, JerseyNumber = pt.JerseyNumber }).ToList(),
                         Parents = linkedPlayer.Parents.Select(pp => new ParentDto { UserId = pp.UserId, FirstName = pp.User.FirstName, LastName = pp.User.LastName }).ToList()
                     };
                 }

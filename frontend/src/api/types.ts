@@ -1,6 +1,9 @@
 export interface TeamDto {
   id: number
   name: string
+  // Only present when this team appears in a player-specific context (e.g.
+  // PlayerDto.teams) - a player can wear a different number per team.
+  jerseyNumber?: number | null
 }
 
 export interface ParentDto {
@@ -84,6 +87,17 @@ export interface GameDto {
   opponentScore?: number | null
   notes?: string | null
   playerStats: GameStatsDto[]
+}
+
+export interface UpdateGameDto {
+  opponentName?: string
+  gameDate?: string
+  location?: string
+  status?: GameDto['status']
+  gameType?: GameType
+  teamScore?: number | null
+  opponentScore?: number | null
+  notes?: string
 }
 
 export interface PlayerTeamStatsDto {

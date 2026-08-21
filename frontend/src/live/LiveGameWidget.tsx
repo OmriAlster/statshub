@@ -176,6 +176,16 @@ export default function LiveGameWidget() {
     setSelectedPlayerId(playerId)
     const player = players.find((p) => p.id === playerId)
     setSelectedTeamId(player && player.teams.length > 0 ? player.teams[0].id : '')
+    setError(null)
+  }
+
+  // A player can only be live in one game at a time. This is the primary,
+  // pre-flight check (fast feedback, no half-created game); the backend
+  // enforces the same rule in GameStatsService as a backstop for races
+  // (a second tab/device, or a session that never got cleaned up).
+  const playerHasActiveGame = async (playerId: number) => {
+    const { data } = await api.get<GameDto[]>(`/games/player/${playerId}`)
+    return data.some((g) => g.status === 'In Progress')
   }
 
   const startGame = async () => {
@@ -191,6 +201,11 @@ export default function LiveGameWidget() {
     setStarting(true)
     setError(null)
     try {
+      if (await playerHasActiveGame(selectedPlayerId)) {
+        setError('This player already has a live game in progress. End it before starting a new one.')
+        return
+      }
+
       const gameRes = await api.post<GameDto>('/games', {
         teamId: selectedTeamId,
         gameType,
@@ -198,9 +213,14 @@ export default function LiveGameWidget() {
         gameDate: new Date(gameDate).toISOString(),
         location: location.trim(),
       })
-      const [, statsRes] = await Promise.all([
-        api.put(`/games/${gameRes.data.id}`, { status: 'In Progress' }),
-        api.post('/gamestats', {
+
+      // Create the stats row (and get the uniqueness check) before flipping
+      // the game to "In Progress" - if this fails, the game never goes live
+      // and we clean up the leftover "Upcoming" row below instead of
+      // orphaning it.
+      let statsRes
+      try {
+        statsRes = await api.post('/gamestats', {
           gameId: gameRes.data.id,
           playerId: selectedPlayerId,
           fieldGoalsMade: 0,
@@ -217,8 +237,18 @@ export default function LiveGameWidget() {
           turnovers: 0,
           fouls: 0,
           minutesPlayed: 0,
-        }),
-      ])
+        })
+        await api.put(`/games/${gameRes.data.id}`, { status: 'In Progress' })
+      } catch (err) {
+        await api.delete(`/games/${gameRes.data.id}`).catch(() => {})
+        const status = (err as { response?: { status?: number } })?.response?.status
+        setError(
+          status === 409
+            ? 'This player already has a live game in progress. End it before starting a new one.'
+            : 'Could not start the game. Please try again.'
+        )
+        return
+      }
 
       const player = players.find((p) => p.id === selectedPlayerId)!
       const team = player.teams.find((t) => t.id === selectedTeamId)
@@ -227,7 +257,7 @@ export default function LiveGameWidget() {
         gameStatsId: statsRes.data.id,
         playerId: player.id,
         playerName: `${player.firstName} ${player.lastName}`,
-        jerseyNumber: player.jerseyNumber,
+        jerseyNumber: team?.jerseyNumber ?? player.jerseyNumber,
         teamName: team?.name ?? '',
         gameType,
         opponent: opponent.trim(),
