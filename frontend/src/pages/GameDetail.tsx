@@ -1,17 +1,45 @@
 import { useEffect, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import { api } from '../api/client'
-import type { GameDto, ShotDto } from '../api/types'
+import type { GameDto, GameType, ShotDto, UpdateGameDto } from '../api/types'
 import CourtShotChart from '../components/CourtShotChart'
+import GameStatusBadge from '../components/GameStatusBadge'
+
+interface EditForm {
+  opponentName: string
+  gameDate: string
+  location: string
+  gameType: GameType
+  teamScore: string
+  opponentScore: string
+  notes: string
+}
+
+function toEditForm(game: GameDto): EditForm {
+  return {
+    opponentName: game.opponentName,
+    gameDate: game.gameDate.split('T')[0],
+    location: game.location,
+    gameType: game.gameType,
+    teamScore: game.teamScore != null ? String(game.teamScore) : '',
+    opponentScore: game.opponentScore != null ? String(game.opponentScore) : '',
+    notes: game.notes ?? '',
+  }
+}
 
 export default function GameDetail() {
   const { id } = useParams<{ id: string }>()
+  const navigate = useNavigate()
   const [game, setGame] = useState<GameDto | null>(null)
   const [shotsByStatsId, setShotsByStatsId] = useState<Record<number, ShotDto[]>>({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [sharing, setSharing] = useState(false)
   const [shareUrl, setShareUrl] = useState<string | null>(null)
+  const [editing, setEditing] = useState(false)
+  const [form, setForm] = useState<EditForm | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [deleting, setDeleting] = useState(false)
 
   useEffect(() => {
     if (id) load(Number(id))
@@ -33,6 +61,49 @@ export default function GameDetail() {
       setError('Could not load this game.')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const startEditing = () => {
+    if (!game) return
+    setForm(toEditForm(game))
+    setEditing(true)
+  }
+
+  const saveEdits = async () => {
+    if (!game || !form) return
+    setSaving(true)
+    try {
+      const dto: UpdateGameDto = {
+        opponentName: form.opponentName.trim(),
+        gameDate: new Date(form.gameDate).toISOString(),
+        location: form.location.trim(),
+        gameType: form.gameType,
+        teamScore: form.teamScore === '' ? null : Number(form.teamScore),
+        opponentScore: form.opponentScore === '' ? null : Number(form.opponentScore),
+        notes: form.notes.trim(),
+      }
+      const { data } = await api.put<GameDto>(`/games/${game.id}`, dto)
+      setGame(data)
+      setEditing(false)
+      setError(null)
+    } catch {
+      setError('Could not save those changes.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const deleteGame = async () => {
+    if (!game) return
+    if (!window.confirm(`Delete this game vs ${game.opponentName}? This removes all of its stats and can't be undone.`)) return
+    setDeleting(true)
+    try {
+      await api.delete(`/games/${game.id}`)
+      navigate('/stats', { replace: true })
+    } catch {
+      setError('Could not delete this game.')
+      setDeleting(false)
     }
   }
 
@@ -87,9 +158,17 @@ export default function GameDetail() {
           </h2>
           <p>{game.teamName} · {new Date(game.gameDate).toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })} · 📍 {game.location || 'TBD'}</p>
         </div>
-        <button className="submit-btn" onClick={shareGame} disabled={sharing}>
-          {sharing ? 'Creating link...' : '🔗 Share This Game'}
-        </button>
+        <div className="flex gap-1">
+          <button className="submit-btn" onClick={shareGame} disabled={sharing}>
+            {sharing ? 'Creating link...' : '🔗 Share This Game'}
+          </button>
+          {!editing && (
+            <button className="submit-btn" onClick={startEditing}>✏️ Edit</button>
+          )}
+          <button className="end-game-btn" onClick={deleteGame} disabled={deleting}>
+            {deleting ? 'Deleting...' : '🗑️ Delete Game'}
+          </button>
+        </div>
       </div>
 
       {shareUrl && (
@@ -99,7 +178,56 @@ export default function GameDetail() {
         </div>
       )}
 
-      {game.status === 'Completed' ? (
+      {error && <p className="error">{error}</p>}
+
+      {editing && form ? (
+        <div className="info-section" style={{ marginTop: '1.5rem' }}>
+          <div className="form-row">
+            <label>
+              Opponent
+              <input value={form.opponentName} onChange={(e) => setForm({ ...form, opponentName: e.target.value })} />
+            </label>
+            <label>
+              Date
+              <input type="date" value={form.gameDate} onChange={(e) => setForm({ ...form, gameDate: e.target.value })} />
+            </label>
+            <label>
+              Location
+              <input value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} />
+            </label>
+            <label>
+              Game Type
+              <select value={form.gameType} onChange={(e) => setForm({ ...form, gameType: e.target.value as GameType })}>
+                <option value="League">League</option>
+                <option value="Cup">Cup</option>
+              </select>
+            </label>
+            <label>
+              {game.teamName} Score
+              <input type="number" value={form.teamScore} onChange={(e) => setForm({ ...form, teamScore: e.target.value })} />
+            </label>
+            <label>
+              Opponent Score
+              <input type="number" value={form.opponentScore} onChange={(e) => setForm({ ...form, opponentScore: e.target.value })} />
+            </label>
+          </div>
+          <label style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', fontWeight: 600, marginBottom: '1rem' }}>
+            Notes
+            <textarea
+              value={form.notes}
+              onChange={(e) => setForm({ ...form, notes: e.target.value })}
+              rows={3}
+              style={{ resize: 'vertical', fontFamily: 'inherit' }}
+            />
+          </label>
+          <div className="flex gap-1">
+            <button className="submit-btn" onClick={saveEdits} disabled={saving}>
+              {saving ? 'Saving...' : 'Save Changes'}
+            </button>
+            <button className="nav-btn" onClick={() => setEditing(false)} disabled={saving}>Cancel</button>
+          </div>
+        </div>
+      ) : game.status === 'Completed' ? (
         <div className="game-score">
           <div className={`score-display ${won ? 'win' : 'loss'}`}>
             <span>{game.teamScore}</span>
@@ -109,7 +237,7 @@ export default function GameDetail() {
         </div>
       ) : (
         <div className="game-upcoming">
-          <p>{game.status}</p>
+          <p><GameStatusBadge status={game.status} /></p>
         </div>
       )}
 

@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { api } from '../api/client'
 import type { GameDto, PlayerDto, PlayerTeamStatsDto, SeasonDto } from '../api/types'
 import { useAuth } from '../auth/AuthContext'
+import GameStatusBadge from '../components/GameStatusBadge'
 
 interface PlayerCard {
   player: PlayerDto
@@ -122,7 +123,7 @@ export default function Dashboard() {
               <div className="player-card-teams">
                 {teamStats.map((s) => (
                   <div className="player-card-team-row" key={s.teamId}>
-                    <span className="player-card-team-name">{s.teamName}</span>
+                    <span className="player-card-team-name">{s.teamName} <span className="player-card-number">#{s.jerseyNumber}</span></span>
                     <div className="player-card-team-stats">
                       <div className="tabular"><b>{s.pointsPerGame}</b><span>PPG</span></div>
                       <div className="tabular"><b>{s.reboundsPerGame}</b><span>RPG</span></div>
@@ -165,7 +166,7 @@ export default function Dashboard() {
                   <div className={`game-result ${game.status === 'Completed' ? (won ? 'win' : 'loss') : ''}`}>
                     {game.status === 'Completed'
                       ? `${won ? 'W' : 'L'} ${game.teamScore}-${game.opponentScore}`
-                      : game.status}
+                      : <GameStatusBadge status={game.status} />}
                   </div>
                 </Link>
               )

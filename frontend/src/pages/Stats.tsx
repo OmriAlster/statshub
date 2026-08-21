@@ -4,6 +4,7 @@ import { api } from '../api/client'
 import type { GameDto, PlayerDto, PlayerTeamStatsDto, ShotDto } from '../api/types'
 import { useAuth } from '../auth/AuthContext'
 import CourtShotChart from '../components/CourtShotChart'
+import GameStatusBadge from '../components/GameStatusBadge'
 import SegmentedControl from '../components/SegmentedControl'
 
 export default function Stats() {
@@ -193,7 +194,7 @@ function GamesTab({ player }: { player: PlayerDto }) {
                         <td className="num col-optional">{stats?.turnovers ?? '-'}</td>
                       </>
                     ) : (
-                      <td className="games-table-status" colSpan={7}>{game.status}</td>
+                      <td className="games-table-status" colSpan={7}><GameStatusBadge status={game.status} /></td>
                     )}
                   </tr>
                 )
