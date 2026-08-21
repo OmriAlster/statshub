@@ -256,7 +256,6 @@ export default function GameDetail() {
                 <p>{stats.minutesPlayed} minutes played</p>
               </div>
             </div>
-            <div className="games-badge">{stats.totalPoints} PTS</div>
           </div>
 
           <div className="primary-stats">

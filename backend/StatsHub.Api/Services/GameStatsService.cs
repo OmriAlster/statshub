@@ -179,7 +179,11 @@ namespace StatsHub.Api.Services
         private static PlayerTeamStatsDto BuildTeamStatsDto(Player player, Team team, int jerseyNumber, List<GameStats> gameStats)
         {
             var gamesPlayed = gameStats.Count;
-            double PerGame(int total) => gamesPlayed > 0 ? Math.Round((double)total / gamesPlayed, 2) : 0;
+            // A scoreless game is usually a DNP/token appearance rather than a
+            // real outing, so it's excluded from the per-game averages (but
+            // still counts toward GamesPlayed below).
+            var gamesWithPoints = gameStats.Count(gs => gs.TotalPoints > 0);
+            double PerGame(int total) => gamesWithPoints > 0 ? Math.Round((double)total / gamesWithPoints, 2) : 0;
 
             var totalPoints = gameStats.Sum(gs => gs.TotalPoints);
             var totalRebounds = gameStats.Sum(gs => gs.TotalRebounds);

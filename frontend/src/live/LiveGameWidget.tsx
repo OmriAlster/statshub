@@ -702,17 +702,19 @@ export default function LiveGameWidget() {
                     <h3><svg className="icon"><use href="#i-target" /></svg> Shot Chart — tap the court</h3>
                     <CourtShotChart shots={chartShots} interactive pendingShot={pendingShot} onCourtTap={handleCourtTap} onRemoveShot={removeShot} />
                     {pendingShot && (
-                      <div className="shot-confirm-panel">
-                        <span className="shot-confirm-label">{pendingShot.value}PT shot</span>
-                        <button className="shot-confirm-btn make" onClick={() => confirmShot(true)} disabled={loggingShot}>
-                          <svg className="icon" style={{ stroke: '#10230a' }}><use href="#i-check" /></svg> MAKE
-                        </button>
-                        <button className="shot-confirm-btn miss" onClick={() => confirmShot(false)} disabled={loggingShot}>
-                          <svg className="icon"><use href="#i-x" /></svg> MISS
-                        </button>
-                        <button className="shot-confirm-cancel" onClick={() => setPendingShot(null)}>
-                          Cancel
-                        </button>
+                      <div className="shot-confirm-backdrop" onClick={() => setPendingShot(null)}>
+                        <div className="shot-confirm-panel" onClick={(e) => e.stopPropagation()}>
+                          <span className="shot-confirm-label">{pendingShot.value}PT shot</span>
+                          <button className="shot-confirm-btn make" onClick={() => confirmShot(true)} disabled={loggingShot}>
+                            <svg className="icon" style={{ stroke: '#10230a' }}><use href="#i-check" /></svg> MAKE
+                          </button>
+                          <button className="shot-confirm-btn miss" onClick={() => confirmShot(false)} disabled={loggingShot}>
+                            <svg className="icon"><use href="#i-x" /></svg> MISS
+                          </button>
+                          <button className="shot-confirm-cancel" onClick={() => setPendingShot(null)}>
+                            Cancel
+                          </button>
+                        </div>
                       </div>
                     )}
                   </div>

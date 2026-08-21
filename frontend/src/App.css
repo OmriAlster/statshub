@@ -1606,7 +1606,7 @@ select:focus {
 
 .mini-game {
   display: grid;
-  grid-template-columns: 68px 1fr auto;
+  grid-template-columns: 68px minmax(0, 1fr) auto;
   gap: 1rem;
   align-items: center;
   padding: 0.9rem 1rem;
@@ -1638,12 +1638,16 @@ select:focus {
 
 .game-info {
   font-weight: 600;
+  min-width: 0;
 }
 
 .game-info > div:first-child {
   color: var(--color-text);
   font-size: 1rem;
   margin-bottom: 0.25rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .game-stats {
@@ -2911,18 +2915,32 @@ select:focus {
 }
 
 /* Shot confirm panel */
+/* Fixed-position modal so confirming a shot never requires scrolling down
+   past the court, regardless of where the tap happened on the page. */
+.shot-confirm-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 150;
+  padding: 1.5rem;
+}
+
 .shot-confirm-panel {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 0.75rem;
   flex-wrap: wrap;
-  margin-top: 1rem;
-  padding: 1rem;
+  padding: 1.5rem;
   background: var(--color-surface);
   border: 1.5px solid var(--color-accent);
-  border-radius: var(--radius-md);
-  box-shadow: var(--glow-accent);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg), var(--glow-accent);
+  max-width: 22rem;
+  width: 100%;
 }
 
 .shot-confirm-label {
@@ -3864,11 +3882,32 @@ select:focus {
 }
 
 @media (max-width: 480px) {
-  .games-table .col-optional {
-    display: none;
-  }
-
   .stats-toolbar {
     gap: 0.75rem;
+  }
+
+  .mini-game {
+    grid-template-columns: 52px minmax(0, 1fr) auto;
+    gap: 0.6rem;
+    padding: 0.75rem 0.8rem;
+  }
+
+  .game-date {
+    font-size: 0.78rem;
+  }
+
+  .game-info > div:first-child {
+    font-size: 0.9rem;
+  }
+
+  .game-type-badge {
+    margin-left: 0.3rem;
+    padding: 0.18rem 0.45rem;
+    font-size: 0.6rem;
+  }
+
+  .game-result {
+    font-size: 0.85rem;
+    padding: 0.35rem 0.6rem;
   }
 }
