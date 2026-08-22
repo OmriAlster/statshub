@@ -103,7 +103,7 @@ function GamesTab({ player }: { player: PlayerDto }) {
 
   const teamOptions = useMemo(() => Array.from(new Map(games.map((g) => [g.teamId, g.teamName])).entries()), [games])
 
-  const { filteredGames, completedGames, gamesWithStats, wins, losses, ppg } = useMemo(() => {
+  const { filteredGames, gamesWithStats, wins, losses, ppg } = useMemo(() => {
     const filteredGames = selectedTeamId === 'all' ? games : games.filter((g) => g.teamId === selectedTeamId)
     const completedGames = filteredGames.filter((g) => g.status === 'Completed')
     // Team record reflects every completed game regardless of whether this
@@ -116,7 +116,7 @@ function GamesTab({ player }: { player: PlayerDto }) {
     const ppg = gamesWithStats.length
       ? (gamesWithStats.reduce((sum, g) => sum + (g.playerStats[0]?.totalPoints ?? 0), 0) / gamesWithStats.length).toFixed(1)
       : '0'
-    return { filteredGames, completedGames, gamesWithStats, wins, losses, ppg }
+    return { filteredGames, gamesWithStats, wins, losses, ppg }
   }, [games, selectedTeamId])
 
   return (

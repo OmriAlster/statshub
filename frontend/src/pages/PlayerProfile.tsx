@@ -346,31 +346,48 @@ export default function PlayerProfile() {
             </div>
 
             <div className="team-section">
-              <div className="team-chip-row">
-                {(player.teams ?? []).map((t) => (
-                  <span className="team-chip" key={t.id}>
-                    {t.name}
-                    {!isPlayerRole ? (
-                      <input
-                        type="number"
-                        className="team-chip-jersey"
-                        title={`Jersey number on ${t.name}`}
-                        value={jerseyEdits[editJerseyKey(player.id, t.id)] ?? String(t.jerseyNumber ?? 0)}
-                        onChange={(e) =>
-                          setJerseyEdits((prev) => ({ ...prev, [editJerseyKey(player.id, t.id)]: e.target.value }))
-                        }
-                        onBlur={() => commitJerseyEdit(player.id, t.id)}
+              <div className="team-chip-row" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
+                {(player.teams ?? []).map((t) => {
+                  const ibbaTeam = ibbaLinks[player.id]?.teams.find((it) => it.linkedTeamId === t.id)
+                  return (
+                    <div className="team-chip-v2" key={t.id}>
+                      <TeamCrest
+                        logoUrl={ibbaTeam?.teamLogoUrl}
+                        jerseyNumber={t.jerseyNumber}
+                        showIbbaMark={!!ibbaTeam}
+                        size="sm"
+                        onClick={ibbaTeam?.ibbaLeagueUrl ? () => setStandingsFor({ leagueUrl: ibbaTeam.ibbaLeagueUrl!, leagueName: ibbaTeam.ibbaLeagueName ?? '', teamName: t.name }) : undefined}
+                        title={ibbaTeam?.ibbaLeagueUrl ? 'View standings' : undefined}
                       />
-                    ) : (
-                      <span className="player-card-number">#{t.jerseyNumber}</span>
-                    )}
-                    {!isPlayerRole && (
-                      <button className="team-chip-remove" onClick={() => removeTeam(player.id, t.id)} title="Remove from team">
-                        ×
-                      </button>
-                    )}
-                  </span>
-                ))}
+                      <div className="tcv2-info">
+                        <span className="tcv2-name">{t.name}</span>
+                        {!isPlayerRole ? (
+                          <div className="tcv2-jersey-row">
+                            <label htmlFor={`jersey-${player.id}-${t.id}`}>Jersey</label>
+                            <input
+                              id={`jersey-${player.id}-${t.id}`}
+                              type="number"
+                              className="team-chip-jersey"
+                              title={`Jersey number on ${t.name}`}
+                              value={jerseyEdits[editJerseyKey(player.id, t.id)] ?? String(t.jerseyNumber ?? 0)}
+                              onChange={(e) =>
+                                setJerseyEdits((prev) => ({ ...prev, [editJerseyKey(player.id, t.id)]: e.target.value }))
+                              }
+                              onBlur={() => commitJerseyEdit(player.id, t.id)}
+                            />
+                          </div>
+                        ) : (
+                          <span className="player-card-number">#{t.jerseyNumber}</span>
+                        )}
+                      </div>
+                      {!isPlayerRole && (
+                        <button className="team-chip-remove" onClick={() => removeTeam(player.id, t.id)} title="Remove from team">
+                          ×
+                        </button>
+                      )}
+                    </div>
+                  )
+                })}
                 {(player.teams ?? []).length === 0 && <span className="team-chip-empty">No team yet</span>}
               </div>
 
