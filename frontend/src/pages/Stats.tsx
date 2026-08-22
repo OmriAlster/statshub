@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../api/client'
-import type { GameDto, PlayerDto, PlayerTeamStatsDto, ShotDto } from '../api/types'
+import type { GameDto, IbbaLinkStatusDto, PlayerDto, PlayerTeamStatsDto, ShotDto } from '../api/types'
 import { useAuth } from '../auth/AuthContext'
 import CourtShotChart from '../components/CourtShotChart'
 import GameStatusBadge from '../components/GameStatusBadge'
 import SegmentedControl from '../components/SegmentedControl'
+import TeamCrest from '../components/TeamCrest'
 
 export default function Stats() {
   const { user } = useAuth()
@@ -78,6 +79,7 @@ export default function Stats() {
 
 function GamesTab({ player }: { player: PlayerDto }) {
   const [games, setGames] = useState<GameDto[]>([])
+  const [ibba, setIbba] = useState<IbbaLinkStatusDto | null>(null)
   const [selectedTeamId, setSelectedTeamId] = useState<number | 'all'>('all')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -90,8 +92,12 @@ function GamesTab({ player }: { player: PlayerDto }) {
   const load = async (playerId: number) => {
     try {
       setLoading(true)
-      const { data } = await api.get<GameDto[]>(`/games/player/${playerId}`)
+      const [{ data }, ibbaData] = await Promise.all([
+        api.get<GameDto[]>(`/games/player/${playerId}`),
+        api.get<IbbaLinkStatusDto>(`/players/${playerId}/ibba`).then((res) => res.data).catch(() => null),
+      ])
       setGames(data)
+      setIbba(ibbaData)
       setSelectedTeamId('all')
       setError(null)
     } catch {
@@ -103,7 +109,23 @@ function GamesTab({ player }: { player: PlayerDto }) {
 
   const teamOptions = useMemo(() => Array.from(new Map(games.map((g) => [g.teamId, g.teamName])).entries()), [games])
 
-  const { filteredGames, gamesWithStats, wins, losses, ppg } = useMemo(() => {
+  // Per-team crest (from IBBA, when that team is linked) and jersey number
+  // (this player wears a different number per team) - so a row's Team badge
+  // is a real identity, not decoration.
+  const teamMeta = useMemo(() => {
+    const meta: Record<number, { logoUrl?: string | null; jerseyNumber?: number | null; isIbba: boolean }> = {}
+    for (const t of player.teams ?? []) {
+      meta[t.id] = { jerseyNumber: t.jerseyNumber, isIbba: false }
+    }
+    for (const t of ibba?.teams ?? []) {
+      if (t.linkedTeamId != null) {
+        meta[t.linkedTeamId] = { ...meta[t.linkedTeamId], logoUrl: t.teamLogoUrl, isIbba: true }
+      }
+    }
+    return meta
+  }, [player.teams, ibba])
+
+  const { filteredGames, gamesWithStats, wins, losses, ppg, averages } = useMemo(() => {
     const filteredGames = selectedTeamId === 'all' ? games : games.filter((g) => g.teamId === selectedTeamId)
     const completedGames = filteredGames.filter((g) => g.status === 'Completed')
     // Team record reflects every completed game regardless of whether this
@@ -113,10 +135,28 @@ function GamesTab({ player }: { player: PlayerDto }) {
     const wins = completedGames.filter((g) => (g.teamScore ?? 0) > (g.opponentScore ?? 0)).length
     const losses = completedGames.filter((g) => (g.teamScore ?? 0) < (g.opponentScore ?? 0)).length
     const gamesWithStats = completedGames.filter((g) => g.playerStats.length > 0)
-    const ppg = gamesWithStats.length
-      ? (gamesWithStats.reduce((sum, g) => sum + (g.playerStats[0]?.totalPoints ?? 0), 0) / gamesWithStats.length).toFixed(1)
-      : '0'
-    return { filteredGames, gamesWithStats, wins, losses, ppg }
+
+    const avg = (pick: (g: GameDto) => number) =>
+      gamesWithStats.length ? gamesWithStats.reduce((sum, g) => sum + pick(g), 0) / gamesWithStats.length : 0
+    const ppg = avg((g) => g.playerStats[0]?.totalPoints ?? 0).toFixed(1)
+    const averages = gamesWithStats.length
+      ? {
+          pts: ppg,
+          fgm: avg((g) => g.playerStats[0]?.fieldGoalsMade ?? 0).toFixed(1),
+          fga: avg((g) => g.playerStats[0]?.fieldGoalsAttempted ?? 0).toFixed(1),
+          tpm: avg((g) => g.playerStats[0]?.threePointersMade ?? 0).toFixed(1),
+          tpa: avg((g) => g.playerStats[0]?.threePointersAttempted ?? 0).toFixed(1),
+          ftm: avg((g) => g.playerStats[0]?.freeThrowsMade ?? 0).toFixed(1),
+          fta: avg((g) => g.playerStats[0]?.freeThrowsAttempted ?? 0).toFixed(1),
+          reb: avg((g) => g.playerStats[0]?.totalRebounds ?? 0).toFixed(1),
+          ast: avg((g) => g.playerStats[0]?.assists ?? 0).toFixed(1),
+          stl: avg((g) => g.playerStats[0]?.steals ?? 0).toFixed(1),
+          blk: avg((g) => g.playerStats[0]?.blocks ?? 0).toFixed(1),
+          to: avg((g) => g.playerStats[0]?.turnovers ?? 0).toFixed(1),
+        }
+      : null
+
+    return { filteredGames, gamesWithStats, wins, losses, ppg, averages }
   }, [games, selectedTeamId])
 
   return (
@@ -157,6 +197,7 @@ function GamesTab({ player }: { player: PlayerDto }) {
           <table className="games-table">
             <thead>
               <tr>
+                <th>Team</th>
                 <th>Date</th>
                 <th>Opponent</th>
                 <th>Type</th>
@@ -176,8 +217,12 @@ function GamesTab({ player }: { player: PlayerDto }) {
               {filteredGames.map((game) => {
                 const stats = game.playerStats[0]
                 const won = (game.teamScore ?? 0) > (game.opponentScore ?? 0)
+                const meta = teamMeta[game.teamId]
                 return (
                   <tr key={game.id} className={game.status !== 'Completed' ? 'upcoming-row' : ''}>
+                    <td>
+                      <TeamCrest logoUrl={meta?.logoUrl} jerseyNumber={meta?.jerseyNumber} showIbbaMark={meta?.isIbba} size="sm" title={game.teamName} />
+                    </td>
                     <td>
                       <Link to={`/games/${game.id}`} className="games-table-date-link">
                         {new Date(game.gameDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
@@ -219,6 +264,21 @@ function GamesTab({ player }: { player: PlayerDto }) {
                   </tr>
                 )
               })}
+              {averages && (
+                <tr className="avg-row">
+                  <td colSpan={4}>Avg</td>
+                  <td className="num">&mdash;</td>
+                  <td className="num">{averages.pts}</td>
+                  <td className="num col-optional">{averages.fgm}/{averages.fga}</td>
+                  <td className="num col-optional">{averages.tpm}/{averages.tpa}</td>
+                  <td className="num col-optional">{averages.ftm}/{averages.fta}</td>
+                  <td className="num col-optional">{averages.reb}</td>
+                  <td className="num col-optional">{averages.ast}</td>
+                  <td className="num col-optional">{averages.stl}</td>
+                  <td className="num col-optional">{averages.blk}</td>
+                  <td className="num col-optional">{averages.to}</td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
