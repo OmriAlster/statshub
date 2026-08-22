@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import { api } from '../api/client'
 import type { GameDto, IbbaLinkStatusDto, PlayerDto, PlayerTeamStatsDto, ShotDto } from '../api/types'
 import { useAuth } from '../auth/AuthContext'
@@ -10,10 +10,11 @@ import SegmentedControl from '../components/SegmentedControl'
 export default function Stats() {
   const { user } = useAuth()
   const isPlayerRole = user?.role === 'Player'
+  const { playerId: playerIdParam } = useParams<{ playerId: string }>()
+  const navigate = useNavigate()
 
   const [tab, setTab] = useState<'games' | 'season'>('games')
   const [players, setPlayers] = useState<PlayerDto[]>([])
-  const [selectedPlayerId, setSelectedPlayerId] = useState<number | ''>('')
   const [playersLoading, setPlayersLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -26,7 +27,9 @@ export default function Stats() {
     try {
       const list = isPlayerRole && user?.linkedPlayer ? [user.linkedPlayer] : (await api.get<PlayerDto[]>('/players')).data
       setPlayers(list)
-      if (list.length > 0) setSelectedPlayerId(list[0].id)
+      // Every player gets their own URL - land on the first one if none was
+      // requested, so switching players is real navigation, not just local state.
+      if (!playerIdParam && list.length > 0) navigate(`/stats/${list[0].id}`, { replace: true })
     } catch {
       setError('Could not load players.')
     } finally {
@@ -34,7 +37,7 @@ export default function Stats() {
     }
   }
 
-  const selectedPlayer = players.find((p) => p.id === selectedPlayerId)
+  const selectedPlayer = players.find((p) => p.id === Number(playerIdParam)) ?? players[0]
 
   return (
     <div className="page-container">
@@ -49,12 +52,17 @@ export default function Stats() {
       ) : (
         <>
           {players.length > 1 && (
-            <div className="profiles-player-switch">
-              <SegmentedControl
-                options={players.map((p) => ({ value: p.id, label: `${p.firstName} ${p.lastName}` }))}
-                value={selectedPlayerId as number}
-                onChange={setSelectedPlayerId}
-              />
+            <div className="profile-picker">
+              {players.map((p) => (
+                <Link
+                  key={p.id}
+                  to={`/stats/${p.id}`}
+                  className={`profile-picker-item ${selectedPlayer?.id === p.id ? 'active' : ''}`}
+                >
+                  <span className="profile-picker-avatar">{p.firstName[0]}{p.lastName[0]}</span>
+                  <span className="profile-picker-name">{p.firstName} {p.lastName}</span>
+                </Link>
+              ))}
             </div>
           )}
 
@@ -68,8 +76,8 @@ export default function Stats() {
             onChange={setTab}
           />
 
-          {tab === 'games' && selectedPlayer && <GamesTab player={selectedPlayer} />}
-          {tab === 'season' && selectedPlayer && <SeasonTab player={selectedPlayer} />}
+          {tab === 'games' && selectedPlayer && <GamesTab key={selectedPlayer.id} player={selectedPlayer} />}
+          {tab === 'season' && selectedPlayer && <SeasonTab key={selectedPlayer.id} player={selectedPlayer} />}
         </>
       )}
     </div>

@@ -139,8 +139,8 @@ export default function Dashboard() {
                   const { last, next } = lastAndNextGame(gamesByTeam[s.teamId] ?? [])
                   return (
                     <div className="player-card-team-row" key={s.teamId}>
-                      <div className="flex" style={{ justifyContent: 'space-between', gap: '0.6rem' }}>
-                        <div className="flex" style={{ gap: '0.5rem', minWidth: 0 }}>
+                      <div className="pctr-top">
+                        <div className="pctr-team">
                           <TeamCrest
                             logoUrl={ibbaTeam?.teamLogoUrl}
                             jerseyNumber={s.jerseyNumber}
@@ -150,10 +150,8 @@ export default function Dashboard() {
                             title={ibbaTeam?.ibbaLeagueUrl ? 'View standings' : undefined}
                           />
                           <div style={{ minWidth: 0 }}>
-                            <span className="player-card-team-name">{s.teamName}</span>
-                            {ibbaTeam?.ibbaLeagueName && (
-                              <div style={{ fontSize: '0.7rem', color: 'var(--color-text-faint)' }} dir="rtl">{ibbaTeam.ibbaLeagueName}</div>
-                            )}
+                            <div className="pctr-team-name">{s.teamName}</div>
+                            {ibbaTeam?.ibbaLeagueName && <div className="pctr-league" dir="rtl">{ibbaTeam.ibbaLeagueName}</div>}
                           </div>
                         </div>
                         {ibbaTeam?.position && (
@@ -163,10 +161,10 @@ export default function Dashboard() {
                           </button>
                         )}
                       </div>
-                      <div className="player-card-team-stats">
-                        <div className="tabular"><b>{s.pointsPerGame}</b><span>PPG</span></div>
-                        <div className="tabular"><b>{s.reboundsPerGame}</b><span>RPG</span></div>
-                        <div className="tabular"><b>{s.assistsPerGame}</b><span>APG</span></div>
+                      <div className="pctr-stats">
+                        <div><b>{s.pointsPerGame}</b><span>PPG</span></div>
+                        <div><b>{s.reboundsPerGame}</b><span>RPG</span></div>
+                        <div><b>{s.assistsPerGame}</b><span>APG</span></div>
                       </div>
                       {(last || next) && (
                         <div className="glance-grid">

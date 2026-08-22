@@ -86,6 +86,16 @@ function App() {
         }
       />
       <Route
+        path="/stats/:playerId"
+        element={
+          <ProtectedRoute>
+            <Layout>
+              <Stats />
+            </Layout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
         path="/players"
         element={
           <ProtectedRoute>
