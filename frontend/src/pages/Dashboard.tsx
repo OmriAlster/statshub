@@ -3,7 +3,6 @@ import { Link } from 'react-router-dom'
 import { api } from '../api/client'
 import type { GameDto, IbbaLinkStatusDto, PlayerDto, PlayerTeamStatsDto, SeasonDto } from '../api/types'
 import { useAuth } from '../auth/AuthContext'
-import GameStatusBadge from '../components/GameStatusBadge'
 import IbbaBadge from '../components/IbbaBadge'
 import StandingsModal from '../components/StandingsModal'
 import TeamCrest from '../components/TeamCrest'
@@ -26,7 +25,6 @@ export default function Dashboard() {
   const isPlayerRole = user?.role === 'Player'
   const [players, setPlayers] = useState<PlayerCard[]>([])
   const [currentSeason, setCurrentSeason] = useState<SeasonDto | null>(null)
-  const [recentGames, setRecentGames] = useState<GameDto[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [standingsFor, setStandingsFor] = useState<{ leagueUrl: string; leagueName: string; teamName: string } | null>(null)
@@ -71,7 +69,6 @@ export default function Dashboard() {
 
       const cards = await cardsPromise
       setPlayers(cards)
-      setRecentGames(cards[0] ? Object.values(cards[0].gamesByTeam).flat().sort((a, b) => new Date(b.gameDate).getTime() - new Date(a.gameDate).getTime()).slice(0, 5) : [])
 
       setError(null)
     } catch {
@@ -205,41 +202,6 @@ export default function Dashboard() {
             <Link className="view-link" to="/stats">View Stats →</Link>
           </div>
         ))}
-      </div>
-
-      <div className="recent-games-section">
-        <h3><svg className="icon"><use href="#i-live" /></svg> Recent Games</h3>
-        {recentGames.length === 0 ? (
-          <p>No games yet.</p>
-        ) : (
-          <div className="mini-game-list">
-            {recentGames.map((game) => {
-              const stats = game.playerStats[0]
-              const won = (game.teamScore ?? 0) > (game.opponentScore ?? 0)
-              return (
-                <Link to={`/games/${game.id}`} className="mini-game" key={game.id}>
-                  <div className="game-date">
-                    {new Date(game.gameDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                  </div>
-                  <div className="game-info">
-                    <div>
-                      vs {game.opponentName}
-                      <span className={`game-type-badge ${game.gameType.toLowerCase()}`}>{game.gameType}</span>
-                    </div>
-                    {stats && (
-                      <div className="game-stats">{stats.totalPoints} pts • {stats.totalRebounds} reb • {stats.assists} ast</div>
-                    )}
-                  </div>
-                  <div className={`game-result ${game.status === 'Completed' ? (won ? 'win' : 'loss') : ''}`}>
-                    {game.status === 'Completed'
-                      ? `${won ? 'W' : 'L'} ${game.teamScore}-${game.opponentScore}`
-                      : <GameStatusBadge status={game.status} />}
-                  </div>
-                </Link>
-              )
-            })}
-          </div>
-        )}
       </div>
 
       {standingsFor && (

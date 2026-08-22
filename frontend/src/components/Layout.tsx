@@ -44,7 +44,7 @@ export default function Layout({ children }: { children: ReactNode }) {
         </NavLink>
         <NavLink to="/stats" className={({ isActive }) => `nav-btn ${isActive ? 'active' : ''}`}>
           <svg className="icon"><use href="#i-chart" /></svg>
-          <span>Stats</span>
+          <span>Profiles</span>
         </NavLink>
         <NavLink to="/players" className={({ isActive }) => `nav-btn ${isActive ? 'active' : ''}`}>
           <svg className="icon"><use href={isPlayerRole ? '#i-user' : '#i-users'} /></svg>

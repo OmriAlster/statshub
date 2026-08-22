@@ -1,8 +1,9 @@
+import type { ReactNode } from 'react'
 import { useLayoutEffect, useRef, useState } from 'react'
 
 interface SegmentedOption<T extends string | number> {
   value: T
-  label: string
+  label: ReactNode
 }
 
 interface SegmentedControlProps<T extends string | number> {

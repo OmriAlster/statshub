@@ -6,7 +6,6 @@ import { useAuth } from '../auth/AuthContext'
 import CourtShotChart from '../components/CourtShotChart'
 import GameStatusBadge from '../components/GameStatusBadge'
 import SegmentedControl from '../components/SegmentedControl'
-import TeamCrest from '../components/TeamCrest'
 
 export default function Stats() {
   const { user } = useAuth()
@@ -39,17 +38,7 @@ export default function Stats() {
 
   return (
     <div className="page-container">
-      <h2>📈 Stats</h2>
-
-      <SegmentedControl
-        className="stats-tab-switch"
-        options={[
-          { value: 'games', label: '📅 Games' },
-          { value: 'season', label: '📊 Season' },
-        ]}
-        value={tab}
-        onChange={setTab}
-      />
+      <h2>📈 Profiles</h2>
 
       {error && <p className="error">{error}</p>}
 
@@ -60,7 +49,7 @@ export default function Stats() {
       ) : (
         <>
           {players.length > 1 && (
-            <div className="stats-player-switch">
+            <div className="profiles-player-switch">
               <SegmentedControl
                 options={players.map((p) => ({ value: p.id, label: `${p.firstName} ${p.lastName}` }))}
                 value={selectedPlayerId as number}
@@ -68,6 +57,16 @@ export default function Stats() {
               />
             </div>
           )}
+
+          <SegmentedControl
+            className="stats-tab-switch"
+            options={[
+              { value: 'games', label: '📅 Games' },
+              { value: 'season', label: '📊 Season' },
+            ]}
+            value={tab}
+            onChange={setTab}
+          />
 
           {tab === 'games' && selectedPlayer && <GamesTab player={selectedPlayer} />}
           {tab === 'season' && selectedPlayer && <SeasonTab player={selectedPlayer} />}
@@ -164,7 +163,18 @@ function GamesTab({ player }: { player: PlayerDto }) {
       {teamOptions.length > 1 && (
         <div className="stats-team-switch">
           <SegmentedControl
-            options={[{ value: 'all' as const, label: 'All Teams' }, ...teamOptions.map(([id, name]) => ({ value: id, label: name }))]}
+            options={[
+              { value: 'all' as const, label: 'All Teams' },
+              ...teamOptions.map(([id, name]) => ({
+                value: id,
+                label: (
+                  <span className="team-switch-option">
+                    {teamMeta[id]?.logoUrl ? <img src={teamMeta[id]!.logoUrl!} alt="" /> : <span className="team-switch-option-fallback" />}
+                    {name}
+                  </span>
+                ),
+              })),
+            ]}
             value={selectedTeamId}
             onChange={setSelectedTeamId}
           />
@@ -197,7 +207,6 @@ function GamesTab({ player }: { player: PlayerDto }) {
           <table className="games-table">
             <thead>
               <tr>
-                <th>Team</th>
                 <th>Date</th>
                 <th>Opponent</th>
                 <th>Type</th>
@@ -217,12 +226,8 @@ function GamesTab({ player }: { player: PlayerDto }) {
               {filteredGames.map((game) => {
                 const stats = game.playerStats[0]
                 const won = (game.teamScore ?? 0) > (game.opponentScore ?? 0)
-                const meta = teamMeta[game.teamId]
                 return (
                   <tr key={game.id} className={game.status !== 'Completed' ? 'upcoming-row' : ''}>
-                    <td>
-                      <TeamCrest logoUrl={meta?.logoUrl} jerseyNumber={meta?.jerseyNumber} showIbbaMark={meta?.isIbba} size="sm" title={game.teamName} />
-                    </td>
                     <td>
                       <Link to={`/games/${game.id}`} className="games-table-date-link">
                         {new Date(game.gameDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
@@ -266,7 +271,7 @@ function GamesTab({ player }: { player: PlayerDto }) {
               })}
               {averages && (
                 <tr className="avg-row">
-                  <td colSpan={4}>Avg</td>
+                  <td colSpan={3}>Avg</td>
                   <td className="num">&mdash;</td>
                   <td className="num">{averages.pts}</td>
                   <td className="num col-optional">{averages.fgm}/{averages.fga}</td>
