@@ -158,7 +158,7 @@ export default function Dashboard() {
                         </div>
                         {ibbaTeam?.position && (
                           <button className="pos-pill" onClick={() => setStandingsFor({ leagueUrl: ibbaTeam.ibbaLeagueUrl!, leagueName: ibbaTeam.ibbaLeagueName ?? '', teamName: s.teamName })}>
-                            <svg className="icon"><use href="#i-target" /></svg>
+                            <svg className="icon"><use href="#i-trophy" /></svg>
                             {ibbaTeam.position}{ibbaTeam.position === 1 ? 'st' : ibbaTeam.position === 2 ? 'nd' : ibbaTeam.position === 3 ? 'rd' : 'th'} of {ibbaTeam.totalTeams}
                           </button>
                         )}

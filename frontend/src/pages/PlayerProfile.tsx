@@ -468,7 +468,7 @@ export default function PlayerProfile() {
                             style={{ marginTop: '0.3rem', padding: '0.15rem 0.6rem 0.15rem 0.4rem', fontSize: '0.7rem' }}
                             onClick={() => setStandingsFor({ leagueUrl: t.ibbaLeagueUrl!, leagueName: t.ibbaLeagueName ?? '', teamName: t.teamName })}
                           >
-                            <svg className="icon" style={{ width: 11, height: 11 }}><use href="#i-target" /></svg>
+                            <svg className="icon" style={{ width: 11, height: 11 }}><use href="#i-trophy" /></svg>
                             <span dir="rtl">{t.ibbaLeagueName}</span>
                             {t.position && ` · ${t.position} of ${t.totalTeams}`}
                           </button>
