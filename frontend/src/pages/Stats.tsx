@@ -179,7 +179,16 @@ function GamesTab({ player }: { player: PlayerDto }) {
                       </Link>
                     </td>
                     <td>
+                      {game.isHomeGame != null && <span title={game.isHomeGame ? 'Home' : 'Away'}>{game.isHomeGame ? '🏠' : '✈️'} </span>}
                       <Link to={`/games/${game.id}`}>{game.opponentName}</Link>
+                      {game.isFromIbba && (
+                        <img
+                          src="/icons/ibba-logo.png"
+                          alt=""
+                          title="Synced from IBBA"
+                          style={{ width: 12, height: 12, marginLeft: '0.35rem', verticalAlign: '-1px', borderRadius: 2 }}
+                        />
+                      )}
                     </td>
                     <td>
                       <span className={`game-type-badge ${game.gameType.toLowerCase()}`}>{game.gameType}</span>

@@ -72,7 +72,7 @@ export interface GameStatsDto {
   totalPoints: number
 }
 
-export type GameType = 'League' | 'Cup'
+export type GameType = 'League' | 'Cup' | 'Friendly'
 
 export interface GameDto {
   id: number
@@ -86,6 +86,8 @@ export interface GameDto {
   teamScore?: number | null
   opponentScore?: number | null
   notes?: string | null
+  isHomeGame?: boolean | null
+  isFromIbba: boolean
   playerStats: GameStatsDto[]
 }
 
@@ -160,4 +162,48 @@ export interface CreateShotDto {
   y: number
   made: boolean
   value: 2 | 3
+}
+
+export interface IbbaPreviewTeamDto {
+  teamName: string
+}
+
+export interface IbbaPreviewDto {
+  playerName: string
+  teams: IbbaPreviewTeamDto[]
+}
+
+export interface IbbaTeamLinkDto {
+  id: number
+  teamName: string
+  teamUrl: string
+  teamLogoUrl?: string | null
+  linkedTeamId?: number | null
+  linkedTeamName?: string | null
+  ibbaLeagueUrl?: string | null
+  ibbaLeagueName?: string | null
+  position?: number | null
+  totalTeams?: number | null
+}
+
+export interface IbbaLinkStatusDto {
+  playerId: number
+  ibbaPlayerUrl: string
+  lastSyncedAt?: string | null
+  lastSyncError?: string | null
+  teams: IbbaTeamLinkDto[]
+}
+
+export interface IbbaStandingRowDto {
+  position: number
+  teamName: string
+  teamUrl: string
+  gamesPlayed: number
+  wins: number
+  losses: number
+  technical: number
+  pointsFor: number
+  pointsAgainst: number
+  diff: number
+  leaguePoints: number
 }

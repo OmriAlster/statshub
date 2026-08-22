@@ -4,6 +4,7 @@ import { api } from '../api/client'
 import type { GameDto, GameType, ShotDto, UpdateGameDto } from '../api/types'
 import CourtShotChart from '../components/CourtShotChart'
 import GameStatusBadge from '../components/GameStatusBadge'
+import IbbaBadge from '../components/IbbaBadge'
 
 interface EditForm {
   opponentName: string
@@ -155,8 +156,12 @@ export default function GameDetail() {
           <h2>
             vs {game.opponentName}
             <span className={`game-type-badge ${game.gameType.toLowerCase()}`}>{game.gameType}</span>
+            {game.isFromIbba && <IbbaBadge />}
           </h2>
-          <p>{game.teamName} · {new Date(game.gameDate).toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })} · 📍 {game.location || 'TBD'}</p>
+          <p>
+            {game.teamName} · {new Date(game.gameDate).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })} ·{' '}
+            {game.isHomeGame === false ? '✈️' : '🏠'} {game.location || 'TBD'}
+          </p>
         </div>
         <div className="flex gap-1">
           <button className="submit-btn" onClick={shareGame} disabled={sharing}>
@@ -200,6 +205,7 @@ export default function GameDetail() {
               <select value={form.gameType} onChange={(e) => setForm({ ...form, gameType: e.target.value as GameType })}>
                 <option value="League">League</option>
                 <option value="Cup">Cup</option>
+                <option value="Friendly">Friendly</option>
               </select>
             </label>
             <label>

@@ -13,6 +13,8 @@ namespace StatsHub.Api.DTOs
         public int? TeamScore { get; set; }
         public int? OpponentScore { get; set; }
         public string? Notes { get; set; }
+        public bool? IsHomeGame { get; set; }
+        public bool IsFromIbba { get; set; }
         public List<GameStatsDto> PlayerStats { get; set; } = new List<GameStatsDto>();
     }
 

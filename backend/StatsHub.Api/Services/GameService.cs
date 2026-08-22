@@ -162,6 +162,8 @@ namespace StatsHub.Api.Services
             TeamScore = game.TeamScore,
             OpponentScore = game.OpponentScore,
             Notes = game.Notes,
+            IsHomeGame = game.IsHomeGame,
+            IsFromIbba = game.IbbaGameCode != null,
             PlayerStats = game.GameStats.Select(MapGameStatsToDto).ToList()
         };
 

@@ -3915,3 +3915,357 @@ select:focus {
     padding: 0.35rem 0.6rem;
   }
 }
+
+/* ============================================================
+   IBBA integration
+   ============================================================ */
+.ibba-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: var(--color-surface-alt);
+  border: 1px solid var(--color-border-strong);
+  color: var(--color-text-muted);
+  border-radius: var(--radius-pill);
+  padding: 0.2rem 0.6rem 0.2rem 0.4rem;
+  font-size: 0.65rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.ibba-badge img {
+  width: 13px;
+  height: 13px;
+  border-radius: 3px;
+  object-fit: contain;
+}
+
+/* Crest + per-team jersey + IBBA mark, as one interactive unit */
+.crest-cluster {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+  width: 46px;
+  height: 46px;
+  cursor: default;
+  transition: transform var(--transition), filter var(--transition);
+}
+
+button.crest-cluster {
+  cursor: pointer;
+}
+
+button.crest-cluster:hover {
+  transform: translateY(-2px) scale(1.05);
+  filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.4));
+}
+
+.crest-cluster.crest-cluster-sm {
+  width: 34px;
+  height: 34px;
+}
+
+.crest-cluster .crest-main {
+  width: 100%;
+  height: 100%;
+  border-radius: 12px;
+  object-fit: cover;
+  background: var(--color-surface-alt);
+  border: 1.5px solid var(--color-border-strong);
+  box-shadow: var(--shadow-sm);
+  transition: border-color var(--transition);
+}
+
+button.crest-cluster:hover .crest-main {
+  border-color: var(--color-accent);
+}
+
+.crest-cluster .cc-jersey {
+  position: absolute;
+  bottom: -6px;
+  right: -8px;
+  min-width: 1.5rem;
+  height: 1.3rem;
+  padding: 0 0.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-surface);
+  border: 1.5px solid var(--color-accent);
+  color: var(--color-accent-bright);
+  border-radius: 6px;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 0.66rem;
+  box-shadow: var(--shadow-sm);
+}
+
+.crest-cluster.crest-cluster-sm .cc-jersey {
+  bottom: -5px;
+  right: -6px;
+  min-width: 1.25rem;
+  height: 1.1rem;
+  font-size: 0.58rem;
+}
+
+.crest-cluster .cc-ibba {
+  position: absolute;
+  top: -6px;
+  left: -6px;
+  width: 1.15rem;
+  height: 1.15rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-surface);
+  border: 1.5px solid var(--color-surface-alt);
+  border-radius: 50%;
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+
+.crest-cluster.crest-cluster-sm .cc-ibba {
+  width: 1rem;
+  height: 1rem;
+  top: -4px;
+  left: -4px;
+}
+
+.crest-cluster .cc-ibba img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.league-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: var(--color-info-soft);
+  color: var(--color-info);
+  border: 1px solid rgba(63, 183, 255, 0.3);
+  border-radius: var(--radius-pill);
+  padding: 0.32rem 0.75rem 0.32rem 0.55rem;
+  font-weight: 700;
+  font-size: 0.78rem;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.league-chip:hover {
+  background: var(--color-info);
+  color: #06212f;
+}
+
+.pos-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: var(--color-accent-soft);
+  color: var(--color-accent-bright);
+  border: 1px solid rgba(255, 122, 26, 0.3);
+  border-radius: var(--radius-pill);
+  padding: 0.3rem 0.7rem 0.3rem 0.55rem;
+  font-weight: 800;
+  font-size: 0.72rem;
+  cursor: pointer;
+  transition: all var(--transition);
+  white-space: nowrap;
+}
+
+.pos-pill:hover {
+  background: var(--color-accent);
+  color: #1a0d00;
+}
+
+/* Dashboard: last/next game glance per team */
+.glance-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+  padding-top: 0.55rem;
+  margin-top: 0.55rem;
+  border-top: 1px dashed var(--color-border);
+}
+
+.glance-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.glance-label {
+  font-size: 0.6rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-text-faint);
+}
+
+.glance-line {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.glance-line span.truncate {
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 9rem;
+}
+
+.glance-score {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 0.75rem;
+}
+
+.glance-score.win { color: var(--color-success); }
+.glance-score.loss { color: var(--color-danger); }
+.glance-score.upcoming { color: var(--color-gold); }
+
+/* Standings modal */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+  padding: 1.5rem;
+}
+
+.modal-panel {
+  background: var(--color-surface);
+  border: 1.5px solid var(--color-border-strong);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  max-width: 30rem;
+  width: 100%;
+  max-height: 80vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.3rem 1.5rem;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.modal-head-title p {
+  margin: 0.15rem 0 0;
+  font-size: 0.76rem;
+  color: var(--color-text-muted);
+}
+
+.modal-close {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--color-surface-alt);
+  border: 1px solid var(--color-border-strong);
+  color: var(--color-text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex: none;
+}
+
+.modal-body {
+  overflow-y: auto;
+  padding: 0.5rem 0;
+}
+
+.standings-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+}
+
+.standings-table th {
+  position: sticky;
+  top: 0;
+  background: var(--color-surface);
+  text-align: left;
+  font-size: 0.65rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--color-text-faint);
+  font-weight: 700;
+  padding: 0.5rem 1.4rem;
+}
+
+.standings-table td {
+  padding: 0.55rem 1.4rem;
+  border-top: 1px solid var(--color-border);
+}
+
+.standings-table td.num { text-align: right; }
+.standings-table td.opp { text-align: left; font-weight: 600; }
+
+.standings-table tr.own td {
+  background: var(--color-accent-soft);
+  color: var(--color-accent-bright);
+  font-weight: 800;
+}
+
+.game-type-badge.friendly {
+  background: var(--color-purple-soft);
+  color: var(--color-purple);
+  border-color: rgba(185, 139, 255, 0.35);
+}
+
+/* IBBA connect panel (Players page) */
+.ibba-connect-box {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--color-border);
+}
+
+.ibba-connect-form {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.ibba-connect-form input {
+  flex: 1;
+  min-width: 12rem;
+  padding: 0.6rem 0.8rem;
+  background: var(--color-surface);
+  border: 1.5px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  font-size: 0.9rem;
+}
+
+.ibba-team-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 0.6rem 0.75rem;
+  margin-top: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.ibba-team-row select {
+  padding: 0.4rem 1.8rem 0.4rem 0.6rem;
+  font-size: 0.82rem;
+}
