@@ -15,8 +15,16 @@ namespace StatsHub.Api.Models
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
+        // IBBA sync - all null for manually-created (including Friendly) games.
+        // IbbaGameCode is the dedup key from IBBA's own per-game "Code" column,
+        // so re-syncing never creates duplicate Games for the same fixture.
+        public string? IbbaGameCode { get; set; }
+        public int? IbbaTeamLinkId { get; set; }
+        public bool? IsHomeGame { get; set; }
+
         // Navigation properties
         public Team Team { get; set; } = null!;
+        public IbbaTeamLink? IbbaTeamLink { get; set; }
         public ICollection<GameStats> GameStats { get; set; } = new List<GameStats>();
     }
 }

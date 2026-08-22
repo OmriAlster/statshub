@@ -18,6 +18,9 @@ namespace StatsHub.Api.Data
         public DbSet<GameStats> GameStats { get; set; }
         public DbSet<Shot> Shots { get; set; }
         public DbSet<ShareLink> ShareLinks { get; set; }
+        public DbSet<PlayerIbbaLink> PlayerIbbaLinks { get; set; }
+        public DbSet<IbbaTeamLink> IbbaTeamLinks { get; set; }
+        public DbSet<IbbaStanding> IbbaStandings { get; set; }
 
         // SQLite never validated DateTime.Kind, so call sites across the app
         // freely mix DateTime.UtcNow with Kind-less values (new DateTime(...),
@@ -184,6 +187,51 @@ namespace StatsHub.Api.Data
                 .WithMany()
                 .HasForeignKey(sl => sl.GameId)
                 .OnDelete(DeleteBehavior.Cascade);
+
+            // PlayerIbbaLink configuration (one per player)
+            modelBuilder.Entity<PlayerIbbaLink>()
+                .HasKey(pil => pil.Id);
+            modelBuilder.Entity<PlayerIbbaLink>()
+                .HasIndex(pil => pil.PlayerId)
+                .IsUnique();
+            modelBuilder.Entity<PlayerIbbaLink>()
+                .HasOne(pil => pil.Player)
+                .WithMany()
+                .HasForeignKey(pil => pil.PlayerId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // IbbaTeamLink configuration
+            modelBuilder.Entity<IbbaTeamLink>()
+                .HasKey(itl => itl.Id);
+            modelBuilder.Entity<IbbaTeamLink>()
+                .HasIndex(itl => itl.PlayerIbbaLinkId);
+            modelBuilder.Entity<IbbaTeamLink>()
+                .HasOne(itl => itl.PlayerIbbaLink)
+                .WithMany(pil => pil.TeamLinks)
+                .HasForeignKey(itl => itl.PlayerIbbaLinkId)
+                .OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<IbbaTeamLink>()
+                .HasOne(itl => itl.LinkedTeam)
+                .WithMany()
+                .HasForeignKey(itl => itl.LinkedTeamId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            // IbbaStanding configuration - shared per league, not per player/team
+            modelBuilder.Entity<IbbaStanding>()
+                .HasKey(s => s.Id);
+            modelBuilder.Entity<IbbaStanding>()
+                .HasIndex(s => s.IbbaLeagueUrl);
+
+            // Game -> IbbaTeamLink: a synced game's source. SetNull (not Cascade) so
+            // unlinking a team from IBBA never deletes the real, stats-bearing games
+            // it produced - only the sync attribution.
+            modelBuilder.Entity<Game>()
+                .HasOne(g => g.IbbaTeamLink)
+                .WithMany(itl => itl.Games)
+                .HasForeignKey(g => g.IbbaTeamLinkId)
+                .OnDelete(DeleteBehavior.SetNull);
+            modelBuilder.Entity<Game>()
+                .HasIndex(g => g.IbbaGameCode);
         }
     }
 }

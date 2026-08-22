@@ -100,15 +100,20 @@ builder.Services.AddScoped<IShareService, ShareService>();
 var app = builder.Build();
 
 // Ensure the database and schema exist. EnsureCreated() builds the full
-// current schema on a brand-new database, which is all a fresh Postgres
-// deployment needs. SchemaUpgrader only applies to the pre-existing local
-// SQLite file, whose schema predates EnsureCreated ever having run against
-// today's model.
+// current schema on a brand-new database - all a fresh deploy needs - but is a
+// complete no-op on one that already exists, on any provider. So every model
+// change made since first deploy needs an explicit, idempotent upgrader:
+// SchemaUpgrader for the local SQLite file, PostgresSchemaUpgrader for
+// production. Both are safe to run on every startup.
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
     db.Database.EnsureCreated();
-    if (!usingPostgres)
+    if (usingPostgres)
+    {
+        PostgresSchemaUpgrader.Apply(db);
+    }
+    else
     {
         SchemaUpgrader.Apply(db);
     }
