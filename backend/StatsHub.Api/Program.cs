@@ -96,6 +96,16 @@ builder.Services.AddScoped<IGameService, GameService>();
 builder.Services.AddScoped<IGameStatsService, GameStatsService>();
 builder.Services.AddScoped<IShotService, ShotService>();
 builder.Services.AddScoped<IShareService, ShareService>();
+builder.Services.AddScoped<IIbbaService, IbbaService>();
+builder.Services.AddHttpClient("Ibba", client =>
+{
+    client.DefaultRequestHeaders.UserAgent.ParseAdd(
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36");
+    client.Timeout = TimeSpan.FromSeconds(30);
+}).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
+{
+    AutomaticDecompression = System.Net.DecompressionMethods.All
+});
 
 var app = builder.Build();
 
