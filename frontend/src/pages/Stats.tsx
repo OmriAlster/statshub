@@ -103,15 +103,20 @@ function GamesTab({ player }: { player: PlayerDto }) {
 
   const teamOptions = useMemo(() => Array.from(new Map(games.map((g) => [g.teamId, g.teamName])).entries()), [games])
 
-  const { filteredGames, completedGames, wins, losses, ppg } = useMemo(() => {
+  const { filteredGames, completedGames, gamesWithStats, wins, losses, ppg } = useMemo(() => {
     const filteredGames = selectedTeamId === 'all' ? games : games.filter((g) => g.teamId === selectedTeamId)
     const completedGames = filteredGames.filter((g) => g.status === 'Completed')
+    // Team record reflects every completed game regardless of whether this
+    // player's box score has been tracked yet (e.g. a game just synced from
+    // IBBA). Personal averages below must not count those - an untracked
+    // game has no points to report, not zero points.
     const wins = completedGames.filter((g) => (g.teamScore ?? 0) > (g.opponentScore ?? 0)).length
     const losses = completedGames.filter((g) => (g.teamScore ?? 0) < (g.opponentScore ?? 0)).length
-    const ppg = completedGames.length
-      ? (completedGames.reduce((sum, g) => sum + (g.playerStats[0]?.totalPoints ?? 0), 0) / completedGames.length).toFixed(1)
+    const gamesWithStats = completedGames.filter((g) => g.playerStats.length > 0)
+    const ppg = gamesWithStats.length
+      ? (gamesWithStats.reduce((sum, g) => sum + (g.playerStats[0]?.totalPoints ?? 0), 0) / gamesWithStats.length).toFixed(1)
       : '0'
-    return { filteredGames, completedGames, wins, losses, ppg }
+    return { filteredGames, completedGames, gamesWithStats, wins, losses, ppg }
   }, [games, selectedTeamId])
 
   return (
@@ -130,7 +135,7 @@ function GamesTab({ player }: { player: PlayerDto }) {
 
       <div className="season-summary">
         <div className="summary-stat">
-          <span className="summary-value">{completedGames.length}</span>
+          <span className="summary-value">{gamesWithStats.length}</span>
           <span className="summary-label">Games Played</span>
         </div>
         <div className="summary-stat">

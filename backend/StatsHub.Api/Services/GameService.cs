@@ -75,13 +75,24 @@ namespace StatsHub.Api.Services
                 p.Id == playerId && (p.LinkedUserId == requestingUserId || p.Parents.Any(pp => pp.UserId == requestingUserId)));
             if (!canAccess) return new List<GameDto>();
 
-            var gameIds = await _context.GameStats
+            // A player's games are every game for a team they're currently rostered
+            // on - not just games they already have stats for. That distinction used
+            // to be invisible because every Game was created together with its
+            // GameStats via live tracking, but a game synced from IBBA has no stats
+            // until the user adds them, and would otherwise never show up here.
+            // Stats-only games are kept too, in case a player has left the team since.
+            var teamIds = await _context.PlayerTeams
+                .Where(pt => pt.PlayerId == playerId)
+                .Select(pt => pt.TeamId)
+                .ToListAsync();
+
+            var statsGameIds = await _context.GameStats
                 .Where(gs => gs.PlayerId == playerId)
                 .Select(gs => gs.GameId)
                 .ToListAsync();
 
             var games = await _context.Games
-                .Where(g => gameIds.Contains(g.Id))
+                .Where(g => teamIds.Contains(g.TeamId) || statsGameIds.Contains(g.Id))
                 .Include(g => g.Team)
                 .Include(g => g.GameStats.Where(gs => gs.PlayerId == playerId))
                 .ThenInclude(gs => gs.Player)
