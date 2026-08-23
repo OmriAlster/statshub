@@ -49,12 +49,20 @@ namespace StatsHub.Api.Data
                     WHERE pp.""PlayerId"" = p.""Id"" AND pp.""UserId"" = p.""UserId""
                 );");
 
-            // Backfill: give every existing PlayerTeam row the player's current
-            // jersey number so per-team numbers start populated.
-            db.ExecuteSqlRaw(@"
-                UPDATE ""PlayerTeams""
-                SET ""JerseyNumber"" = (SELECT p.""JerseyNumber"" FROM ""Players"" p WHERE p.""Id"" = ""PlayerTeams"".""PlayerId"")
-                WHERE ""JerseyNumber"" = 0;");
+            // Backfill: give every existing PlayerTeam row the player's old
+            // (pre-migration) jersey number so per-team numbers start populated,
+            // before that column is dropped below. No-op once already applied.
+            if (ColumnExists(context, "Players", "JerseyNumber"))
+            {
+                db.ExecuteSqlRaw(@"
+                    UPDATE ""PlayerTeams""
+                    SET ""JerseyNumber"" = (SELECT p.""JerseyNumber"" FROM ""Players"" p WHERE p.""Id"" = ""PlayerTeams"".""PlayerId"")
+                    WHERE ""JerseyNumber"" = 0;");
+            }
+
+            // Jersey number is per-team now (PlayerTeams.JerseyNumber) - the old
+            // player-level default is gone.
+            db.ExecuteSqlRaw(@"ALTER TABLE ""Players"" DROP COLUMN IF EXISTS ""JerseyNumber"";");
 
             // ---- IBBA integration ----
             db.ExecuteSqlRaw(@"ALTER TABLE ""Games"" ADD COLUMN IF NOT EXISTS ""IbbaGameCode"" TEXT;");
@@ -107,6 +115,32 @@ namespace StatsHub.Api.Data
                 );");
             db.ExecuteSqlRaw(@"CREATE INDEX IF NOT EXISTS ""IX_IbbaStandings_IbbaLeagueUrl"" ON ""IbbaStandings"" (""IbbaLeagueUrl"");");
             db.ExecuteSqlRaw(@"CREATE INDEX IF NOT EXISTS ""IX_Games_IbbaGameCode"" ON ""Games"" (""IbbaGameCode"");");
+        }
+
+        private static bool ColumnExists(AppDbContext context, string table, string column)
+        {
+            var connection = context.Database.GetDbConnection();
+            var wasClosed = connection.State != System.Data.ConnectionState.Open;
+            if (wasClosed) connection.Open();
+            try
+            {
+                using var cmd = connection.CreateCommand();
+                cmd.CommandText = "SELECT 1 FROM information_schema.columns WHERE table_name = @table AND column_name = @column;";
+                var tableParam = cmd.CreateParameter();
+                tableParam.ParameterName = "@table";
+                tableParam.Value = table;
+                cmd.Parameters.Add(tableParam);
+                var columnParam = cmd.CreateParameter();
+                columnParam.ParameterName = "@column";
+                columnParam.Value = column;
+                cmd.Parameters.Add(columnParam);
+                using var reader = cmd.ExecuteReader();
+                return reader.Read();
+            }
+            finally
+            {
+                if (wasClosed) connection.Close();
+            }
         }
     }
 }

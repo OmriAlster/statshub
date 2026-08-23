@@ -16,7 +16,6 @@ export interface PlayerDto {
   id: number
   firstName: string
   lastName: string
-  jerseyNumber: number
   position: string
   height?: number | null
   weight?: number | null
@@ -70,6 +69,8 @@ export interface GameStatsDto {
   fouls: number
   minutesPlayed: number
   totalPoints: number
+  // Only populated where a caller specifically asks for it (e.g. a shared game view).
+  shots?: ShotDto[]
 }
 
 export type GameType = 'League' | 'Cup' | 'Friendly'
@@ -91,6 +92,27 @@ export interface GameDto {
   playerStats: GameStatsDto[]
 }
 
+export interface CreateGameStatsDto {
+  gameId: number
+  playerId: number
+  fieldGoalsMade: number
+  fieldGoalsAttempted: number
+  threePointersMade: number
+  threePointersAttempted: number
+  freeThrowsMade: number
+  freeThrowsAttempted: number
+  offensiveRebounds: number
+  defensiveRebounds: number
+  assists: number
+  steals: number
+  blocks: number
+  turnovers: number
+  fouls: number
+  minutesPlayed: number
+}
+
+export type UpdateGameStatsDto = Partial<Omit<CreateGameStatsDto, 'gameId' | 'playerId'>>
+
 export interface UpdateGameDto {
   opponentName?: string
   gameDate?: string
@@ -100,6 +122,7 @@ export interface UpdateGameDto {
   teamScore?: number | null
   opponentScore?: number | null
   notes?: string
+  isHomeGame?: boolean
 }
 
 export interface PlayerTeamStatsDto {
@@ -128,14 +151,22 @@ export interface PlayerTeamStatsDto {
   freeThrowPercentage: number
 }
 
+export interface SharedTeamDto extends PlayerTeamStatsDto {
+  logoUrl?: string | null
+  isIbba: boolean
+  leagueUrl?: string | null
+  leagueName?: string | null
+  standingPosition?: number | null
+  standingTotalTeams?: number | null
+}
+
 export interface SharedPlayerDto {
   playerName: string
-  jerseyNumber: number
   position: string
   profilePictureUrl?: string | null
   game?: GameDto | null
-  teams: PlayerTeamStatsDto[]
-  recentGames: GameDto[]
+  teams: SharedTeamDto[]
+  games: GameDto[]
 }
 
 export interface ShotDto {
@@ -170,6 +201,7 @@ export interface IbbaPreviewTeamDto {
 
 export interface IbbaPreviewDto {
   playerName: string
+  dateOfBirth?: string | null
   teams: IbbaPreviewTeamDto[]
 }
 
@@ -192,6 +224,15 @@ export interface IbbaLinkStatusDto {
   lastSyncedAt?: string | null
   lastSyncError?: string | null
   teams: IbbaTeamLinkDto[]
+}
+
+export interface CreatePlayerFromIbbaDto {
+  ibbaPlayerUrl: string
+}
+
+export interface CreatePlayerFromIbbaResultDto {
+  player: PlayerDto
+  ibba: IbbaLinkStatusDto | null
 }
 
 export interface IbbaStandingRowDto {

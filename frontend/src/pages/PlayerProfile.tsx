@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api/client'
-import type { IbbaLinkStatusDto, IbbaPreviewDto, InviteDto, PlayerDto, TeamDto } from '../api/types'
+import type { CreatePlayerFromIbbaResultDto, IbbaLinkStatusDto, IbbaPreviewDto, InviteDto, PlayerDto, TeamDto } from '../api/types'
 import { useAuth } from '../auth/AuthContext'
+import ConfirmModal from '../components/ConfirmModal'
 import IbbaBadge from '../components/IbbaBadge'
 import StandingsModal from '../components/StandingsModal'
 import TeamCrest from '../components/TeamCrest'
@@ -9,9 +10,12 @@ import TeamCrest from '../components/TeamCrest'
 const emptyForm = {
   firstName: '',
   lastName: '',
-  jerseyNumber: 0,
   position: '',
   dateOfBirth: new Date().toISOString().split('T')[0],
+}
+
+const emptyIbbaNewForm = {
+  url: '',
 }
 
 export default function PlayerProfile() {
@@ -24,6 +28,12 @@ export default function PlayerProfile() {
   const [showAddForm, setShowAddForm] = useState(false)
   const [form, setForm] = useState(emptyForm)
   const [saving, setSaving] = useState(false)
+
+  const [showAddIbbaForm, setShowAddIbbaForm] = useState(false)
+  const [ibbaNewForm, setIbbaNewForm] = useState(emptyIbbaNewForm)
+  const [ibbaNewPreview, setIbbaNewPreview] = useState<IbbaPreviewDto | null>(null)
+  const [ibbaNewBusy, setIbbaNewBusy] = useState(false)
+  const [ibbaNewError, setIbbaNewError] = useState<string | null>(null)
 
   const [invites, setInvites] = useState<Record<number, InviteDto>>({})
   const [parentInvites, setParentInvites] = useState<Record<number, InviteDto>>({})
@@ -41,8 +51,10 @@ export default function PlayerProfile() {
   const [ibbaPreview, setIbbaPreview] = useState<Record<number, IbbaPreviewDto | null>>({})
   const [ibbaBusy, setIbbaBusy] = useState<Record<number, boolean>>({})
   const [ibbaError, setIbbaError] = useState<Record<number, string | null>>({})
-  const [ibbaNewTeamName, setIbbaNewTeamName] = useState<Record<number, string>>({})
   const [standingsFor, setStandingsFor] = useState<{ leagueUrl: string; leagueName: string; teamName: string } | null>(null)
+
+  const [deletingPlayer, setDeletingPlayer] = useState<PlayerDto | null>(null)
+  const [deletingBusy, setDeletingBusy] = useState(false)
 
   useEffect(() => {
     load()
@@ -91,7 +103,6 @@ export default function PlayerProfile() {
     try {
       const { data } = await api.post<PlayerDto>('/players', {
         ...form,
-        jerseyNumber: Number(form.jerseyNumber),
         dateOfBirth: new Date(form.dateOfBirth).toISOString(),
       })
       setPlayers((prev) => [...prev, data])
@@ -102,6 +113,42 @@ export default function PlayerProfile() {
       setError('Could not add player.')
     } finally {
       setSaving(false)
+    }
+  }
+
+  const previewNewIbba = async () => {
+    const url = ibbaNewForm.url.trim()
+    if (!url) return
+    setIbbaNewBusy(true)
+    setIbbaNewError(null)
+    try {
+      const { data } = await api.get<IbbaPreviewDto>('/ibba/preview', { params: { playerUrl: url } })
+      setIbbaNewPreview(data)
+    } catch (err) {
+      const message = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
+      setIbbaNewError(message ?? 'Could not read that IBBA page.')
+    } finally {
+      setIbbaNewBusy(false)
+    }
+  }
+
+  const createPlayerFromIbba = async () => {
+    setIbbaNewBusy(true)
+    setIbbaNewError(null)
+    try {
+      const { data } = await api.post<CreatePlayerFromIbbaResultDto>('/ibba/players', {
+        ibbaPlayerUrl: ibbaNewForm.url.trim(),
+      })
+      setPlayers((prev) => [...prev, data.player])
+      setIbbaLinks((prev) => ({ ...prev, [data.player.id]: data.ibba }))
+      setIbbaNewForm(emptyIbbaNewForm)
+      setIbbaNewPreview(null)
+      setShowAddIbbaForm(false)
+      setError(null)
+    } catch {
+      setIbbaNewError('Could not create this player from IBBA.')
+    } finally {
+      setIbbaNewBusy(false)
     }
   }
 
@@ -129,6 +176,20 @@ export default function PlayerProfile() {
     }
   }
 
+  const confirmDeletePlayer = async () => {
+    if (!deletingPlayer) return
+    setDeletingBusy(true)
+    try {
+      await api.delete(`/players/${deletingPlayer.id}`)
+      setPlayers((prev) => prev.filter((p) => p.id !== deletingPlayer.id))
+      setDeletingPlayer(null)
+    } catch {
+      setError('Could not delete this player.')
+    } finally {
+      setDeletingBusy(false)
+    }
+  }
+
   const shareProfile = async (playerId: number) => {
     setBusyPlayerId(playerId)
     try {
@@ -151,7 +212,7 @@ export default function PlayerProfile() {
     setPlayers((prev) =>
       prev.map((p) =>
         p.id === playerId && !(p.teams ?? []).some((t) => t.id === team.id)
-          ? { ...p, teams: [...(p.teams ?? []), { ...team, jerseyNumber: jerseyNumber ?? team.jerseyNumber ?? p.jerseyNumber }] }
+          ? { ...p, teams: [...(p.teams ?? []), { ...team, jerseyNumber: jerseyNumber ?? team.jerseyNumber ?? 0 }] }
           : p
       )
     )
@@ -306,7 +367,6 @@ export default function PlayerProfile() {
       setAllTeams((prev) => [...prev, team])
       const { data } = await api.put<IbbaLinkStatusDto>(`/ibba/team-links/${ibbaTeamLinkId}`, { teamId: team.id })
       setIbbaLinks((prev) => ({ ...prev, [playerId]: data }))
-      setIbbaNewTeamName((prev) => ({ ...prev, [ibbaTeamLinkId]: '' }))
     } catch {
       setIbbaError((prev) => ({ ...prev, [playerId]: 'Could not create that team.' }))
     } finally {
@@ -332,9 +392,13 @@ export default function PlayerProfile() {
         {players.map((player) => (
           <div className="profile-card profile-card-v2" key={player.id}>
             <div className="profile-top-row">
-              <div className="avatar-lg">{player.firstName[0]}{player.lastName[0]}</div>
+              {player.profilePictureUrl ? (
+                <img className="avatar-lg" src={player.profilePictureUrl} alt="" />
+              ) : (
+                <div className="avatar-lg">{player.firstName[0]}{player.lastName[0]}</div>
+              )}
               <div className="profile-id">
-                <h3>{player.firstName} {player.lastName} <span className="player-card-number">#{player.jerseyNumber}</span></h3>
+                <h3>{player.firstName} {player.lastName}</h3>
                 <p className="profile-id-sub">{player.position || 'Player'}</p>
               </div>
             </div>
@@ -412,7 +476,7 @@ export default function PlayerProfile() {
                       <div className="flex gap-1">
                         <input
                           type="number"
-                          placeholder={`Jersey # (default ${player.jerseyNumber})`}
+                          placeholder="Jersey #"
                           value={pickerJerseyNumber}
                           onChange={(e) => setPickerJerseyNumber(e.target.value)}
                           style={{ maxWidth: '9rem' }}
@@ -492,19 +556,12 @@ export default function PlayerProfile() {
                               ))}
                             </select>
                           )}
-                          <input
-                            type="text"
-                            placeholder="New team name"
-                            value={ibbaNewTeamName[t.id] ?? ''}
-                            onChange={(e) => setIbbaNewTeamName((prev) => ({ ...prev, [t.id]: e.target.value }))}
-                            style={{ maxWidth: '10rem' }}
-                          />
                           <button
                             className="submit-btn"
-                            disabled={ibbaBusy[player.id] || !(ibbaNewTeamName[t.id] ?? '').trim()}
-                            onClick={() => mapIbbaTeamToNew(player.id, t.id, ibbaNewTeamName[t.id] ?? '')}
+                            disabled={ibbaBusy[player.id]}
+                            onClick={() => mapIbbaTeamToNew(player.id, t.id, t.teamName)}
                           >
-                            Create &amp; Link
+                            Create team "{t.teamName}"
                           </button>
                         </div>
                       )}
@@ -591,6 +648,11 @@ export default function PlayerProfile() {
                   🔑 Player Login Code
                 </button>
               )}
+              {!isPlayerRole && (
+                <button onClick={() => setDeletingPlayer(player)} style={{ color: 'var(--color-danger)' }}>
+                  🗑️ Delete Player
+                </button>
+              )}
             </div>
             {shareLinks[player.id] && (
               <div className="invite-box">
@@ -610,9 +672,61 @@ export default function PlayerProfile() {
 
         {!isPlayerRole && !showAddForm && (
           <div className="add-player-card">
-            <h3>➕ Add New Player</h3>
-            <p>Manage multiple players</p>
-            <button onClick={() => setShowAddForm(true)}>Add Player</button>
+            {showAddIbbaForm ? (
+              ibbaNewPreview ? (
+                <>
+                  <h3>➕ New Player from IBBA</h3>
+                  <p>
+                    Found: <b>{ibbaNewPreview.playerName}</b>
+                    {ibbaNewPreview.dateOfBirth && <> · born {new Date(ibbaNewPreview.dateOfBirth).toLocaleDateString()}</>}
+                    {ibbaNewPreview.teams.length > 0 && <> · {ibbaNewPreview.teams.map((t) => t.teamName).join(', ')}</>}
+                  </p>
+                  {!ibbaNewPreview.dateOfBirth && (
+                    <p className="error">This IBBA profile doesn't list a birth date - add this player manually instead.</p>
+                  )}
+                  {ibbaNewError && <p className="error">{ibbaNewError}</p>}
+                  <div className="flex gap-1" style={{ justifyContent: 'center', flexWrap: 'wrap' }}>
+                    {ibbaNewPreview.dateOfBirth && (
+                      <button className="submit-btn" onClick={createPlayerFromIbba} disabled={ibbaNewBusy}>
+                        {ibbaNewBusy ? 'Creating...' : 'Create Player'}
+                      </button>
+                    )}
+                    <button onClick={() => setIbbaNewPreview(null)} disabled={ibbaNewBusy}>Back</button>
+                    <button
+                      onClick={() => { setShowAddIbbaForm(false); setIbbaNewPreview(null); setIbbaNewForm(emptyIbbaNewForm); setIbbaNewError(null) }}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <h3>➕ New Player from IBBA</h3>
+                  <div className="ibba-connect-form">
+                    <input
+                      type="text"
+                      placeholder="Paste this player's ibasketball.co.il profile URL"
+                      value={ibbaNewForm.url}
+                      onChange={(e) => setIbbaNewForm({ ...ibbaNewForm, url: e.target.value })}
+                    />
+                    <button className="submit-btn" disabled={ibbaNewBusy || !ibbaNewForm.url.trim()} onClick={previewNewIbba}>
+                      {ibbaNewBusy ? 'Checking...' : 'Preview'}
+                    </button>
+                  </div>
+                  {ibbaNewError && <p className="error">{ibbaNewError}</p>}
+                  <button onClick={() => setShowAddIbbaForm(false)}>Cancel</button>
+                </>
+              )
+            ) : (
+              <>
+                <h3>➕ Add New Player</h3>
+                <p>Manage multiple players</p>
+                <div className="flex gap-1" style={{ justifyContent: 'center', flexWrap: 'wrap' }}>
+                  <button onClick={() => setShowAddForm(true)}>Add Manually</button>
+                  <button onClick={() => setShowAddIbbaForm(true)}>Add via IBBA Link</button>
+                </div>
+              </>
+            )}
           </div>
         )}
       </div>
@@ -628,10 +742,6 @@ export default function PlayerProfile() {
             <label>
               Last Name
               <input value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })} />
-            </label>
-            <label>
-              Jersey #
-              <input type="number" value={form.jerseyNumber} onChange={(e) => setForm({ ...form, jerseyNumber: Number(e.target.value) })} />
             </label>
             <label>
               Position
@@ -657,6 +767,23 @@ export default function PlayerProfile() {
           leagueName={standingsFor.leagueName}
           highlightTeamName={standingsFor.teamName}
           onClose={() => setStandingsFor(null)}
+        />
+      )}
+
+      {deletingPlayer && (
+        <ConfirmModal
+          title="Delete Player"
+          message={
+            <>
+              Delete <b>{deletingPlayer.firstName} {deletingPlayer.lastName}</b>? This removes every team, game, and
+              stat that belongs only to them - a team shared with a sibling is kept, only their own membership and
+              stats on it go away. This can't be undone.
+            </>
+          }
+          confirmLabel="Delete Player"
+          busy={deletingBusy}
+          onConfirm={confirmDeletePlayer}
+          onCancel={() => setDeletingPlayer(null)}
         />
       )}
     </div>

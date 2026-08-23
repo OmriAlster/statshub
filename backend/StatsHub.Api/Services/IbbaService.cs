@@ -51,6 +51,7 @@ namespace StatsHub.Api.Services
             return new IbbaPreviewDto
             {
                 PlayerName = info.PlayerName,
+                DateOfBirth = info.DateOfBirth,
                 Teams = info.Teams.Select(t => new IbbaPreviewTeamDto { TeamName = t.TeamName }).ToList()
             };
         }
@@ -213,6 +214,12 @@ namespace StatsHub.Api.Services
             {
                 var builder = new IbbaReportBuilder(CreateIbbaHttpClient());
                 var (player, teamReports) = await builder.BuildAsync(link.IbbaPlayerUrl);
+
+                if (!string.IsNullOrEmpty(player.PhotoUrl))
+                {
+                    var playerEntity = await _context.Players.FindAsync(link.PlayerId);
+                    if (playerEntity != null) playerEntity.ProfilePictureUrl = player.PhotoUrl;
+                }
 
                 foreach (var report in teamReports)
                 {

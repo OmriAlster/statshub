@@ -3,16 +3,8 @@ import { api } from '../api/client'
 import type { GameDto, GameType, PlayerDto, ShotDto } from '../api/types'
 import { useAuth } from '../auth/AuthContext'
 import CourtShotChart, { type ChartShot } from '../components/CourtShotChart'
+import { computeStatsFromEvents, EVENT_ICONS, EVENT_LABELS, seedEventsFromStats, type EventType, type GameEvent } from './gameEvents'
 import { useLiveGameOverlay } from './LiveGameContext'
-
-type EventType = 'FT_MAKE' | 'FT_MISS' | 'OREB' | 'DREB' | 'AST' | 'STL' | 'BLK' | 'TO' | 'FOUL'
-
-interface GameEvent {
-  id: string
-  type: EventType
-  quarter: number
-  display: string
-}
 
 interface ActionLogEntry {
   kind: 'event' | 'shot'
@@ -40,49 +32,10 @@ interface ActiveGame {
 
 const STORAGE_KEY_PREFIX = 'statshub_active_live_game'
 
-const EVENT_LABELS: Record<EventType, string> = {
-  FT_MAKE: 'FT Make',
-  FT_MISS: 'FT Miss',
-  OREB: 'Off. Rebound',
-  DREB: 'Def. Rebound',
-  AST: 'Assist',
-  STL: 'Steal',
-  BLK: 'Block',
-  TO: 'Turnover',
-  FOUL: 'Foul',
-}
-
-const EVENT_ICONS: Record<EventType, string> = {
-  FT_MAKE: 'i-check',
-  FT_MISS: 'i-x',
-  OREB: 'i-reb',
-  DREB: 'i-reb',
-  AST: 'i-ast',
-  STL: 'i-stl',
-  BLK: 'i-blk',
-  TO: 'i-to',
-  FOUL: 'i-foul',
-}
-
-function computeStatsFromEvents(events: GameEvent[], minutesPlayed: number) {
-  const count = (types: EventType[]) => events.filter((e) => types.includes(e.type)).length
-  return {
-    freeThrowsMade: count(['FT_MAKE']),
-    freeThrowsAttempted: count(['FT_MAKE', 'FT_MISS']),
-    offensiveRebounds: count(['OREB']),
-    defensiveRebounds: count(['DREB']),
-    assists: count(['AST']),
-    steals: count(['STL']),
-    blocks: count(['BLK']),
-    turnovers: count(['TO']),
-    fouls: count(['FOUL']),
-    minutesPlayed,
-  }
-}
-
 export default function LiveGameWidget() {
   const { user } = useAuth()
-  const { overlayOpen, openOverlay, closeOverlay } = useLiveGameOverlay()
+  const { overlayOpen, openOverlay, closeOverlay, pendingGame, clearPendingGame } = useLiveGameOverlay()
+  const [promoting, setPromoting] = useState(false)
   const [players, setPlayers] = useState<PlayerDto[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -132,6 +85,84 @@ export default function LiveGameWidget() {
     loadSetupData()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storageKey])
+
+  // A game scheduled ahead of time from the Schedule tab, promoted to a live
+  // in-progress game instead of starting a brand new one from scratch.
+  useEffect(() => {
+    if (!pendingGame || active || promoting) return
+    promoteToLive(pendingGame.gameId, pendingGame.playerId)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingGame, active])
+
+  const promoteToLive = async (gameId: number, playerId: number) => {
+    setPromoting(true)
+    setError(null)
+    try {
+      const { data: game } = await api.get<GameDto>(`/games/${gameId}`)
+      const playerList = players.length > 0 ? players : (await api.get<PlayerDto[]>('/players')).data
+      const player = playerList.find((p) => p.id === playerId)
+      if (!player) {
+        setError('Could not find that player.')
+        return
+      }
+      if (await playerHasActiveGame(playerId)) {
+        setError('This player already has a live game in progress. End it before starting a new one.')
+        return
+      }
+
+      let stats: GameDto['playerStats'][number] | undefined = game.playerStats.find((s) => s.playerId === playerId)
+      if (!stats) {
+        const { data } = await api.post<GameDto['playerStats'][number]>('/gamestats', {
+          gameId,
+          playerId,
+          fieldGoalsMade: 0,
+          fieldGoalsAttempted: 0,
+          threePointersMade: 0,
+          threePointersAttempted: 0,
+          freeThrowsMade: 0,
+          freeThrowsAttempted: 0,
+          offensiveRebounds: 0,
+          defensiveRebounds: 0,
+          assists: 0,
+          steals: 0,
+          blocks: 0,
+          turnovers: 0,
+          fouls: 0,
+          minutesPlayed: 0,
+        })
+        stats = data
+      }
+
+      if (game.status !== 'In Progress') {
+        await api.put(`/games/${gameId}`, { status: 'In Progress' })
+      }
+
+      const shots = await api.get<ShotDto[]>(`/shots/gamestats/${stats.id}`).then((res) => res.data).catch(() => [])
+      const team = player.teams.find((t) => t.id === game.teamId)
+
+      setActive({
+        gameId,
+        gameStatsId: stats.id,
+        playerId: player.id,
+        playerName: `${player.firstName} ${player.lastName}`,
+        jerseyNumber: team?.jerseyNumber ?? 0,
+        teamName: game.teamName,
+        gameType: game.gameType,
+        opponent: game.opponentName,
+        gameDate: game.gameDate.split('T')[0],
+        currentQuarter: 1,
+        events: seedEventsFromStats(stats),
+        shots,
+        actionLog: [],
+        minutesPlayed: stats.minutesPlayed,
+      })
+    } catch {
+      setError('Could not go live on that game. Please try again.')
+    } finally {
+      setPromoting(false)
+      clearPendingGame()
+    }
+  }
 
   useEffect(() => {
     if (!storageKey) return
@@ -257,7 +288,7 @@ export default function LiveGameWidget() {
         gameStatsId: statsRes.data.id,
         playerId: player.id,
         playerName: `${player.firstName} ${player.lastName}`,
-        jerseyNumber: team?.jerseyNumber ?? player.jerseyNumber,
+        jerseyNumber: team?.jerseyNumber ?? 0,
         teamName: team?.name ?? '',
         gameType,
         opponent: opponent.trim(),
@@ -530,7 +561,11 @@ export default function LiveGameWidget() {
         <div className="live-overlay-body">
           {error && <p className="error">{error}</p>}
 
-          {!active ? (
+          {promoting ? (
+            <div className="game-setup">
+              <p>Going live...</p>
+            </div>
+          ) : !active ? (
             <div className="game-setup">
               {players.length === 0 ? (
                 <p>You don't have any players yet. Add one on the Players page first.</p>
@@ -583,6 +618,13 @@ export default function LiveGameWidget() {
                           onClick={() => setGameType('Cup')}
                         >
                           Cup
+                        </button>
+                        <button
+                          type="button"
+                          className={`toggle-option ${gameType === 'Friendly' ? 'active' : ''}`}
+                          onClick={() => setGameType('Friendly')}
+                        >
+                          Friendly
                         </button>
                       </div>
                     </div>

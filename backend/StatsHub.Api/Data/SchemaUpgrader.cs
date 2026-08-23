@@ -48,12 +48,20 @@ namespace StatsHub.Api.Data
                         WHERE pp.""PlayerId"" = p.""Id"" AND pp.""UserId"" = p.""UserId""
                     );");
 
-                // Backfill: give every existing PlayerTeam row the player's current
-                // (pre-migration) jersey number so per-team numbers start populated.
-                ExecuteNonQuery(connection, @"
-                    UPDATE ""PlayerTeams""
-                    SET ""JerseyNumber"" = (SELECT p.""JerseyNumber"" FROM ""Players"" p WHERE p.""Id"" = ""PlayerTeams"".""PlayerId"")
-                    WHERE ""JerseyNumber"" = 0;");
+                // Backfill: give every existing PlayerTeam row the player's old
+                // (pre-migration) jersey number so per-team numbers start populated,
+                // before that column is dropped below. No-op once already applied.
+                if (ColumnExists(connection, "Players", "JerseyNumber"))
+                {
+                    ExecuteNonQuery(connection, @"
+                        UPDATE ""PlayerTeams""
+                        SET ""JerseyNumber"" = (SELECT p.""JerseyNumber"" FROM ""Players"" p WHERE p.""Id"" = ""PlayerTeams"".""PlayerId"")
+                        WHERE ""JerseyNumber"" = 0;");
+                }
+
+                // Jersey number is per-team now (PlayerTeams.JerseyNumber) - the old
+                // player-level default is gone.
+                DropColumnIfExists(connection, "Players", "JerseyNumber");
 
                 // IBBA integration
                 AddColumnIfMissing(connection, "Games", "IbbaGameCode", "TEXT");
@@ -118,24 +126,31 @@ namespace StatsHub.Api.Data
 
         private static void AddColumnIfMissing(System.Data.Common.DbConnection connection, string table, string column, string columnDefSql)
         {
-            using var checkCmd = connection.CreateCommand();
-            checkCmd.CommandText = $"PRAGMA table_info(\"{table}\");";
-            using var reader = checkCmd.ExecuteReader();
-            var exists = false;
-            while (reader.Read())
-            {
-                if (string.Equals(reader.GetString(1), column, StringComparison.OrdinalIgnoreCase))
-                {
-                    exists = true;
-                    break;
-                }
-            }
-            reader.Close();
-
-            if (!exists)
+            if (!ColumnExists(connection, table, column))
             {
                 ExecuteNonQuery(connection, $"ALTER TABLE \"{table}\" ADD COLUMN \"{column}\" {columnDefSql};");
             }
+        }
+
+        private static void DropColumnIfExists(System.Data.Common.DbConnection connection, string table, string column)
+        {
+            if (ColumnExists(connection, table, column))
+            {
+                ExecuteNonQuery(connection, $"ALTER TABLE \"{table}\" DROP COLUMN \"{column}\";");
+            }
+        }
+
+        private static bool ColumnExists(System.Data.Common.DbConnection connection, string table, string column)
+        {
+            using var checkCmd = connection.CreateCommand();
+            checkCmd.CommandText = $"PRAGMA table_info(\"{table}\");";
+            using var reader = checkCmd.ExecuteReader();
+            while (reader.Read())
+            {
+                if (string.Equals(reader.GetString(1), column, StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
+            return false;
         }
 
         private static void CreateTableIfMissing(System.Data.Common.DbConnection connection, string createSql) =>

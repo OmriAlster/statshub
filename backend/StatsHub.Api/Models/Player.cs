@@ -6,7 +6,6 @@ namespace StatsHub.Api.Models
         public int UserId { get; set; }
         public string FirstName { get; set; } = string.Empty;
         public string LastName { get; set; } = string.Empty;
-        public int JerseyNumber { get; set; }
         public string Position { get; set; } = string.Empty; // PG, SG, SF, PF, C
         public int? Height { get; set; } // in cm
         public int? Weight { get; set; } // in kg

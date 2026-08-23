@@ -96,7 +96,7 @@ namespace StatsHub.Api.Services
             {
                 TeamId = teamId,
                 PlayerId = playerId,
-                JerseyNumber = jerseyNumber ?? player.JerseyNumber,
+                JerseyNumber = jerseyNumber ?? 0,
                 CreatedAt = DateTime.UtcNow
             });
             await _context.SaveChangesAsync();

@@ -143,7 +143,7 @@ namespace StatsHub.Api.Services
             var jerseyNumber = await _context.PlayerTeams
                 .Where(pt => pt.PlayerId == playerId && pt.TeamId == teamId)
                 .Select(pt => (int?)pt.JerseyNumber)
-                .FirstOrDefaultAsync() ?? player.JerseyNumber;
+                .FirstOrDefaultAsync() ?? 0;
 
             var gameStats = await _context.GameStats
                 .Where(gs => gs.PlayerId == playerId && gs.Game.TeamId == teamId)

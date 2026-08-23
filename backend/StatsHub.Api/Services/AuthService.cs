@@ -209,7 +209,6 @@ namespace StatsHub.Api.Services
                         Id = linkedPlayer.Id,
                         FirstName = linkedPlayer.FirstName,
                         LastName = linkedPlayer.LastName,
-                        JerseyNumber = linkedPlayer.JerseyNumber,
                         Position = linkedPlayer.Position,
                         Height = linkedPlayer.Height,
                         Weight = linkedPlayer.Weight,

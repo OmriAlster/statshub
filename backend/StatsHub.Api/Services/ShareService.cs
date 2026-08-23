@@ -67,7 +67,6 @@ namespace StatsHub.Api.Services
             var dto = new SharedPlayerDto
             {
                 PlayerName = $"{player.FirstName} {player.LastName}",
-                JerseyNumber = player.JerseyNumber,
                 Position = player.Position,
                 ProfilePictureUrl = player.ProfilePictureUrl
             };
@@ -78,6 +77,8 @@ namespace StatsHub.Api.Services
                     .Include(g => g.Team)
                     .Include(g => g.GameStats.Where(gs => gs.PlayerId == link.PlayerId))
                     .ThenInclude(gs => gs.Player)
+                    .Include(g => g.GameStats.Where(gs => gs.PlayerId == link.PlayerId))
+                    .ThenInclude(gs => gs.Shots)
                     .FirstOrDefaultAsync(g => g.Id == link.GameId.Value);
 
                 if (game != null)
@@ -87,23 +88,91 @@ namespace StatsHub.Api.Services
             }
             else
             {
-                dto.Teams = await _gameStatsService.GetStatsByPlayerUnrestrictedAsync(link.PlayerId);
+                var stats = await _gameStatsService.GetStatsByPlayerUnrestrictedAsync(link.PlayerId);
 
-                var gameIds = await _context.GameStats
+                // Crest, league, and standing per team - same IBBA info the signed-in
+                // Profiles page shows, resolved directly since a public share link
+                // can't go through the authorized IBBA endpoints.
+                var ibbaTeams = await _context.IbbaTeamLinks
+                    .Include(t => t.PlayerIbbaLink)
+                    .Where(t => t.PlayerIbbaLink.PlayerId == link.PlayerId && t.LinkedTeamId != null)
+                    .ToListAsync();
+
+                dto.Teams = stats.Select(s =>
+                {
+                    var ibba = ibbaTeams.FirstOrDefault(t => t.LinkedTeamId == s.TeamId);
+                    return new SharedTeamDto
+                    {
+                        PlayerId = s.PlayerId,
+                        PlayerName = s.PlayerName,
+                        JerseyNumber = s.JerseyNumber,
+                        Position = s.Position,
+                        TeamId = s.TeamId,
+                        TeamName = s.TeamName,
+                        GamesPlayed = s.GamesPlayed,
+                        TotalMinutes = s.TotalMinutes,
+                        TotalPoints = s.TotalPoints,
+                        PointsPerGame = s.PointsPerGame,
+                        TotalRebounds = s.TotalRebounds,
+                        ReboundsPerGame = s.ReboundsPerGame,
+                        TotalAssists = s.TotalAssists,
+                        AssistsPerGame = s.AssistsPerGame,
+                        TotalSteals = s.TotalSteals,
+                        StealsPerGame = s.StealsPerGame,
+                        TotalBlocks = s.TotalBlocks,
+                        BlocksPerGame = s.BlocksPerGame,
+                        TotalTurnovers = s.TotalTurnovers,
+                        TurnoversPerGame = s.TurnoversPerGame,
+                        FieldGoalPercentage = s.FieldGoalPercentage,
+                        ThreePointPercentage = s.ThreePointPercentage,
+                        FreeThrowPercentage = s.FreeThrowPercentage,
+                        LogoUrl = ibba?.TeamLogoUrl,
+                        IsIbba = ibba != null,
+                        LeagueUrl = ibba?.IbbaLeagueUrl,
+                        LeagueName = ibba?.IbbaLeagueName,
+                    };
+                }).ToList();
+
+                if (ibbaTeams.Count > 0)
+                {
+                    foreach (var team in dto.Teams.Where(t => t.IsIbba && !string.IsNullOrEmpty(t.LeagueUrl)))
+                    {
+                        var standing = await _context.IbbaStandings
+                            .Where(st => st.IbbaLeagueUrl == team.LeagueUrl)
+                            .OrderBy(st => st.Position)
+                            .ToListAsync();
+                        var own = standing.FirstOrDefault(st => st.TeamName.Contains(team.TeamName) || team.TeamName.Contains(st.TeamName));
+                        if (own != null)
+                        {
+                            team.StandingPosition = own.Position;
+                            team.StandingTotalTeams = standing.Count;
+                        }
+                    }
+                }
+
+                // Every game for a team the player's rostered on, or already has stats
+                // for - same rule as the signed-in Games endpoint, so a game synced
+                // from IBBA that has no box score yet still shows up here.
+                var teamIds = await _context.PlayerTeams
+                    .Where(pt => pt.PlayerId == link.PlayerId)
+                    .Select(pt => pt.TeamId)
+                    .ToListAsync();
+                var statsGameIds = await _context.GameStats
                     .Where(gs => gs.PlayerId == link.PlayerId)
                     .Select(gs => gs.GameId)
                     .ToListAsync();
 
-                var recentGames = await _context.Games
-                    .Where(g => gameIds.Contains(g.Id))
+                var games = await _context.Games
+                    .Where(g => teamIds.Contains(g.TeamId) || statsGameIds.Contains(g.Id))
                     .Include(g => g.Team)
                     .Include(g => g.GameStats.Where(gs => gs.PlayerId == link.PlayerId))
                     .ThenInclude(gs => gs.Player)
+                    .Include(g => g.GameStats.Where(gs => gs.PlayerId == link.PlayerId))
+                    .ThenInclude(gs => gs.Shots)
                     .OrderByDescending(g => g.GameDate)
-                    .Take(15)
                     .ToListAsync();
 
-                dto.RecentGames = recentGames.Select(MapGameToDto).ToList();
+                dto.Games = games.Select(MapGameToDto).ToList();
             }
 
             return dto;
@@ -122,6 +191,8 @@ namespace StatsHub.Api.Services
             TeamScore = game.TeamScore,
             OpponentScore = game.OpponentScore,
             Notes = game.Notes,
+            IsHomeGame = game.IsHomeGame,
+            IsFromIbba = game.IbbaGameCode != null,
             PlayerStats = game.GameStats.Select(gs => new GameStatsDto
             {
                 Id = gs.Id,
@@ -146,7 +217,19 @@ namespace StatsHub.Api.Services
                 Turnovers = gs.Turnovers,
                 Fouls = gs.Fouls,
                 MinutesPlayed = gs.MinutesPlayed,
-                TotalPoints = gs.TotalPoints
+                TotalPoints = gs.TotalPoints,
+                Shots = gs.Shots.Select(s => new ShotDto
+                {
+                    Id = s.Id,
+                    GameStatsId = s.GameStatsId,
+                    GameId = gs.GameId,
+                    PlayerId = gs.PlayerId,
+                    Quarter = s.Quarter,
+                    X = s.X,
+                    Y = s.Y,
+                    Made = s.Made,
+                    Value = s.Value
+                }).ToList()
             }).ToList()
         };
     }

@@ -107,9 +107,6 @@ namespace StatsHub.Api.Services
             if (!await OwnsTeamAsync(dto.TeamId, requestingUserId))
                 throw new UnauthorizedAccessException("Team not found or not owned by user");
 
-            if (dto.GameDate.Date > DateTime.UtcNow.Date)
-                throw new InvalidOperationException("Games are recorded live and can't be created with a future date.");
-
             var game = new Game
             {
                 TeamId = dto.TeamId,
@@ -142,6 +139,7 @@ namespace StatsHub.Api.Services
             if (dto.TeamScore.HasValue) game.TeamScore = dto.TeamScore;
             if (dto.OpponentScore.HasValue) game.OpponentScore = dto.OpponentScore;
             if (!string.IsNullOrEmpty(dto.Notes)) game.Notes = dto.Notes;
+            if (dto.IsHomeGame.HasValue) game.IsHomeGame = dto.IsHomeGame;
 
             game.UpdatedAt = DateTime.UtcNow;
             await _context.SaveChangesAsync();

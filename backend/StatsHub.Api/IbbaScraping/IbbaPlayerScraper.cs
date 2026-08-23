@@ -28,7 +28,7 @@ public class IbbaPlayerScraper
 
         // Player name sits in the <h1> on the profile page, e.g. <h1>עידן אלסטר</h1>
         var nameNode = doc.DocumentNode.SelectSingleNode("//h1");
-        info.PlayerName = nameNode?.InnerText.Trim() ?? "";
+        info.PlayerName = HtmlEntity.DeEntitize(nameNode?.InnerText.Trim() ?? "");
 
         // IMPORTANT: the page's top nav menu also contains lots of /team/ and /league/
         // links (mega-menu of every league/club on the site) BEFORE the player's own
@@ -45,7 +45,7 @@ public class IbbaPlayerScraper
             info.Teams.Add(new IbbaPlayerTeamInfo
             {
                 TeamUrl = teamUrl,
-                TeamName = mainTeamNode.InnerText.Trim(),
+                TeamName = HtmlEntity.DeEntitize(mainTeamNode.InnerText.Trim()),
                 TeamSlugId = ExtractTeamSlugId(teamUrl),
             });
         }
@@ -65,9 +65,28 @@ public class IbbaPlayerScraper
                 info.Teams.Add(new IbbaPlayerTeamInfo
                 {
                     TeamUrl = teamUrl,
-                    TeamName = additionalTeamNode.InnerText.Trim(),
+                    TeamName = HtmlEntity.DeEntitize(additionalTeamNode.InnerText.Trim()),
                     TeamSlugId = ExtractTeamSlugId(teamUrl),
                 });
+            }
+        }
+
+        // Player photo sits in a <figure class="gb-block-image"> right before the <h1>.
+        // Like every other image on this site it's lazy-loaded - src is a placeholder
+        // SVG, the real URL is data-src.
+        var photoImg = doc.DocumentNode.SelectSingleNode("//figure[contains(@class,'gb-block-image')]//img");
+        info.PhotoUrl = photoImg?.GetAttributeValue("data-src", "") ?? "";
+
+        // Birth date sits in its own widget: <div class="data-birthdate"><span>תאריך לידה:</span>18-09-2011</div>
+        var birthdateNode = doc.DocumentNode.SelectSingleNode("//div[@class='data-birthdate']");
+        if (birthdateNode != null)
+        {
+            var raw = HtmlEntity.DeEntitize(birthdateNode.InnerText);
+            var match = Regex.Match(raw, @"(\d{2})-(\d{2})-(\d{4})");
+            if (match.Success &&
+                DateTime.TryParse($"{match.Groups[3].Value}-{match.Groups[2].Value}-{match.Groups[1].Value}", out var dob))
+            {
+                info.DateOfBirth = DateTime.SpecifyKind(dob, DateTimeKind.Utc);
             }
         }
 

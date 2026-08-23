@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Net;
 using HtmlAgilityPack;
 
 namespace StatsHub.Api.IbbaScraping;
@@ -50,7 +51,7 @@ public class IbbaLeagueScraper
             standings.Add(new IbbaStandingRow
             {
                 Position = ParseInt(cells[0].InnerText),
-                TeamName = (teamLink?.InnerText ?? cells[1].InnerText).Trim(),
+                TeamName = WebUtility.HtmlDecode((teamLink?.InnerText ?? cells[1].InnerText).Trim()),
                 TeamUrl = string.IsNullOrEmpty(rawTeamHref) ? "" : IbbaUrlHelper.Resolve(leagueUrl, rawTeamHref),
                 GamesPlayed = ParseInt(cells[2].InnerText),
                 Wins = ParseInt(cells[3].InnerText),

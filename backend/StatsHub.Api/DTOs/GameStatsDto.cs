@@ -30,6 +30,11 @@ namespace StatsHub.Api.DTOs
         public int Fouls { get; set; }
         public int MinutesPlayed { get; set; }
         public int TotalPoints { get; set; }
+
+        // Only populated where a caller specifically asks for it (e.g. a shared
+        // game view) - not loaded by the normal authenticated game endpoints,
+        // which fetch shots separately via /shots/gamestats/{id}.
+        public List<ShotDto> Shots { get; set; } = new();
     }
 
     public class CreateGameStatsDto

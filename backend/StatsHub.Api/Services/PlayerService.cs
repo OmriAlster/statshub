@@ -73,7 +73,6 @@ namespace StatsHub.Api.Services
                 UserId = userId,
                 FirstName = dto.FirstName,
                 LastName = dto.LastName,
-                JerseyNumber = dto.JerseyNumber,
                 Position = dto.Position,
                 Height = dto.Height,
                 Weight = dto.Weight,
@@ -98,7 +97,6 @@ namespace StatsHub.Api.Services
 
             if (!string.IsNullOrEmpty(dto.FirstName)) player.FirstName = dto.FirstName;
             if (!string.IsNullOrEmpty(dto.LastName)) player.LastName = dto.LastName;
-            if (dto.JerseyNumber.HasValue) player.JerseyNumber = dto.JerseyNumber.Value;
             if (!string.IsNullOrEmpty(dto.Position)) player.Position = dto.Position;
             if (dto.Height.HasValue) player.Height = dto.Height;
             if (dto.Weight.HasValue) player.Weight = dto.Weight;
@@ -113,8 +111,22 @@ namespace StatsHub.Api.Services
 
         public async Task<bool> DeletePlayerAsync(int id, int requestingUserId)
         {
-            var player = await _context.Players.FindAsync(id);
+            var player = await _context.Players.Include(p => p.PlayerTeams).FirstOrDefaultAsync(p => p.Id == id);
             if (player == null || !await IsParentAsync(id, requestingUserId)) return false;
+
+            // Deleting a player also removes every team that's exclusively theirs
+            // (which cascades to that team's games, stats, and shots) - a team
+            // shared with a sibling is left alone, only this player's own
+            // membership and stats on it go away.
+            foreach (var teamId in player.PlayerTeams.Select(pt => pt.TeamId).ToList())
+            {
+                var otherMembers = await _context.PlayerTeams.CountAsync(pt => pt.TeamId == teamId && pt.PlayerId != id);
+                if (otherMembers == 0)
+                {
+                    var team = await _context.Teams.FindAsync(teamId);
+                    if (team != null) _context.Teams.Remove(team);
+                }
+            }
 
             _context.Players.Remove(player);
             await _context.SaveChangesAsync();
@@ -215,7 +227,6 @@ namespace StatsHub.Api.Services
             Id = p.Id,
             FirstName = p.FirstName,
             LastName = p.LastName,
-            JerseyNumber = p.JerseyNumber,
             Position = p.Position,
             Height = p.Height,
             Weight = p.Weight,

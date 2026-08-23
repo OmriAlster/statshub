@@ -3,6 +3,7 @@ namespace StatsHub.Api.DTOs
     public class IbbaPreviewDto
     {
         public string PlayerName { get; set; } = string.Empty;
+        public DateTime? DateOfBirth { get; set; }
         public List<IbbaPreviewTeamDto> Teams { get; set; } = new();
     }
 
@@ -14,6 +15,17 @@ namespace StatsHub.Api.DTOs
     public class LinkIbbaPlayerDto
     {
         public string IbbaPlayerUrl { get; set; } = string.Empty;
+    }
+
+    public class CreatePlayerFromIbbaDto
+    {
+        public string IbbaPlayerUrl { get; set; } = string.Empty;
+    }
+
+    public class CreatePlayerFromIbbaResultDto
+    {
+        public PlayerDto Player { get; set; } = null!;
+        public IbbaLinkStatusDto? Ibba { get; set; }
     }
 
     public class LinkIbbaTeamDto

@@ -18,7 +18,7 @@ namespace StatsHub.Api.DTOs
 
     public class AddPlayerToTeamDto
     {
-        // Defaults to the player's profile jersey number when omitted.
+        // Defaults to 0 when omitted.
         public int? JerseyNumber { get; set; }
     }
 

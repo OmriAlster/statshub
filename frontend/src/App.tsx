@@ -41,6 +41,7 @@ function App() {
     <Routes>
       <Route path="/login" element={<Login />} />
       <Route path="/share/:token" element={<SharedPlayerView />} />
+      <Route path="/share/:token/games/:gameId" element={<SharedPlayerView />} />
 
       <Route
         path="/join"

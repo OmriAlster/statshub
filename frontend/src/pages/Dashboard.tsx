@@ -123,10 +123,14 @@ export default function Dashboard() {
         {players.map(({ player, teamStats, ibba, gamesByTeam }) => (
           <div className="card player-card-v2" key={player.id}>
             <div className="player-card-head">
-              <div className="player-card-avatar">{player.firstName[0]}{player.lastName[0]}</div>
+              {player.profilePictureUrl ? (
+                <img className="player-card-avatar" src={player.profilePictureUrl} alt="" />
+              ) : (
+                <div className="player-card-avatar">{player.firstName[0]}{player.lastName[0]}</div>
+              )}
               <div>
                 <h3>
-                  {player.firstName} {player.lastName} <span className="player-card-number">#{player.jerseyNumber}</span>
+                  {player.firstName} {player.lastName}
                   {ibba && <IbbaBadge />}
                 </h3>
                 <p className="player-card-role">{player.position || 'Player'}</p>
@@ -155,10 +159,10 @@ export default function Dashboard() {
                           </div>
                         </div>
                         {ibbaTeam?.position && (
-                          <button className="pos-pill" onClick={() => setStandingsFor({ leagueUrl: ibbaTeam.ibbaLeagueUrl!, leagueName: ibbaTeam.ibbaLeagueName ?? '', teamName: s.teamName })}>
+                          <label className="pos-pill" onClick={() => setStandingsFor({ leagueUrl: ibbaTeam.ibbaLeagueUrl!, leagueName: ibbaTeam.ibbaLeagueName ?? '', teamName: s.teamName })}>
                             <svg className="icon"><use href="#i-trophy" /></svg>
                             {ibbaTeam.position}{ibbaTeam.position === 1 ? 'st' : ibbaTeam.position === 2 ? 'nd' : ibbaTeam.position === 3 ? 'rd' : 'th'} of {ibbaTeam.totalTeams}
-                          </button>
+                          </label>
                         )}
                       </div>
                       <div className="pctr-stats">

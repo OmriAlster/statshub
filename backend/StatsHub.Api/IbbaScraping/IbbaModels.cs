@@ -24,6 +24,8 @@ public class IbbaPlayerInfo
     public string PlayerName { get; set; } = "";
     public string PlayerUrl { get; set; } = "";
     public List<IbbaPlayerTeamInfo> Teams { get; set; } = new();
+    public DateTime? DateOfBirth { get; set; }
+    public string PhotoUrl { get; set; } = "";
 }
 
 /// <summary>

@@ -1,3 +1,4 @@
+using System.Net;
 using ClosedXML.Excel;
 using HtmlAgilityPack;
 
@@ -63,17 +64,17 @@ public class IbbaTeamScraper
 
             games.Add(new IbbaGameRow
             {
-                League = row.Cell(1).GetString().Trim(),
-                Code = row.Cell(2).GetString().Trim(),
-                WeekDay = row.Cell(3).GetString().Trim(),
-                Date = row.Cell(4).GetString().Trim(),
-                Round = row.Cell(5).GetString().Trim(),
-                Time = row.Cell(6).GetString().Trim(),
-                HomeTeam = row.Cell(7).GetString().Trim(),
-                HomeTeamCode = row.Cell(8).GetString().Trim(),
-                AwayTeam = row.Cell(9).GetString().Trim(),
-                AwayTeamCode = row.Cell(10).GetString().Trim(),
-                Venue = row.Cell(11).GetString().Trim(),
+                League = Decoded(row.Cell(1)),
+                Code = Decoded(row.Cell(2)),
+                WeekDay = Decoded(row.Cell(3)),
+                Date = Decoded(row.Cell(4)),
+                Round = Decoded(row.Cell(5)),
+                Time = Decoded(row.Cell(6)),
+                HomeTeam = Decoded(row.Cell(7)),
+                HomeTeamCode = Decoded(row.Cell(8)),
+                AwayTeam = Decoded(row.Cell(9)),
+                AwayTeamCode = Decoded(row.Cell(10)),
+                Venue = Decoded(row.Cell(11)),
                 HomeScore = ParseNullableInt(row.Cell(12).GetString()),
                 AwayScore = ParseNullableInt(row.Cell(13).GetString()),
             });
@@ -81,6 +82,11 @@ public class IbbaTeamScraper
 
         return games;
     }
+
+    // The site's own Excel export bakes literal HTML entities into cell text
+    // (e.g. a team named מכבי פ"ת comes back as "מכבי פ&quot;ת"), instead of
+    // the real character - so every text cell needs HTML-decoding, not just trimming.
+    private static string Decoded(IXLCell cell) => WebUtility.HtmlDecode(cell.GetString()).Trim();
 
     private static int? ParseNullableInt(string text)
     {
@@ -100,7 +106,8 @@ public class IbbaTeamScraper
         var doc = new HtmlDocument();
         doc.LoadHtml(html);
         var h1 = doc.DocumentNode.SelectSingleNode("//h1");
-        return h1?.InnerText.Trim();
+        var name = h1?.InnerText.Trim();
+        return name == null ? null : WebUtility.HtmlDecode(name);
     }
 
     /// <summary>
@@ -119,7 +126,7 @@ public class IbbaTeamScraper
 
         var span = doc.DocumentNode
             .SelectNodes("//span[contains(@class,'team-logo')]")
-            ?.FirstOrDefault(s => s.GetAttributeValue("title", "").Trim() == teamName.Trim());
+            ?.FirstOrDefault(s => WebUtility.HtmlDecode(s.GetAttributeValue("title", "")).Trim() == teamName.Trim());
 
         var img = span?.SelectSingleNode(".//img");
         var dataSrc = img?.GetAttributeValue("data-src", null);
@@ -140,7 +147,7 @@ public class IbbaTeamScraper
 
         var link = doc.DocumentNode
             .SelectNodes("//a[contains(@class,'league') and contains(@class,'data-item')]")
-            ?.FirstOrDefault(a => a.InnerText.Trim() == leagueName.Trim());
+            ?.FirstOrDefault(a => WebUtility.HtmlDecode(a.InnerText).Trim() == leagueName.Trim());
 
         if (link == null) return null;
         var rawHref = link.GetAttributeValue("href", "");

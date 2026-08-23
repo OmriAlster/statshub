@@ -1648,6 +1648,8 @@ select:focus {
   border-left: 3px solid var(--color-accent);
   transition: transform var(--transition), border-color var(--transition);
   border: 1px solid var(--color-border);
+  color: inherit;
+  text-decoration: none;
   border-left-width: 3px;
   border-left-color: var(--color-accent);
   text-decoration: none;
@@ -3366,6 +3368,7 @@ select:focus {
   font-weight: 800;
   font-size: 0.85rem;
   flex: none;
+  object-fit: cover;
 }
 
 .profile-picker-name {
@@ -3501,15 +3504,15 @@ select:focus {
   width: 44px;
   height: 44px;
   border-radius: 50%;
-  background: var(--color-surface);
-  border: 2px solid var(--color-accent);
+  background: var(--gradient-accent);
   display: flex;
   align-items: center;
   justify-content: center;
   font-family: var(--font-display);
   font-weight: 800;
-  color: var(--color-accent-bright);
+  color: #1a0d00;
   flex-shrink: 0;
+  object-fit: cover;
 }
 
 .player-card-v2 h3 {
@@ -3622,6 +3625,22 @@ select:focus {
   align-items: center;
   gap: 0.9rem;
   margin-bottom: 1.1rem;
+}
+
+.avatar-lg {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background: var(--gradient-accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-display);
+  font-size: 1.3rem;
+  font-weight: 800;
+  color: #1a0d00;
+  flex-shrink: 0;
+  object-fit: cover;
 }
 
 .profile-id h3 {
@@ -3942,6 +3961,29 @@ select:focus {
   font-variant-numeric: tabular-nums;
 }
 
+/* The same live-game recorder (shot chart + stat buttons), embedded inline
+   in the Schedule tab's edit row instead of the fixed-position overlay. */
+.live-game-embed {
+  margin-top: 0.5rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  background: var(--color-bg);
+}
+
+.live-game-embed .quarter-selector {
+  margin: 1rem 1rem 0;
+}
+
+.live-game-embed .live-game-main {
+  padding: 1rem;
+}
+
+.live-bottom-bar.embedded {
+  box-shadow: none;
+  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+}
+
 /* ============================================================
    Responsive: new components (games table, dashboard cards,
    segmented controls, floating live button + overlay)
@@ -4260,6 +4302,21 @@ button.crest-cluster:hover .crest-main {
 .glance-score.win { color: var(--color-success); }
 .glance-score.loss { color: var(--color-danger); }
 .glance-score.upcoming { color: var(--color-gold); }
+
+/* Player profile: shared team header above Stats/Schedule/Season tabs */
+.team-meta-strip { display: flex; align-items: center; gap: 0.9rem; flex-wrap: wrap; margin-bottom: 1.5rem; padding: 1rem 1.2rem; background: var(--color-surface-alt); border: 1px solid var(--color-border); border-radius: var(--radius-md); }
+
+/* Schedule tab: inline per-game edit */
+.edit-btn { background: var(--color-surface-alt); border: 1px solid var(--color-border-strong); color: var(--color-text-muted); width: 28px; height: 28px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
+.edit-btn:hover { border-color: var(--color-accent); color: var(--color-accent-bright); }
+.edit-btn .icon { width: 14px; height: 14px; }
+.edit-row { background: var(--color-surface-alt); }
+.edit-panel { padding: 1.2rem 1.4rem; }
+.edit-panel .form-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 0.85rem; margin-bottom: 1rem; }
+.edit-panel label { display: flex; flex-direction: column; gap: 0.35rem; font-size: 0.74rem; font-weight: 700; color: var(--color-text-muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.edit-panel input, .edit-panel select { padding: 0.55rem 0.7rem; background: var(--color-surface); border: 1.5px solid var(--color-border-strong); border-radius: var(--radius-sm); font-size: 0.92rem; color: var(--color-text); font-family: var(--font-sans); }
+.edit-panel .stat-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(70px, 1fr)); gap: 0.7rem; margin-bottom: 1.1rem; padding-top: 1rem; border-top: 1px dashed var(--color-border-strong); }
+.edit-panel .stat-fields label { text-transform: none; font-size: 0.68rem; }
 
 /* Standings modal */
 .modal-backdrop {
