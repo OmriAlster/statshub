@@ -274,6 +274,7 @@ namespace StatsHub.Api.Services
             // IDs, and only once per game regardless of how many rows touched it.
             var newlyUpcoming = new List<Game>();
             var newlyCompleted = new List<Game>();
+            var rescheduled = new List<Game>();
 
             foreach (var row in rows)
             {
@@ -313,11 +314,30 @@ namespace StatsHub.Api.Services
                 }
                 else
                 {
-                    // Non-destructive refresh: a resync only ever fills in fields the
-                    // user hasn't already resolved themselves (via live tracking or a
-                    // manual edit) - it never overwrites a game once it has a score.
-                    if (string.IsNullOrEmpty(existing.Location) && !string.IsNullOrEmpty(row.Venue))
-                        existing.Location = row.Venue;
+                    // Schedule facts (opponent, venue, home/away, type, date/time) always
+                    // track IBBA - the Schedule tab locks editing these fields for an
+                    // IBBA-synced game specifically because IBBA is the only source for
+                    // them, so there's no risk of clobbering something the user set
+                    // themselves. The score/status stays conservative below: once a game
+                    // has a real result (live-tracked or already synced), a resync never
+                    // overwrites it.
+                    existing.OpponentName = opponentName;
+                    existing.Location = row.Venue;
+                    existing.IsHomeGame = isHome;
+                    existing.GameType = row.IsCup ? "Cup" : "League";
+
+                    // Date/time always tracks IBBA too, regardless of status - no
+                    // restrictions here, so a game whose stored time was ever wrong
+                    // (e.g. computed before a timezone-conversion fix shipped) gets
+                    // corrected by the very next sync instead of staying stuck. A
+                    // minute of slack avoids false positives from re-parsing the same
+                    // time down to the second.
+                    if (Math.Abs((gameDate - existing.GameDate).TotalMinutes) >= 1)
+                    {
+                        existing.GameDate = gameDate;
+                        existing.ReminderSentAt = null;
+                        rescheduled.Add(existing);
+                    }
 
                     if (existing.Status == "Upcoming" && teamScore.HasValue)
                     {
@@ -349,6 +369,15 @@ namespace StatsHub.Api.Services
                     game.TeamId,
                     "Final score",
                     $"{result} {game.TeamScore}-{game.OpponentScore} vs {game.OpponentName}",
+                    $"/games/{game.Id}");
+            }
+
+            foreach (var game in rescheduled)
+            {
+                await _push.NotifyTeamAsync(
+                    game.TeamId,
+                    "📅 Game rescheduled",
+                    $"vs {game.OpponentName} moved to {game.GameDate:MMM d, h:mm tt}",
                     $"/games/{game.Id}");
             }
         }

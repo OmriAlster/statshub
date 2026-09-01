@@ -453,6 +453,7 @@ function SchedulePanel({
     () => [...games].sort((a, b) => new Date(a.gameDate).getTime() - new Date(b.gameDate).getTime()),
     [games]
   )
+  const editingGame = sorted.find((g) => g.id === editingId) ?? null
 
   const deleteGame = async (game: GameDto) => {
     if (!window.confirm(`Delete this game vs ${game.opponentName}? This removes all of its stats and can't be undone.`)) return
@@ -545,24 +546,20 @@ function SchedulePanel({
                     </div>
                   </td>
                 </tr>
-                {editingId === game.id && (
-                  <tr className="edit-row">
-                    <td colSpan={5}>
-                      <ScheduleEditPanel
-                        player={player}
-                        game={game}
-                        onGameUpdated={onGameUpdated}
-                        onClose={() => setEditingId(null)}
-                      />
-                    </td>
-                  </tr>
-                )}
               </Fragment>
             )
           })}
         </tbody>
       </table>
       </div>
+      )}
+      {editingGame && (
+        <ScheduleEditPanel
+          player={player}
+          game={editingGame}
+          onGameUpdated={onGameUpdated}
+          onClose={() => setEditingId(null)}
+        />
       )}
     </div>
   )
@@ -792,6 +789,18 @@ function ScheduleEditPanel({
   }
 
   return (
+    <div className="game-edit-modal-backdrop" onClick={onClose}>
+      <div className="game-edit-modal-panel" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-head">
+          <div className="modal-head-title">
+            <h3>Edit Game</h3>
+            <p>vs {game.opponentName}</p>
+          </div>
+          <button className="modal-close" onClick={onClose} aria-label="Close">
+            <svg className="icon"><use href="#i-x" /></svg>
+          </button>
+        </div>
+        <div className="modal-body">
     <div className="edit-panel">
       {game.isFromIbba ? (
         <div className="ibba-locked-info">
@@ -888,6 +897,9 @@ function ScheduleEditPanel({
 
       <div className="flex gap-1" style={{ marginTop: '1rem' }}>
         <button className="nav-btn" onClick={onClose}>Done</button>
+      </div>
+    </div>
+        </div>
       </div>
     </div>
   )

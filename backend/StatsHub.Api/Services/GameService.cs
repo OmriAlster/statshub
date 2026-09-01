@@ -147,15 +147,27 @@ namespace StatsHub.Api.Services
 
             var previousStatus = game.Status;
 
-            if (!string.IsNullOrEmpty(dto.OpponentName)) game.OpponentName = dto.OpponentName;
-            if (dto.GameDate.HasValue) game.GameDate = dto.GameDate.Value;
-            if (!string.IsNullOrEmpty(dto.Location)) game.Location = dto.Location;
+            // Schedule facts (opponent, date/time, location, type, home/away) for an
+            // IBBA-synced game only ever come from IBBA - the Schedule tab already
+            // hides the form that would edit them, and the IBBA sync itself now keeps
+            // them current on every resync. This is the backstop: even a direct API
+            // call can't fight the next sync. Status/scores stay editable regardless
+            // of source, since live-tracking a game to completion (via the Live Game
+            // widget) uses this same endpoint for IBBA-synced games too.
+            var isIbbaGame = game.IbbaGameCode != null;
+
+            if (!isIbbaGame)
+            {
+                if (!string.IsNullOrEmpty(dto.OpponentName)) game.OpponentName = dto.OpponentName;
+                if (dto.GameDate.HasValue) game.GameDate = dto.GameDate.Value;
+                if (!string.IsNullOrEmpty(dto.Location)) game.Location = dto.Location;
+                if (!string.IsNullOrEmpty(dto.GameType)) game.GameType = dto.GameType;
+                if (dto.IsHomeGame.HasValue) game.IsHomeGame = dto.IsHomeGame;
+            }
             if (!string.IsNullOrEmpty(dto.Status)) game.Status = dto.Status;
-            if (!string.IsNullOrEmpty(dto.GameType)) game.GameType = dto.GameType;
             if (dto.TeamScore.HasValue) game.TeamScore = dto.TeamScore;
             if (dto.OpponentScore.HasValue) game.OpponentScore = dto.OpponentScore;
             if (!string.IsNullOrEmpty(dto.Notes)) game.Notes = dto.Notes;
-            if (dto.IsHomeGame.HasValue) game.IsHomeGame = dto.IsHomeGame;
 
             game.UpdatedAt = DateTime.UtcNow;
             await _context.SaveChangesAsync();
