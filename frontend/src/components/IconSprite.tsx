@@ -29,6 +29,7 @@ export default function IconSprite() {
       <symbol id="i-undo" viewBox="0 0 24 24"><path d="M4 10h9a5 5 0 010 10h-2" /><path d="M4 10l4-4M4 10l4 4" /></symbol>
       <symbol id="i-trophy" viewBox="0 0 24 24"><path d="M7 4h10v3a5 5 0 01-10 0V4z" /><path d="M7 5H4v2a3 3 0 003 3M17 5h3v2a3 3 0 01-3 3" /><path d="M12 12v4M9 20h6M9 20v-2a3 3 0 013-3 3 3 0 013 3v2" /></symbol>
       <symbol id="i-edit" viewBox="0 0 24 24"><path d="M4 20h4l11-11-4-4L4 16z" /><path d="M13.5 6.5l4 4" /></symbol>
+      <symbol id="i-install" viewBox="0 0 24 24"><path d="M12 3v12" /><path d="M7 10l5 5 5-5" /><path d="M4 19h16" /></symbol>
     </svg>
   )
 }

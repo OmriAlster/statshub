@@ -1,7 +1,7 @@
 import { lazy, Suspense, type ReactNode } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
-import InstallAppBanner from './InstallAppBanner'
+import InstallAppButton from './InstallAppBanner'
 
 const LiveGameWidget = lazy(() => import('../live/LiveGameWidget'))
 
@@ -52,6 +52,8 @@ export default function Layout({ children }: { children: ReactNode }) {
           <span>{isPlayerRole ? 'My Profile' : 'Players'}</span>
         </NavLink>
 
+        <InstallAppButton />
+
         {user && (
           <div className="app-nav-user">
             {user.profilePictureUrl && <img className="avatar" src={user.profilePictureUrl} alt="" />}
@@ -66,10 +68,7 @@ export default function Layout({ children }: { children: ReactNode }) {
         )}
       </nav>
 
-      <main className="app-content">
-        <InstallAppBanner />
-        {children}
-      </main>
+      <main className="app-content">{children}</main>
 
       {!isPlayerRole && (
         <Suspense fallback={null}>
