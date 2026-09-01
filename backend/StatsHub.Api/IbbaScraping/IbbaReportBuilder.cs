@@ -9,7 +9,7 @@ public class IbbaTeamReport
     public IbbaPlayerTeamInfo Team { get; set; } = new();
     public List<IbbaGameRow> Games { get; set; } = new();
     public List<IbbaStandingRow> Standings { get; set; } = new();
-    public IbbaStandingRow? TeamStanding => Standings.FirstOrDefault(s => s.IsTeam(Team.TeamName));
+    public IbbaStandingRow? TeamStanding => Standings.FirstOrDefault(s => s.IsTeam(Team.TeamUrl, Team.TeamName));
 }
 
 /// <summary>

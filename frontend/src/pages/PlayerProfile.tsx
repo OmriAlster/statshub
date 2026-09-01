@@ -51,7 +51,7 @@ export default function PlayerProfile() {
   const [ibbaPreview, setIbbaPreview] = useState<Record<number, IbbaPreviewDto | null>>({})
   const [ibbaBusy, setIbbaBusy] = useState<Record<number, boolean>>({})
   const [ibbaError, setIbbaError] = useState<Record<number, string | null>>({})
-  const [standingsFor, setStandingsFor] = useState<{ leagueUrl: string; leagueName: string; teamName: string } | null>(null)
+  const [standingsFor, setStandingsFor] = useState<{ leagueUrl: string; leagueName: string; teamName: string; teamUrl: string } | null>(null)
 
   const [deletingPlayer, setDeletingPlayer] = useState<PlayerDto | null>(null)
   const [deletingBusy, setDeletingBusy] = useState(false)
@@ -420,7 +420,7 @@ export default function PlayerProfile() {
                         jerseyNumber={t.jerseyNumber}
                         showIbbaMark={!!ibbaTeam}
                         size="sm"
-                        onClick={ibbaTeam?.ibbaLeagueUrl ? () => setStandingsFor({ leagueUrl: ibbaTeam.ibbaLeagueUrl!, leagueName: ibbaTeam.ibbaLeagueName ?? '', teamName: t.name }) : undefined}
+                        onClick={ibbaTeam?.ibbaLeagueUrl ? () => setStandingsFor({ leagueUrl: ibbaTeam.ibbaLeagueUrl!, leagueName: ibbaTeam.ibbaLeagueName ?? '', teamName: t.name, teamUrl: ibbaTeam.teamUrl }) : undefined}
                         title={ibbaTeam?.ibbaLeagueUrl ? 'View standings' : undefined}
                       />
                       <div className="tcv2-info">
@@ -522,7 +522,7 @@ export default function PlayerProfile() {
                         logoUrl={t.teamLogoUrl}
                         showIbbaMark
                         size="sm"
-                        onClick={t.ibbaLeagueUrl ? () => setStandingsFor({ leagueUrl: t.ibbaLeagueUrl!, leagueName: t.ibbaLeagueName ?? '', teamName: t.teamName }) : undefined}
+                        onClick={t.ibbaLeagueUrl ? () => setStandingsFor({ leagueUrl: t.ibbaLeagueUrl!, leagueName: t.ibbaLeagueName ?? '', teamName: t.teamName, teamUrl: t.teamUrl }) : undefined}
                       />
                       <div style={{ flex: 1, minWidth: '10rem' }}>
                         <div style={{ fontWeight: 700, fontSize: '0.9rem' }} dir="rtl">{t.teamName}</div>
@@ -530,7 +530,7 @@ export default function PlayerProfile() {
                           <button
                             className="league-chip"
                             style={{ marginTop: '0.3rem', padding: '0.15rem 0.6rem 0.15rem 0.4rem', fontSize: '0.7rem' }}
-                            onClick={() => setStandingsFor({ leagueUrl: t.ibbaLeagueUrl!, leagueName: t.ibbaLeagueName ?? '', teamName: t.teamName })}
+                            onClick={() => setStandingsFor({ leagueUrl: t.ibbaLeagueUrl!, leagueName: t.ibbaLeagueName ?? '', teamName: t.teamName, teamUrl: t.teamUrl })}
                           >
                             <svg className="icon" style={{ width: 11, height: 11 }}><use href="#i-trophy" /></svg>
                             <span dir="rtl">{t.ibbaLeagueName}</span>
@@ -765,6 +765,7 @@ export default function PlayerProfile() {
         <StandingsModal
           leagueUrl={standingsFor.leagueUrl}
           leagueName={standingsFor.leagueName}
+          highlightTeamUrl={standingsFor.teamUrl}
           highlightTeamName={standingsFor.teamName}
           onClose={() => setStandingsFor(null)}
         />

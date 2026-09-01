@@ -91,7 +91,8 @@ namespace StatsHub.Api.Services
 
                 if (game != null)
                 {
-                    dto.Game = MapGameToDto(game);
+                    var logos = await BuildOpponentLogoLookupAsync(new[] { game });
+                    dto.Game = MapGameToDto(game, logos);
                 }
             }
             else
@@ -149,7 +150,14 @@ namespace StatsHub.Api.Services
                             .Where(st => st.IbbaLeagueUrl == team.LeagueUrl)
                             .OrderBy(st => st.Position)
                             .ToListAsync();
-                        var own = standing.FirstOrDefault(st => st.TeamName.Contains(team.TeamName) || team.TeamName.Contains(st.TeamName));
+
+                        // Match by team URL, not name - a substring name match (e.g.
+                        // "מכבי בקה" is contained in "מכבי בקה גת") would silently pick
+                        // the wrong row whenever one team's name is a prefix of another's.
+                        var ibbaTeam = ibbaTeams.FirstOrDefault(t => t.LinkedTeamId == team.TeamId);
+                        var own = !string.IsNullOrEmpty(ibbaTeam?.TeamUrl)
+                            ? standing.FirstOrDefault(st => st.TeamUrl == ibbaTeam.TeamUrl)
+                            : standing.FirstOrDefault(st => st.TeamName == team.TeamName);
                         if (own != null)
                         {
                             team.StandingPosition = own.Position;
@@ -180,19 +188,59 @@ namespace StatsHub.Api.Services
                     .OrderByDescending(g => g.GameDate)
                     .ToListAsync();
 
-                dto.Games = games.Select(MapGameToDto).ToList();
+                var gameLogos = await BuildOpponentLogoLookupAsync(games);
+                dto.Games = games.Select(g => MapGameToDto(g, gameLogos)).ToList();
             }
 
             return dto;
         }
 
-        private static GameDto MapGameToDto(Game game) => new GameDto
+        // A game's opponent has a logo only when it's also a team in the same
+        // synced league's standings - matched by (this game's team's league,
+        // opponent name) since a Game only ever stores the opponent as plain
+        // text (no team URL of its own to look up directly). Batched across
+        // every game passed in, rather than one query per game.
+        private async Task<Dictionary<(int TeamId, string OpponentName), string?>> BuildOpponentLogoLookupAsync(IEnumerable<Game> games)
+        {
+            var result = new Dictionary<(int, string), string?>();
+            var teamIds = games.Select(g => g.TeamId).Distinct().ToList();
+            if (teamIds.Count == 0) return result;
+
+            var teamLeagues = await _context.IbbaTeamLinks
+                .Where(t => t.LinkedTeamId != null && teamIds.Contains(t.LinkedTeamId.Value) && t.IbbaLeagueUrl != null)
+                .ToDictionaryAsync(t => t.LinkedTeamId!.Value, t => t.IbbaLeagueUrl!);
+            if (teamLeagues.Count == 0) return result;
+
+            var leagueUrls = teamLeagues.Values.Distinct().ToList();
+            var standings = await _context.IbbaStandings
+                .Where(s => leagueUrls.Contains(s.IbbaLeagueUrl))
+                .ToListAsync();
+            var teamUrlByLeagueName = standings
+                .GroupBy(s => (s.IbbaLeagueUrl, s.TeamName))
+                .ToDictionary(g => g.Key, g => g.First().TeamUrl);
+
+            var crestUrls = teamUrlByLeagueName.Values.Distinct().ToList();
+            var crests = await _context.IbbaTeamCrests
+                .Where(c => crestUrls.Contains(c.TeamUrl))
+                .ToDictionaryAsync(c => c.TeamUrl, c => c.LogoUrl);
+
+            foreach (var game in games)
+            {
+                if (!teamLeagues.TryGetValue(game.TeamId, out var leagueUrl)) continue;
+                if (!teamUrlByLeagueName.TryGetValue((leagueUrl, game.OpponentName), out var teamUrl)) continue;
+                result[(game.TeamId, game.OpponentName)] = crests.GetValueOrDefault(teamUrl);
+            }
+            return result;
+        }
+
+        private static GameDto MapGameToDto(Game game, Dictionary<(int TeamId, string OpponentName), string?> opponentLogos) => new GameDto
         {
             Id = game.Id,
             TeamId = game.TeamId,
             TeamName = game.Team?.Name ?? string.Empty,
             GameType = game.GameType,
             OpponentName = game.OpponentName,
+            OpponentLogoUrl = opponentLogos.GetValueOrDefault((game.TeamId, game.OpponentName)),
             GameDate = game.GameDate,
             Location = game.Location,
             Status = game.Status,

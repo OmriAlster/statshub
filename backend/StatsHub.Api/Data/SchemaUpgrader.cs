@@ -148,6 +148,16 @@ namespace StatsHub.Api.Data
                 {
                     Console.Error.WriteLine($"Could not create unique index on Games.IbbaGameCode (likely pre-existing duplicates): {ex.Message}");
                 }
+
+                // Team crest cache
+                CreateTableIfMissing(connection, @"
+                    CREATE TABLE IF NOT EXISTS ""IbbaTeamCrests"" (
+                        ""Id"" INTEGER NOT NULL CONSTRAINT ""PK_IbbaTeamCrests"" PRIMARY KEY AUTOINCREMENT,
+                        ""TeamUrl"" TEXT NOT NULL,
+                        ""LogoUrl"" TEXT NULL,
+                        ""FetchedAt"" TEXT NOT NULL
+                    );");
+                ExecuteNonQuery(connection, "CREATE UNIQUE INDEX IF NOT EXISTS \"IX_IbbaTeamCrests_TeamUrl\" ON \"IbbaTeamCrests\" (\"TeamUrl\");");
             }
             finally
             {

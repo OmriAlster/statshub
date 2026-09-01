@@ -150,7 +150,12 @@ namespace StatsHub.Api.Services
                         .OrderBy(s => s.Position)
                         .ToListAsync();
                     dto.TotalTeams = standings.Count;
-                    var own = standings.FirstOrDefault(s => s.TeamName.Contains(t.TeamName) || t.TeamName.Contains(s.TeamName));
+                    // Match by team URL, not name - a substring name match (e.g. "מכבי
+                    // בקה" is contained in "מכבי בקה גת") would silently pick the wrong
+                    // row whenever one team's name is a prefix of another's.
+                    var own = !string.IsNullOrEmpty(t.TeamUrl)
+                        ? standings.FirstOrDefault(s => s.TeamUrl == t.TeamUrl)
+                        : standings.FirstOrDefault(s => s.TeamName == t.TeamName);
                     dto.Position = own?.Position;
                 }
 
@@ -194,11 +199,17 @@ namespace StatsHub.Api.Services
                 .OrderBy(s => s.Position)
                 .ToListAsync();
 
+            var teamUrls = rows.Select(s => s.TeamUrl).Where(u => !string.IsNullOrEmpty(u)).Distinct().ToList();
+            var crests = await _context.IbbaTeamCrests
+                .Where(c => teamUrls.Contains(c.TeamUrl))
+                .ToDictionaryAsync(c => c.TeamUrl, c => c.LogoUrl);
+
             return rows.Select(s => new IbbaStandingDto
             {
                 Position = s.Position,
                 TeamName = s.TeamName,
                 TeamUrl = s.TeamUrl,
+                LogoUrl = crests.GetValueOrDefault(s.TeamUrl),
                 GamesPlayed = s.GamesPlayed,
                 Wins = s.Wins,
                 Losses = s.Losses,
@@ -256,6 +267,7 @@ namespace StatsHub.Api.Services
                     if (!string.IsNullOrEmpty(teamLink.IbbaLeagueUrl))
                     {
                         await ReplaceStandingsAsync(teamLink.IbbaLeagueUrl!, teamLink.IbbaLeagueName ?? "", report.Standings);
+                        await EnsureTeamCrestsAsync(report.Standings);
                     }
                 }
 
@@ -428,6 +440,55 @@ namespace StatsHub.Api.Services
                 });
             }
 
+            await _context.SaveChangesAsync();
+        }
+
+        // Every team seen in a standings table gets its crest cached, keyed by team
+        // URL - not just the player's own team, so opponents get a logo too. A
+        // cached team (found or not - "not every team page renders this widget" is
+        // normal) is never re-fetched, so steady-state syncs only ever pay for
+        // genuinely new teams. Fetched in parallel (bounded) since a full league is
+        // 12-16 teams and this only matters the first time any of them is seen.
+        private async Task EnsureTeamCrestsAsync(List<IbbaStandingRow> rows)
+        {
+            var candidates = rows
+                .Where(r => !string.IsNullOrEmpty(r.TeamUrl))
+                .GroupBy(r => r.TeamUrl)
+                .Select(g => g.First())
+                .ToList();
+            if (candidates.Count == 0) return;
+
+            var urls = candidates.Select(r => r.TeamUrl).ToList();
+            var cachedUrls = await _context.IbbaTeamCrests.Where(c => urls.Contains(c.TeamUrl)).Select(c => c.TeamUrl).ToListAsync();
+            var missing = candidates.Where(r => !cachedUrls.Contains(r.TeamUrl)).ToList();
+            if (missing.Count == 0) return;
+
+            var scraper = new IbbaTeamScraper(CreateIbbaHttpClient());
+            using var throttle = new SemaphoreSlim(5);
+            var results = new System.Collections.Concurrent.ConcurrentBag<(string TeamUrl, string? LogoUrl)>();
+
+            await Task.WhenAll(missing.Select(async row =>
+            {
+                await throttle.WaitAsync();
+                try
+                {
+                    var logo = await scraper.FindTeamLogoUrlAsync(row.TeamUrl, row.TeamName);
+                    results.Add((row.TeamUrl, logo));
+                }
+                catch
+                {
+                    results.Add((row.TeamUrl, null));
+                }
+                finally
+                {
+                    throttle.Release();
+                }
+            }));
+
+            foreach (var (teamUrl, logoUrl) in results)
+            {
+                _context.IbbaTeamCrests.Add(new IbbaTeamCrest { TeamUrl = teamUrl, LogoUrl = logoUrl, FetchedAt = DateTime.UtcNow });
+            }
             await _context.SaveChangesAsync();
         }
 

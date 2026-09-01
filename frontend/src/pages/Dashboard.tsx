@@ -27,7 +27,7 @@ export default function Dashboard() {
   const [currentSeason, setCurrentSeason] = useState<SeasonDto | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [standingsFor, setStandingsFor] = useState<{ leagueUrl: string; leagueName: string; teamName: string } | null>(null)
+  const [standingsFor, setStandingsFor] = useState<{ leagueUrl: string; leagueName: string; teamName: string; teamUrl: string } | null>(null)
 
   useEffect(() => {
     load()
@@ -150,7 +150,7 @@ export default function Dashboard() {
                             jerseyNumber={s.jerseyNumber}
                             showIbbaMark={!!ibbaTeam}
                             size="sm"
-                            onClick={ibbaTeam?.ibbaLeagueUrl ? () => setStandingsFor({ leagueUrl: ibbaTeam.ibbaLeagueUrl!, leagueName: ibbaTeam.ibbaLeagueName ?? '', teamName: s.teamName }) : undefined}
+                            onClick={ibbaTeam?.ibbaLeagueUrl ? () => setStandingsFor({ leagueUrl: ibbaTeam.ibbaLeagueUrl!, leagueName: ibbaTeam.ibbaLeagueName ?? '', teamName: s.teamName, teamUrl: ibbaTeam.teamUrl }) : undefined}
                             title={ibbaTeam?.ibbaLeagueUrl ? 'View standings' : undefined}
                           />
                           <div style={{ minWidth: 0 }}>
@@ -159,7 +159,7 @@ export default function Dashboard() {
                           </div>
                         </div>
                         {ibbaTeam?.position && (
-                          <label className="pos-pill" onClick={() => setStandingsFor({ leagueUrl: ibbaTeam.ibbaLeagueUrl!, leagueName: ibbaTeam.ibbaLeagueName ?? '', teamName: s.teamName })}>
+                          <label className="pos-pill" onClick={() => setStandingsFor({ leagueUrl: ibbaTeam.ibbaLeagueUrl!, leagueName: ibbaTeam.ibbaLeagueName ?? '', teamName: s.teamName, teamUrl: ibbaTeam.teamUrl })}>
                             <svg className="icon"><use href="#i-trophy" /></svg>
                             {ibbaTeam.position}{ibbaTeam.position === 1 ? 'st' : ibbaTeam.position === 2 ? 'nd' : ibbaTeam.position === 3 ? 'rd' : 'th'} of {ibbaTeam.totalTeams}
                           </label>
@@ -212,6 +212,7 @@ export default function Dashboard() {
         <StandingsModal
           leagueUrl={standingsFor.leagueUrl}
           leagueName={standingsFor.leagueName}
+          highlightTeamUrl={standingsFor.teamUrl}
           highlightTeamName={standingsFor.teamName}
           onClose={() => setStandingsFor(null)}
         />

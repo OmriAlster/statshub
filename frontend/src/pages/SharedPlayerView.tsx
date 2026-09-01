@@ -353,6 +353,7 @@ function GameRow({ game, token, children }: { game: GameDto; token?: string; chi
       </td>
       <td>
         {game.isHomeGame != null && <span title={game.isHomeGame ? 'Home' : 'Away'}>{game.isHomeGame ? '🏠' : '✈️'} </span>}
+        {game.opponentLogoUrl && <img className="opponent-logo-sm" src={game.opponentLogoUrl} alt="" />}
         <Link to={`/share/${shareToken}/games/${game.id}`}>{game.opponentName}</Link>
         {game.isFromIbba && (
           <img

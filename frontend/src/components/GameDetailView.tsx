@@ -22,6 +22,7 @@ export default function GameDetailView({ game, headerActions }: GameDetailViewPr
       <div className="game-detail-header">
         <div>
           <h2>
+            {game.opponentLogoUrl && <img className="game-opponent-logo" src={game.opponentLogoUrl} alt="" />}
             vs {game.opponentName}
             <span className={`game-type-badge ${game.gameType.toLowerCase()}`}>{game.gameType}</span>
             {game.isFromIbba && <IbbaBadge />}

@@ -21,6 +21,7 @@ namespace StatsHub.Api.Data
         public DbSet<PlayerIbbaLink> PlayerIbbaLinks { get; set; }
         public DbSet<IbbaTeamLink> IbbaTeamLinks { get; set; }
         public DbSet<IbbaStanding> IbbaStandings { get; set; }
+        public DbSet<IbbaTeamCrest> IbbaTeamCrests { get; set; }
         public DbSet<PushSubscription> PushSubscriptions { get; set; }
 
         // SQLite never validated DateTime.Kind, so call sites across the app
@@ -242,6 +243,13 @@ namespace StatsHub.Api.Data
                 .HasIndex(g => g.IbbaGameCode)
                 .IsUnique()
                 .HasFilter("\"IbbaGameCode\" IS NOT NULL");
+
+            // IbbaTeamCrest configuration (logo cache, keyed by team URL)
+            modelBuilder.Entity<IbbaTeamCrest>()
+                .HasKey(c => c.Id);
+            modelBuilder.Entity<IbbaTeamCrest>()
+                .HasIndex(c => c.TeamUrl)
+                .IsUnique();
 
             // PushSubscription configuration
             modelBuilder.Entity<PushSubscription>()

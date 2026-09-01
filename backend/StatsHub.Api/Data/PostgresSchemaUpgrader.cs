@@ -144,6 +144,16 @@ namespace StatsHub.Api.Data
             {
                 Console.Error.WriteLine($"Could not create unique index on Games.IbbaGameCode (likely pre-existing duplicates): {ex.Message}");
             }
+
+            // ---- Team crest cache ----
+            db.ExecuteSqlRaw(@"
+                CREATE TABLE IF NOT EXISTS ""IbbaTeamCrests"" (
+                    ""Id"" SERIAL PRIMARY KEY,
+                    ""TeamUrl"" TEXT NOT NULL,
+                    ""LogoUrl"" TEXT,
+                    ""FetchedAt"" timestamptz NOT NULL
+                );");
+            db.ExecuteSqlRaw(@"CREATE UNIQUE INDEX IF NOT EXISTS ""IX_IbbaTeamCrests_TeamUrl"" ON ""IbbaTeamCrests"" (""TeamUrl"");");
         }
 
         private static bool ColumnExists(AppDbContext context, string table, string column)

@@ -3428,6 +3428,26 @@ select:focus {
   margin: 0;
 }
 
+.game-opponent-logo {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  object-fit: cover;
+  vertical-align: -6px;
+  margin-right: 0.5rem;
+  background: var(--color-surface-alt);
+}
+
+.opponent-logo-sm {
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  object-fit: cover;
+  vertical-align: -3px;
+  margin-right: 0.3rem;
+  background: var(--color-surface-alt);
+}
+
 @media (max-width: 768px) {
   .live-stat-bar {
     top: 0;
@@ -4812,6 +4832,29 @@ button.crest-cluster:hover .crest-main {
   background: var(--color-accent-soft);
   color: var(--color-accent-bright);
   font-weight: 800;
+}
+
+.standings-team-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.standings-team-logo {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+  background: var(--color-surface);
+}
+
+.standings-team-logo-fallback {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--color-border-strong);
+  flex-shrink: 0;
 }
 
 .game-type-badge.friendly {

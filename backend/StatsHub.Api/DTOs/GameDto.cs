@@ -7,6 +7,10 @@ namespace StatsHub.Api.DTOs
         public string TeamName { get; set; } = string.Empty;
         public string GameType { get; set; } = "League";
         public string OpponentName { get; set; } = string.Empty;
+        // Only ever populated for an IBBA-synced game whose opponent is also a
+        // team in the same synced league's standings - there's no logo source
+        // for a manually-created game's opponent.
+        public string? OpponentLogoUrl { get; set; }
         public DateTime GameDate { get; set; }
         public string Location { get; set; } = string.Empty;
         public string Status { get; set; } = string.Empty;

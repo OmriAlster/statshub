@@ -81,6 +81,7 @@ export interface GameDto {
   teamName: string
   gameType: GameType
   opponentName: string
+  opponentLogoUrl?: string | null
   gameDate: string
   location: string
   status: 'Upcoming' | 'In Progress' | 'Completed'
@@ -239,6 +240,7 @@ export interface IbbaStandingRowDto {
   position: number
   teamName: string
   teamUrl: string
+  logoUrl?: string | null
   gamesPlayed: number
   wins: number
   losses: number

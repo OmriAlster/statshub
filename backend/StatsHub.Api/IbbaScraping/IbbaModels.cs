@@ -70,7 +70,10 @@ public class IbbaStandingRow
     public int Diff { get; set; }                 // הפרש
     public int LeaguePoints { get; set; }         // נק'
 
-    public bool IsTeam(string teamNameOrUrl) =>
-        TeamName.Contains(teamNameOrUrl, StringComparison.OrdinalIgnoreCase) ||
-        TeamUrl.Contains(teamNameOrUrl, StringComparison.OrdinalIgnoreCase);
+    // Exact match only - a substring match (e.g. "מכבי בקה" is contained in
+    // "מכבי בקה גת") would silently pick the wrong row whenever one team's
+    // name happens to be a prefix of another's.
+    public bool IsTeam(string? teamUrl, string teamName) =>
+        (!string.IsNullOrEmpty(teamUrl) && !string.IsNullOrEmpty(TeamUrl) && string.Equals(TeamUrl, teamUrl, StringComparison.OrdinalIgnoreCase)) ||
+        string.Equals(TeamName, teamName, StringComparison.OrdinalIgnoreCase);
 }

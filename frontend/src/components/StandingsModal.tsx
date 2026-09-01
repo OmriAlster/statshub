@@ -5,11 +5,12 @@ import type { IbbaStandingRowDto } from '../api/types'
 interface StandingsModalProps {
   leagueUrl: string
   leagueName: string
+  highlightTeamUrl?: string
   highlightTeamName?: string
   onClose: () => void
 }
 
-export default function StandingsModal({ leagueUrl, leagueName, highlightTeamName, onClose }: StandingsModalProps) {
+export default function StandingsModal({ leagueUrl, leagueName, highlightTeamUrl, highlightTeamName, onClose }: StandingsModalProps) {
   const [rows, setRows] = useState<IbbaStandingRowDto[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -55,16 +56,27 @@ export default function StandingsModal({ leagueUrl, leagueName, highlightTeamNam
                 </tr>
               </thead>
               <tbody>
-                {rows.map((r) => (
-                  <tr key={r.teamName} className={highlightTeamName && (r.teamName.includes(highlightTeamName) || highlightTeamName.includes(r.teamName)) ? 'own' : ''}>
+                {rows.map((r) => {
+                  // Match by team URL when available - a substring name match (e.g.
+                  // "מכבי בקה" is contained in "מכבי בקה גת") would wrongly highlight
+                  // both whenever one team's name is a prefix of another's.
+                  const isOwn = highlightTeamUrl ? r.teamUrl === highlightTeamUrl : highlightTeamName === r.teamName
+                  return (
+                  <tr key={r.teamName} className={isOwn ? 'own' : ''}>
                     <td className="num">{r.position}</td>
-                    <td className="opp" dir="rtl">{r.teamName}</td>
+                    <td className="opp" dir="rtl">
+                      <span className="standings-team-cell">
+                        {r.logoUrl ? <img className="standings-team-logo" src={r.logoUrl} alt="" /> : <span className="standings-team-logo-fallback" />}
+                        {r.teamName}
+                      </span>
+                    </td>
                     <td className="num">{r.gamesPlayed}</td>
                     <td className="num">{r.wins}</td>
                     <td className="num">{r.losses}</td>
                     <td className="num">{r.leaguePoints}</td>
                   </tr>
-                ))}
+                  )
+                })}
               </tbody>
             </table>
           )}

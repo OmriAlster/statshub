@@ -102,6 +102,7 @@ interface TeamMeta {
   leagueName?: string | null
   position?: number | null
   totalTeams?: number | null
+  teamUrl?: string | null
 }
 
 function PlayerProfilePanel({ player }: { player: PlayerDto }) {
@@ -112,7 +113,7 @@ function PlayerProfilePanel({ player }: { player: PlayerDto }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [selectedTeamId, setSelectedTeamId] = useState<number | 'all' | null>(null)
-  const [standingsFor, setStandingsFor] = useState<{ leagueUrl: string; leagueName: string; teamName: string } | null>(null)
+  const [standingsFor, setStandingsFor] = useState<{ leagueUrl: string; leagueName: string; teamName: string; teamUrl: string } | null>(null)
 
   useEffect(() => {
     load()
@@ -158,6 +159,7 @@ function PlayerProfilePanel({ player }: { player: PlayerDto }) {
           leagueName: it.ibbaLeagueName,
           position: it.position,
           totalTeams: it.totalTeams,
+          teamUrl: it.teamUrl,
         }
       }
     }
@@ -212,7 +214,7 @@ function PlayerProfilePanel({ player }: { player: PlayerDto }) {
             logoUrl={selectedTeam.logoUrl}
             jerseyNumber={selectedTeam.jerseyNumber}
             showIbbaMark={selectedTeam.isIbba}
-            onClick={selectedTeam.leagueUrl ? () => setStandingsFor({ leagueUrl: selectedTeam.leagueUrl!, leagueName: selectedTeam.leagueName ?? '', teamName: selectedTeam.name }) : undefined}
+            onClick={selectedTeam.leagueUrl ? () => setStandingsFor({ leagueUrl: selectedTeam.leagueUrl!, leagueName: selectedTeam.leagueName ?? '', teamName: selectedTeam.name, teamUrl: selectedTeam.teamUrl ?? '' }) : undefined}
             title={selectedTeam.leagueUrl ? 'View standings' : undefined}
           />
           <div>
@@ -221,7 +223,7 @@ function PlayerProfilePanel({ player }: { player: PlayerDto }) {
               <button
                 className="league-chip"
                 style={{ marginTop: '0.3rem' }}
-                onClick={() => setStandingsFor({ leagueUrl: selectedTeam.leagueUrl!, leagueName: selectedTeam.leagueName ?? '', teamName: selectedTeam.name })}
+                onClick={() => setStandingsFor({ leagueUrl: selectedTeam.leagueUrl!, leagueName: selectedTeam.leagueName ?? '', teamName: selectedTeam.name, teamUrl: selectedTeam.teamUrl ?? '' })}
               >
                 <svg className="icon"><use href="#i-trophy" /></svg>
                 <span dir="rtl">{selectedTeam.leagueName}</span>
@@ -261,6 +263,7 @@ function PlayerProfilePanel({ player }: { player: PlayerDto }) {
         <StandingsModal
           leagueUrl={standingsFor.leagueUrl}
           leagueName={standingsFor.leagueName}
+          highlightTeamUrl={standingsFor.teamUrl}
           highlightTeamName={standingsFor.teamName}
           onClose={() => setStandingsFor(null)}
         />
@@ -362,6 +365,7 @@ function StatsPanel({ games, playerId }: { games: GameDto[]; playerId: number })
                     </td>
                     <td>
                       {game.isHomeGame != null && <span title={game.isHomeGame ? 'Home' : 'Away'}>{game.isHomeGame ? '🏠' : '✈️'} </span>}
+                      {game.opponentLogoUrl && <img className="opponent-logo-sm" src={game.opponentLogoUrl} alt="" />}
                       <Link to={`/games/${game.id}?playerId=${playerId}`}>{game.opponentName}</Link>
                       {game.isFromIbba && (
                         <img
@@ -508,6 +512,7 @@ function SchedulePanel({
                   <td>{formatGameDateTime(game.gameDate)}</td>
                   <td>
                     {game.isHomeGame != null && <span title={game.isHomeGame ? 'Home' : 'Away'}>{game.isHomeGame ? '🏠' : '✈️'} </span>}
+                    {game.opponentLogoUrl && <img className="opponent-logo-sm" src={game.opponentLogoUrl} alt="" />}
                     {game.opponentName}
                     {game.isFromIbba && (
                       <img
