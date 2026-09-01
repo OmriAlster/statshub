@@ -21,6 +21,7 @@ namespace StatsHub.Api.Data
         public DbSet<PlayerIbbaLink> PlayerIbbaLinks { get; set; }
         public DbSet<IbbaTeamLink> IbbaTeamLinks { get; set; }
         public DbSet<IbbaStanding> IbbaStandings { get; set; }
+        public DbSet<PushSubscription> PushSubscriptions { get; set; }
 
         // SQLite never validated DateTime.Kind, so call sites across the app
         // freely mix DateTime.UtcNow with Kind-less values (new DateTime(...),
@@ -232,6 +233,20 @@ namespace StatsHub.Api.Data
                 .OnDelete(DeleteBehavior.SetNull);
             modelBuilder.Entity<Game>()
                 .HasIndex(g => g.IbbaGameCode);
+
+            // PushSubscription configuration
+            modelBuilder.Entity<PushSubscription>()
+                .HasKey(ps => ps.Id);
+            modelBuilder.Entity<PushSubscription>()
+                .HasIndex(ps => ps.Endpoint)
+                .IsUnique();
+            modelBuilder.Entity<PushSubscription>()
+                .HasIndex(ps => ps.UserId);
+            modelBuilder.Entity<PushSubscription>()
+                .HasOne(ps => ps.User)
+                .WithMany()
+                .HasForeignKey(ps => ps.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
         }
     }
 }

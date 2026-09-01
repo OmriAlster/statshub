@@ -23,12 +23,14 @@ namespace StatsHub.Api.Services
         private readonly AppDbContext _context;
         private readonly IPlayerService _playerService;
         private readonly IHttpClientFactory _httpClientFactory;
+        private readonly IPushNotificationService _push;
 
-        public IbbaService(AppDbContext context, IPlayerService playerService, IHttpClientFactory httpClientFactory)
+        public IbbaService(AppDbContext context, IPlayerService playerService, IHttpClientFactory httpClientFactory, IPushNotificationService push)
         {
             _context = context;
             _playerService = playerService;
             _httpClientFactory = httpClientFactory;
+            _push = push;
         }
 
         private HttpClient CreateIbbaHttpClient() => _httpClientFactory.CreateClient("Ibba");
@@ -268,6 +270,11 @@ namespace StatsHub.Api.Services
 
         private async Task UpsertGamesAsync(IbbaTeamLink teamLink, List<IbbaGameRow> rows)
         {
+            // Collected so pushes fire only after SaveChangesAsync assigns real
+            // IDs, and only once per game regardless of how many rows touched it.
+            var newlyUpcoming = new List<Game>();
+            var newlyCompleted = new List<Game>();
+
             foreach (var row in rows)
             {
                 if (string.IsNullOrEmpty(row.Code)) continue;
@@ -281,7 +288,7 @@ namespace StatsHub.Api.Services
                 var existing = await _context.Games.FirstOrDefaultAsync(g => g.IbbaGameCode == row.Code);
                 if (existing == null)
                 {
-                    _context.Games.Add(new Game
+                    var game = new Game
                     {
                         TeamId = teamLink.LinkedTeamId!.Value,
                         IbbaGameCode = row.Code,
@@ -296,7 +303,13 @@ namespace StatsHub.Api.Services
                         OpponentScore = opponentScore,
                         CreatedAt = DateTime.UtcNow,
                         UpdatedAt = DateTime.UtcNow,
-                    });
+                    };
+                    _context.Games.Add(game);
+
+                    // Only a brand-new *upcoming* fixture is worth a "new game
+                    // added" push - a completed one just showed up via a
+                    // historical backfill, nobody needs to be told about it.
+                    if (game.Status == "Upcoming") newlyUpcoming.Add(game);
                 }
                 else
                 {
@@ -311,6 +324,7 @@ namespace StatsHub.Api.Services
                         existing.TeamScore = teamScore;
                         existing.OpponentScore = opponentScore;
                         existing.Status = "Completed";
+                        newlyCompleted.Add(existing);
                     }
 
                     existing.UpdatedAt = DateTime.UtcNow;
@@ -318,6 +332,25 @@ namespace StatsHub.Api.Services
             }
 
             await _context.SaveChangesAsync();
+
+            foreach (var game in newlyUpcoming)
+            {
+                await _push.NotifyTeamAsync(
+                    game.TeamId,
+                    "🏀 New game scheduled",
+                    $"vs {game.OpponentName} on {game.GameDate:MMM d, h:mm tt}",
+                    $"/games/{game.Id}");
+            }
+
+            foreach (var game in newlyCompleted)
+            {
+                var result = (game.TeamScore ?? 0) > (game.OpponentScore ?? 0) ? "W" : "L";
+                await _push.NotifyTeamAsync(
+                    game.TeamId,
+                    "Final score",
+                    $"{result} {game.TeamScore}-{game.OpponentScore} vs {game.OpponentName}",
+                    $"/games/{game.Id}");
+            }
         }
 
         private async Task ReplaceStandingsAsync(string leagueUrl, string leagueName, List<IbbaStandingRow> rows)
@@ -349,12 +382,30 @@ namespace StatsHub.Api.Services
             await _context.SaveChangesAsync();
         }
 
+        // IBBA is an Israeli site - every date/time it publishes is Israel wall-clock
+        // time, not UTC. Falls back to a fixed UTC+2 (Israel Standard Time, no DST)
+        // zone if the OS/container has no "Asia/Jerusalem" tzdata entry, which is
+        // close enough to be right most of the year and off by at most an hour
+        // during DST rather than by the full un-converted offset.
+        private static readonly TimeZoneInfo IsraelTimeZone = ResolveIsraelTimeZone();
+
+        private static TimeZoneInfo ResolveIsraelTimeZone()
+        {
+            try { return TimeZoneInfo.FindSystemTimeZoneById("Asia/Jerusalem"); }
+            catch (TimeZoneNotFoundException) { }
+            catch (InvalidTimeZoneException) { }
+            return TimeZoneInfo.CreateCustomTimeZone("Israel-Fallback", TimeSpan.FromHours(2), "Israel (fallback, no DST)", "IST");
+        }
+
         private static DateTime ParseGameDate(string date, string time)
         {
             var combined = string.IsNullOrWhiteSpace(time) ? date : $"{date} {time}";
             var formats = new[] { "dd-MM-yyyy HH:mm", "dd-MM-yyyy" };
             if (DateTime.TryParseExact(combined, formats, CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsed))
-                return DateTime.SpecifyKind(parsed, DateTimeKind.Utc);
+            {
+                var israelLocal = DateTime.SpecifyKind(parsed, DateTimeKind.Unspecified);
+                return TimeZoneInfo.ConvertTimeToUtc(israelLocal, IsraelTimeZone);
+            }
             return DateTime.UtcNow;
         }
     }

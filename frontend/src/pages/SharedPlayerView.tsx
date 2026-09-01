@@ -9,6 +9,7 @@ import GameStatusBadge from '../components/GameStatusBadge'
 import SegmentedControl from '../components/SegmentedControl'
 import TeamCrest from '../components/TeamCrest'
 import { useElementVisible } from '../hooks/useElementVisible'
+import { formatGameDateTime } from '../utils/formatGameDate'
 
 export default function SharedPlayerView() {
   const { token, gameId } = useParams<{ token: string; gameId?: string }>()
@@ -347,7 +348,7 @@ function GameRow({ game, token, children }: { game: GameDto; token?: string; chi
     <tr className={game.status !== 'Completed' ? 'upcoming-row' : ''}>
       <td>
         <Link to={`/share/${shareToken}/games/${game.id}`}>
-          {new Date(game.gameDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+          {formatGameDateTime(game.gameDate)}
         </Link>
       </td>
       <td>

@@ -1206,6 +1206,132 @@ select:focus {
   font-weight: 800;
 }
 
+.todays-games-card {
+  max-width: 460px;
+}
+
+.setup-hint.centered {
+  text-align: center;
+  margin: -0.5rem 0 1.1rem;
+  font-size: 0.82rem;
+}
+
+.todays-games-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  margin-bottom: 1.1rem;
+}
+
+.today-game-card {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  width: 100%;
+  padding: 0.75rem 0.85rem;
+  background: var(--color-surface);
+  border: 1.5px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color var(--transition), transform var(--transition), box-shadow var(--transition);
+}
+
+.today-game-card:hover {
+  border-color: var(--color-accent);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+.tgc-avatar {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  background: var(--gradient-accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-display);
+  font-weight: 800;
+  color: #1a0d00;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.tgc-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.tgc-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.tgc-name-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.15rem;
+}
+
+.tgc-name {
+  font-weight: 800;
+  font-size: 0.95rem;
+  color: var(--color-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tgc-matchup {
+  font-size: 0.82rem;
+  color: var(--color-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tgc-time {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-faint);
+  font-weight: 700;
+  margin-top: 0.15rem;
+}
+
+.tgc-go {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--gradient-accent);
+  flex-shrink: 0;
+}
+
+.tgc-go .icon {
+  width: 15px;
+  height: 15px;
+  stroke: #1a0d00;
+}
+
+.custom-game-toggle,
+.back-to-todays-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+}
+
+.back-to-todays-btn {
+  margin-bottom: 1rem;
+}
+
 .setup-form {
   display: flex;
   flex-direction: column;
@@ -4090,22 +4216,23 @@ select:focus {
 }
 
 .minutes-input {
-  width: 42px;
+  width: 48px;
   min-height: 44px;
-  background: none;
-  border: none;
-  border-bottom: 2px solid var(--color-accent);
+  background: var(--color-surface);
+  border: 1.5px solid var(--color-accent);
+  border-radius: var(--radius-sm);
   color: var(--color-text);
   font-family: var(--font-display);
   font-weight: 800;
   font-size: 1.05rem;
   text-align: center;
-  padding: 10px 0;
+  padding: 10px 2px;
   touch-action: manipulation;
 }
 
 .minutes-input:focus {
   outline: none;
+  box-shadow: 0 0 0 3px var(--color-accent-soft);
 }
 
 .live-bottom-splits {
@@ -4477,6 +4604,61 @@ button.crest-cluster:hover .crest-main {
 
 .stats-mode-switch { margin: 0.6rem 0 0.9rem; }
 .quick-stats-form { margin-top: 0.5rem; }
+
+.quick-stats-form .minutes-field {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  width: 100%;
+  max-width: 260px;
+  margin-bottom: 1rem;
+  padding: 0.7rem 0.9rem;
+  background: var(--color-surface-alt);
+  border: 1.5px solid var(--color-accent);
+  border-radius: var(--radius-sm);
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.quick-stats-form .minutes-field input {
+  width: 64px;
+  padding: 0.5rem;
+  background: var(--color-surface);
+  border: 1.5px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-display);
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: var(--color-text);
+  text-align: center;
+}
+
+.quick-stats-form .minutes-field input:focus {
+  outline: none;
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px var(--color-accent-soft);
+}
+
+.clear-stats-btn {
+  background: none;
+  border: 1.5px solid var(--color-danger);
+  color: var(--color-danger);
+  padding: 0.4rem 0.8rem;
+  border-radius: var(--radius-pill);
+  font-size: 0.76rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.clear-stats-btn:hover {
+  background: var(--color-surface-hover);
+}
 
 .ibba-locked-info {
   display: flex;

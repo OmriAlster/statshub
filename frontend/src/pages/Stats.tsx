@@ -21,7 +21,7 @@ import SegmentedControl from '../components/SegmentedControl'
 import StandingsModal from '../components/StandingsModal'
 import TeamCrest from '../components/TeamCrest'
 import { useElementVisible } from '../hooks/useElementVisible'
-import { useLiveGameOverlay } from '../live/LiveGameContext'
+import { formatGameDateTime } from '../utils/formatGameDate'
 
 export default function Stats() {
   const { user } = useAuth()
@@ -357,7 +357,7 @@ function StatsPanel({ games, playerId }: { games: GameDto[]; playerId: number })
                   <tr key={game.id}>
                     <td>
                       <Link to={`/games/${game.id}?playerId=${playerId}`} className="games-table-date-link">
-                        {new Date(game.gameDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                        {formatGameDateTime(game.gameDate)}
                       </Link>
                     </td>
                     <td>
@@ -445,7 +445,6 @@ function SchedulePanel({
   onGameDeleted: (id: number) => void
   onGameCreated: (g: GameDto) => void
 }) {
-  const { goLive } = useLiveGameOverlay()
   const [editingId, setEditingId] = useState<number | null>(null)
   const [deletingId, setDeletingId] = useState<number | null>(null)
   const [showAddForm, setShowAddForm] = useState(false)
@@ -505,7 +504,7 @@ function SchedulePanel({
             return (
               <Fragment key={game.id}>
                 <tr className={game.status !== 'Completed' ? 'upcoming-row' : ''}>
-                  <td>{new Date(game.gameDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</td>
+                  <td>{formatGameDateTime(game.gameDate)}</td>
                   <td>
                     {game.isHomeGame != null && <span title={game.isHomeGame ? 'Home' : 'Away'}>{game.isHomeGame ? '🏠' : '✈️'} </span>}
                     {game.opponentName}
@@ -530,15 +529,6 @@ function SchedulePanel({
                   )}
                   <td>
                     <div className="flex gap-1">
-                      {game.status === 'Upcoming' && (
-                        <button
-                          className="edit-btn"
-                          title="Go live on this game"
-                          onClick={() => goLive({ gameId: game.id, playerId: player.id })}
-                        >
-                          <svg className="icon"><use href="#i-live" /></svg>
-                        </button>
-                      )}
                       <button className="edit-btn" title="Edit game & stats" onClick={() => setEditingId(editingId === game.id ? null : game.id)}>
                         <svg className="icon"><use href="#i-edit" /></svg>
                       </button>
@@ -586,6 +576,14 @@ interface ScheduleNewGameForm {
   gameType: GameType
 }
 
+// <input type="datetime-local"> reads/writes local time as "YYYY-MM-DDTHH:mm"
+// with no timezone - Date's own getters/setters already work in local time,
+// so this is a plain zero-padded format, not a UTC conversion.
+function toDatetimeLocalValue(date: Date) {
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`
+}
+
 function ScheduleNewGamePanel({
   teamList,
   selectedTeamId,
@@ -601,7 +599,7 @@ function ScheduleNewGamePanel({
   const [form, setForm] = useState<ScheduleNewGameForm>({
     teamId: defaultTeamId,
     opponentName: '',
-    gameDate: new Date().toISOString().split('T')[0],
+    gameDate: toDatetimeLocalValue(new Date()),
     location: '',
     gameType: 'League',
   })
@@ -649,8 +647,8 @@ function ScheduleNewGamePanel({
           <input value={form.opponentName} onChange={(e) => setForm({ ...form, opponentName: e.target.value })} placeholder="Opponent team name" />
         </label>
         <label>
-          Date
-          <input type="date" value={form.gameDate} onChange={(e) => setForm({ ...form, gameDate: e.target.value })} />
+          Date &amp; time
+          <input type="datetime-local" value={form.gameDate} onChange={(e) => setForm({ ...form, gameDate: e.target.value })} />
         </label>
         <label>
           Location
@@ -700,7 +698,7 @@ function ScheduleEditPanel({
 
   const [form, setForm] = useState<EditGameForm>({
     opponentName: game.opponentName,
-    gameDate: game.gameDate.split('T')[0],
+    gameDate: toDatetimeLocalValue(new Date(game.gameDate)),
     location: game.location,
     gameType: game.gameType,
     isHomeGame: game.isHomeGame === false ? 'away' : 'home',
@@ -774,6 +772,25 @@ function ScheduleEditPanel({
     }
   }
 
+  const [clearing, setClearing] = useState(false)
+
+  const clearStats = async () => {
+    if (!statsSeed) return
+    if (!window.confirm('Clear all recorded stats for this game? This removes the box score and shot chart entirely.')) return
+    setClearing(true)
+    setError(null)
+    try {
+      await api.delete(`/gamestats/${statsSeed.id}`)
+      setStatsSeed(null)
+      const { data: updatedGame } = await api.get<GameDto>(`/games/${game.id}`)
+      onGameUpdated(updatedGame)
+    } catch {
+      setError('Could not clear stats for this game.')
+    } finally {
+      setClearing(false)
+    }
+  }
+
   return (
     <div className="edit-panel">
       {game.isFromIbba ? (
@@ -794,8 +811,8 @@ function ScheduleEditPanel({
               <input value={form.opponentName} onChange={(e) => setForm({ ...form, opponentName: e.target.value })} />
             </label>
             <label>
-              Date
-              <input type="date" value={form.gameDate} onChange={(e) => setForm({ ...form, gameDate: e.target.value })} />
+              Date &amp; time
+              <input type="datetime-local" value={form.gameDate} onChange={(e) => setForm({ ...form, gameDate: e.target.value })} />
             </label>
             <label>
               Location
@@ -833,7 +850,14 @@ function ScheduleEditPanel({
         </>
       )}
 
-      <h4 style={{ marginTop: '1.25rem' }}>Box Score</h4>
+      <div className="flex gap-1" style={{ marginTop: '1.25rem', alignItems: 'baseline', justifyContent: 'space-between' }}>
+        <h4 style={{ margin: 0 }}>Box Score</h4>
+        {statsSeed && (
+          <button className="clear-stats-btn" onClick={clearStats} disabled={clearing}>
+            {clearing ? 'Clearing...' : '🗑️ Clear Stats'}
+          </button>
+        )}
+      </div>
       {statsSeed ? (
         <>
           <SegmentedControl
@@ -909,6 +933,10 @@ function QuickStatsForm({
   )
 
   const save = async () => {
+    if (!(Number(form.minutesPlayed) > 0)) {
+      setError('Enter minutes played before saving - a game with no minutes reads as not actually played.')
+      return
+    }
     setSaving(true)
     setError(null)
     try {
@@ -926,6 +954,17 @@ function QuickStatsForm({
 
   return (
     <div className="quick-stats-form">
+      <label className="minutes-field">
+        Minutes Played
+        <input
+          type="number"
+          min={0}
+          max={48}
+          value={form.minutesPlayed}
+          onChange={(e) => setForm({ ...form, minutesPlayed: e.target.value })}
+          placeholder="0"
+        />
+      </label>
       <div className="stat-fields">
         {field('fieldGoalsMade', '2PM')}
         {field('fieldGoalsAttempted', '2PA')}
@@ -940,7 +979,6 @@ function QuickStatsForm({
         {field('blocks', 'Blk')}
         {field('turnovers', 'TO')}
         {field('fouls', 'Fouls')}
-        {field('minutesPlayed', 'Min')}
       </div>
       {error && <p className="error">{error}</p>}
       <button className="submit-btn" onClick={save} disabled={saving}>{saving ? 'Saving...' : 'Save Stats'}</button>

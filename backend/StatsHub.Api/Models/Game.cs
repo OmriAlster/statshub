@@ -22,6 +22,10 @@ namespace StatsHub.Api.Models
         public int? IbbaTeamLinkId { get; set; }
         public bool? IsHomeGame { get; set; }
 
+        // Set once the "starting soon" push has gone out for this game, so the
+        // reminder background service never sends it twice.
+        public DateTime? ReminderSentAt { get; set; }
+
         // Navigation properties
         public Team Team { get; set; } = null!;
         public IbbaTeamLink? IbbaTeamLink { get; set; }

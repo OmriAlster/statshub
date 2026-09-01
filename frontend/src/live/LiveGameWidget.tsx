@@ -1,10 +1,25 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '../api/client'
-import type { GameDto, GameType, PlayerDto, ShotDto } from '../api/types'
+import type { GameDto, GameType, IbbaLinkStatusDto, PlayerDto, ShotDto } from '../api/types'
 import { useAuth } from '../auth/AuthContext'
 import CourtShotChart, { type ChartShot } from '../components/CourtShotChart'
+import TeamCrest from '../components/TeamCrest'
+import { formatGameDateTime } from '../utils/formatGameDate'
 import { computeStatsFromEvents, EVENT_ICONS, EVENT_LABELS, seedEventsFromStats, type EventType, type GameEvent } from './gameEvents'
 import { useLiveGameOverlay } from './LiveGameContext'
+
+function isToday(iso: string) {
+  const d = new Date(iso)
+  const now = new Date()
+  return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate()
+}
+
+interface TodaysGame {
+  game: GameDto
+  player: PlayerDto
+  jerseyNumber: number
+  teamLogoUrl?: string | null
+}
 
 interface ActionLogEntry {
   kind: 'event' | 'shot'
@@ -34,9 +49,11 @@ const STORAGE_KEY_PREFIX = 'statshub_active_live_game'
 
 export default function LiveGameWidget() {
   const { user } = useAuth()
-  const { overlayOpen, openOverlay, closeOverlay, pendingGame, clearPendingGame } = useLiveGameOverlay()
+  const { overlayOpen, openOverlay, closeOverlay } = useLiveGameOverlay()
   const [promoting, setPromoting] = useState(false)
   const [players, setPlayers] = useState<PlayerDto[]>([])
+  const [todaysGames, setTodaysGames] = useState<TodaysGame[]>([])
+  const [showCustomForm, setShowCustomForm] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -68,10 +85,12 @@ export default function LiveGameWidget() {
     if (!storageKey) return
 
     const saved = localStorage.getItem(storageKey)
+    let restoredLocally = false
     if (saved) {
       try {
         const parsed = JSON.parse(saved) as ActiveGame
         setActive({ ...parsed, minutesPlayed: parsed.minutesPlayed ?? 0 })
+        restoredLocally = true
         api
           .get<ShotDto[]>(`/shots/gamestats/${parsed.gameStatsId}`)
           .then(({ data }) => setActive((prev) => (prev ? { ...prev, shots: data, actionLog: [] } : prev)))
@@ -82,17 +101,9 @@ export default function LiveGameWidget() {
     } else {
       setActive(null)
     }
-    loadSetupData()
+    loadSetupData(restoredLocally)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storageKey])
-
-  // A game scheduled ahead of time from the Schedule tab, promoted to a live
-  // in-progress game instead of starting a brand new one from scratch.
-  useEffect(() => {
-    if (!pendingGame || active || promoting) return
-    promoteToLive(pendingGame.gameId, pendingGame.playerId)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pendingGame, active])
 
   const promoteToLive = async (gameId: number, playerId: number) => {
     setPromoting(true)
@@ -160,7 +171,6 @@ export default function LiveGameWidget() {
       setError('Could not go live on that game. Please try again.')
     } finally {
       setPromoting(false)
-      clearPendingGame()
     }
   }
 
@@ -174,7 +184,7 @@ export default function LiveGameWidget() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active, storageKey])
 
-  const loadSetupData = async () => {
+  const loadSetupData = async (hasLocalActive = false) => {
     try {
       setLoading(true)
       const { data } = await api.get<PlayerDto[]>('/players')
@@ -192,6 +202,56 @@ export default function LiveGameWidget() {
         }
         return prev
       })
+
+      const gamesPerPlayer = await Promise.all(
+        data.map((player) =>
+          api
+            .get<GameDto[]>(`/games/player/${player.id}`)
+            .then((res) => ({ player, games: res.data }))
+            .catch(() => ({ player, games: [] as GameDto[] }))
+        )
+      )
+
+      // Today's scheduled games, for the quick-start picker below - starting
+      // one of these promotes it to live instead of filling out a form.
+      // Enriched with jersey number and team crest so the picker reads like
+      // the rest of the app instead of a bare list of text rows.
+      const todaysRaw = gamesPerPlayer.flatMap(({ player, games }) =>
+        games.filter((g) => g.status === 'Upcoming' && isToday(g.gameDate)).map((game) => ({ game, player }))
+      )
+      const ibbaByPlayer = new Map(
+        await Promise.all(
+          [...new Set(todaysRaw.map((t) => t.player.id))].map(
+            (playerId) =>
+              api
+                .get<IbbaLinkStatusDto>(`/players/${playerId}/ibba`)
+                .then((res) => [playerId, res.data] as const)
+                .catch(() => [playerId, null] as const)
+          )
+        )
+      )
+      setTodaysGames(
+        todaysRaw.map(({ game, player }) => ({
+          game,
+          player,
+          jerseyNumber: player.teams.find((t) => t.id === game.teamId)?.jerseyNumber ?? 0,
+          teamLogoUrl: ibbaByPlayer.get(player.id)?.teams.find((t) => t.linkedTeamId === game.teamId)?.teamLogoUrl,
+        }))
+      )
+
+      // Nothing was restored from this browser's own local storage (a
+      // different device/browser, cleared storage, or a corrupted entry) -
+      // fall back to the server's own record of truth. If any player already
+      // has a game "In Progress", resume tracking it the same way a
+      // scheduled game gets promoted to live, so a lost/cleared local cache
+      // never actually strands an in-progress game.
+      if (!hasLocalActive) {
+        const inProgress = gamesPerPlayer.flatMap(({ player, games }) =>
+          games.filter((g) => g.status === 'In Progress').map((game) => ({ game, player }))
+        )[0]
+        if (inProgress) promoteToLive(inProgress.game.id, inProgress.player.id)
+      }
+
       setError(null)
     } catch {
       setError('Could not load players. Is the backend running?')
@@ -569,9 +629,50 @@ export default function LiveGameWidget() {
             <div className="game-setup">
               {players.length === 0 ? (
                 <p>You don't have any players yet. Add one on the Players page first.</p>
+              ) : todaysGames.length > 0 && !showCustomForm ? (
+                <div className="setup-card todays-games-card">
+                  <h3>Today's Games</h3>
+                  <p className="setup-hint centered">Tap a game to start tracking it live.</p>
+                  <div className="todays-games-list">
+                    {todaysGames.map(({ game, player, jerseyNumber, teamLogoUrl }) => (
+                      <button
+                        key={`${game.id}-${player.id}`}
+                        className="today-game-card"
+                        onClick={() => promoteToLive(game.id, player.id)}
+                      >
+                        <div className="tgc-avatar">
+                          {player.profilePictureUrl ? (
+                            <img src={player.profilePictureUrl} alt="" />
+                          ) : (
+                            <span>{player.firstName[0]}{player.lastName[0]}</span>
+                          )}
+                        </div>
+                        <div className="tgc-body">
+                          <div className="tgc-name-row">
+                            <span className="tgc-name">{player.firstName} {player.lastName}</span>
+                            <TeamCrest logoUrl={teamLogoUrl} jerseyNumber={jerseyNumber} size="sm" />
+                          </div>
+                          <div className="tgc-matchup">vs {game.opponentName}</div>
+                          <div className="tgc-time">{formatGameDateTime(game.gameDate)}</div>
+                        </div>
+                        <div className="tgc-go">
+                          <svg className="icon"><use href="#i-live" /></svg>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                  <button className="nav-btn custom-game-toggle" onClick={() => setShowCustomForm(true)}>
+                    <svg className="icon"><use href="#i-plus" /></svg> Start a Different Game
+                  </button>
+                </div>
               ) : (
                 <div className="setup-card">
                   <h3>Start New Game</h3>
+                  {todaysGames.length > 0 && (
+                    <button className="nav-btn back-to-todays-btn" onClick={() => setShowCustomForm(false)}>
+                      ← Today's Games
+                    </button>
+                  )}
                   <div className="setup-form">
                     <div>
                       <label>Player:</label>

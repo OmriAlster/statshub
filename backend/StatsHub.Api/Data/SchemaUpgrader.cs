@@ -117,6 +117,22 @@ namespace StatsHub.Api.Data
                     );");
                 ExecuteNonQuery(connection, "CREATE INDEX IF NOT EXISTS \"IX_IbbaStandings_IbbaLeagueUrl\" ON \"IbbaStandings\" (\"IbbaLeagueUrl\");");
                 ExecuteNonQuery(connection, "CREATE INDEX IF NOT EXISTS \"IX_Games_IbbaGameCode\" ON \"Games\" (\"IbbaGameCode\");");
+
+                // Push notifications
+                AddColumnIfMissing(connection, "Games", "ReminderSentAt", "TEXT");
+
+                CreateTableIfMissing(connection, @"
+                    CREATE TABLE IF NOT EXISTS ""PushSubscriptions"" (
+                        ""Id"" INTEGER NOT NULL CONSTRAINT ""PK_PushSubscriptions"" PRIMARY KEY AUTOINCREMENT,
+                        ""UserId"" INTEGER NOT NULL,
+                        ""Endpoint"" TEXT NOT NULL,
+                        ""P256dh"" TEXT NOT NULL,
+                        ""Auth"" TEXT NOT NULL,
+                        ""CreatedAt"" TEXT NOT NULL,
+                        CONSTRAINT ""FK_PushSubscriptions_Users_UserId"" FOREIGN KEY (""UserId"") REFERENCES ""Users"" (""Id"") ON DELETE CASCADE
+                    );");
+                ExecuteNonQuery(connection, "CREATE UNIQUE INDEX IF NOT EXISTS \"IX_PushSubscriptions_Endpoint\" ON \"PushSubscriptions\" (\"Endpoint\");");
+                ExecuteNonQuery(connection, "CREATE INDEX IF NOT EXISTS \"IX_PushSubscriptions_UserId\" ON \"PushSubscriptions\" (\"UserId\");");
             }
             finally
             {

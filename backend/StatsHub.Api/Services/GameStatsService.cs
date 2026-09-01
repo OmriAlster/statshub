@@ -179,11 +179,12 @@ namespace StatsHub.Api.Services
         private static PlayerTeamStatsDto BuildTeamStatsDto(Player player, Team team, int jerseyNumber, List<GameStats> gameStats)
         {
             var gamesPlayed = gameStats.Count;
-            // A scoreless game is usually a DNP/token appearance rather than a
-            // real outing, so it's excluded from the per-game averages (but
-            // still counts toward GamesPlayed below).
-            var gamesWithPoints = gameStats.Count(gs => gs.TotalPoints > 0);
-            double PerGame(int total) => gamesWithPoints > 0 ? Math.Round((double)total / gamesWithPoints, 2) : 0;
+            // Every game with a recorded box score counts toward the average,
+            // including a real 0-point outing - the alternative (silently
+            // excluding it) understates games played and inflates the average.
+            // A game the user never actually tracked has no GameStats row at
+            // all, so it was never in this list to begin with.
+            double PerGame(int total) => gamesPlayed > 0 ? Math.Round((double)total / gamesPlayed, 2) : 0;
 
             var totalPoints = gameStats.Sum(gs => gs.TotalPoints);
             var totalRebounds = gameStats.Sum(gs => gs.TotalRebounds);

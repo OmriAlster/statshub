@@ -115,6 +115,21 @@ namespace StatsHub.Api.Data
                 );");
             db.ExecuteSqlRaw(@"CREATE INDEX IF NOT EXISTS ""IX_IbbaStandings_IbbaLeagueUrl"" ON ""IbbaStandings"" (""IbbaLeagueUrl"");");
             db.ExecuteSqlRaw(@"CREATE INDEX IF NOT EXISTS ""IX_Games_IbbaGameCode"" ON ""Games"" (""IbbaGameCode"");");
+
+            // ---- Push notifications ----
+            db.ExecuteSqlRaw(@"ALTER TABLE ""Games"" ADD COLUMN IF NOT EXISTS ""ReminderSentAt"" timestamptz;");
+
+            db.ExecuteSqlRaw(@"
+                CREATE TABLE IF NOT EXISTS ""PushSubscriptions"" (
+                    ""Id"" SERIAL PRIMARY KEY,
+                    ""UserId"" integer NOT NULL REFERENCES ""Users"" (""Id"") ON DELETE CASCADE,
+                    ""Endpoint"" TEXT NOT NULL,
+                    ""P256dh"" TEXT NOT NULL,
+                    ""Auth"" TEXT NOT NULL,
+                    ""CreatedAt"" timestamptz NOT NULL
+                );");
+            db.ExecuteSqlRaw(@"CREATE UNIQUE INDEX IF NOT EXISTS ""IX_PushSubscriptions_Endpoint"" ON ""PushSubscriptions"" (""Endpoint"");");
+            db.ExecuteSqlRaw(@"CREATE INDEX IF NOT EXISTS ""IX_PushSubscriptions_UserId"" ON ""PushSubscriptions"" (""UserId"");");
         }
 
         private static bool ColumnExists(AppDbContext context, string table, string column)

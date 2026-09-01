@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import type { GameDto } from '../api/types'
+import { formatGameDateTimeFull } from '../utils/formatGameDate'
 import CourtShotChart from './CourtShotChart'
 import GameStatusBadge from './GameStatusBadge'
 import IbbaBadge from './IbbaBadge'
@@ -26,7 +27,7 @@ export default function GameDetailView({ game, headerActions }: GameDetailViewPr
             {game.isFromIbba && <IbbaBadge />}
           </h2>
           <p>
-            {game.teamName} · {new Date(game.gameDate).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })} ·{' '}
+            {game.teamName} · {formatGameDateTimeFull(game.gameDate)} ·{' '}
             {game.isHomeGame === false ? '✈️' : '🏠'} {game.location || 'TBD'}
           </p>
         </div>

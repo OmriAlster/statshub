@@ -2,6 +2,7 @@ import { lazy, Suspense, type ReactNode } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
 import InstallAppBanner from './InstallAppBanner'
+import NotificationBanner from './NotificationBanner'
 
 const LiveGameWidget = lazy(() => import('../live/LiveGameWidget'))
 
@@ -68,6 +69,7 @@ export default function Layout({ children }: { children: ReactNode }) {
 
       <main className="app-content">
         <InstallAppBanner />
+        <NotificationBanner />
         {children}
       </main>
 

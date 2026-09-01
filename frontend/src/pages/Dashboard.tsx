@@ -188,7 +188,9 @@ export default function Dashboard() {
                             {next ? (
                               <>
                                 <div className="glance-line">{next.isHomeGame === false ? '✈️' : '🏠'} <span className="truncate">{next.opponentName}</span></div>
-                                <span className="glance-score upcoming">{new Date(next.gameDate).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}</span>
+                                <span className="glance-score upcoming">
+                                  {new Date(next.gameDate).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                                </span>
                               </>
                             ) : <span className="glance-line" style={{ color: 'var(--color-text-faint)' }}>None scheduled</span>}
                           </div>

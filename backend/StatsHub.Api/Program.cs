@@ -110,6 +110,8 @@ builder.Services.AddScoped<IGameStatsService, GameStatsService>();
 builder.Services.AddScoped<IShotService, ShotService>();
 builder.Services.AddScoped<IShareService, ShareService>();
 builder.Services.AddScoped<IIbbaService, IbbaService>();
+builder.Services.AddScoped<IPushNotificationService, PushNotificationService>();
+builder.Services.AddHostedService<GameReminderBackgroundService>();
 builder.Services.AddHttpClient("Ibba", client =>
 {
     client.DefaultRequestHeaders.UserAgent.ParseAdd(

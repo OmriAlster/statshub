@@ -18,10 +18,12 @@ namespace StatsHub.Api.Services
     public class GameService : IGameService
     {
         private readonly AppDbContext _context;
+        private readonly IPushNotificationService _push;
 
-        public GameService(AppDbContext context)
+        public GameService(AppDbContext context, IPushNotificationService push)
         {
             _context = context;
+            _push = push;
         }
 
         // A team is manageable by its season owner, or by any parent of a player
@@ -124,6 +126,16 @@ namespace StatsHub.Api.Services
             _context.Games.Add(game);
             await _context.SaveChangesAsync();
 
+            // Fire-and-forget-ish, but awaited so a slow push provider doesn't
+            // silently drop errors - NotifyTeamAsync itself never throws for
+            // per-subscription failures, only for genuinely unexpected ones.
+            await _push.NotifyTeamAsync(
+                game.TeamId,
+                "🏀 New game scheduled",
+                $"vs {game.OpponentName} on {game.GameDate:MMM d, h:mm tt}",
+                $"/games/{game.Id}",
+                excludeUserId: requestingUserId);
+
             return await GetGameByIdAsync(game.Id, requestingUserId) ?? throw new InvalidOperationException("Game was not created");
         }
 
@@ -132,6 +144,8 @@ namespace StatsHub.Api.Services
             var game = await _context.Games.FindAsync(id);
             if (game == null) return null;
             if (!await OwnsTeamAsync(game.TeamId, requestingUserId)) return null;
+
+            var previousStatus = game.Status;
 
             if (!string.IsNullOrEmpty(dto.OpponentName)) game.OpponentName = dto.OpponentName;
             if (dto.GameDate.HasValue) game.GameDate = dto.GameDate.Value;
@@ -146,7 +160,38 @@ namespace StatsHub.Api.Services
             game.UpdatedAt = DateTime.UtcNow;
             await _context.SaveChangesAsync();
 
+            await NotifyOnStatusChangeAsync(game, previousStatus, requestingUserId);
+
             return await GetGameByIdAsync(id, requestingUserId);
+        }
+
+        // Live-tracking milestones - game start and final score - not every
+        // point scored along the way, which would be far too noisy for a push
+        // notification. Excludes whoever just made the change themselves,
+        // since the person tracking the game obviously already knows.
+        private async Task NotifyOnStatusChangeAsync(Game game, string previousStatus, int actingUserId)
+        {
+            if (previousStatus == game.Status) return;
+
+            if (game.Status == "In Progress")
+            {
+                await _push.NotifyTeamAsync(
+                    game.TeamId,
+                    "🔴 Live now",
+                    $"vs {game.OpponentName} has started",
+                    $"/games/{game.Id}",
+                    excludeUserId: actingUserId);
+            }
+            else if (game.Status == "Completed")
+            {
+                var result = (game.TeamScore ?? 0) > (game.OpponentScore ?? 0) ? "W" : "L";
+                await _push.NotifyTeamAsync(
+                    game.TeamId,
+                    "Final score",
+                    $"{result} {game.TeamScore}-{game.OpponentScore} vs {game.OpponentName}",
+                    $"/games/{game.Id}",
+                    excludeUserId: actingUserId);
+            }
         }
 
         public async Task<bool> DeleteGameAsync(int id, int requestingUserId)
