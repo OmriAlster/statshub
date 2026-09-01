@@ -123,11 +123,11 @@ namespace StatsHub.Api.Controllers
             return Ok(status);
         }
 
-        [HttpPut("ibba/team-links/{ibbaTeamLinkId}")]
-        public async Task<ActionResult<IbbaLinkStatusDto>> LinkTeam(int ibbaTeamLinkId, [FromBody] LinkIbbaTeamDto dto)
+        [HttpPut("ibba/team-links/{ibbaTeamId}")]
+        public async Task<ActionResult<IbbaLinkStatusDto>> LinkTeam(int ibbaTeamId, [FromBody] LinkIbbaTeamDto dto)
         {
-            var status = await _ibbaService.LinkTeamAsync(ibbaTeamLinkId, dto.TeamId, _currentUser.UserId);
-            if (status == null) return NotFound(new { message = "IBBA team link or team not found" });
+            var status = await _ibbaService.LinkTeamAsync(ibbaTeamId, dto.TeamId, _currentUser.UserId);
+            if (status == null) return NotFound(new { message = "IBBA team or app team not found" });
             return Ok(status);
         }
 

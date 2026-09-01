@@ -11,6 +11,6 @@ namespace StatsHub.Api.Models
 
         // Navigation properties
         public Player Player { get; set; } = null!;
-        public ICollection<IbbaTeamLink> TeamLinks { get; set; } = new List<IbbaTeamLink>();
+        public ICollection<PlayerIbbaTeam> Teams { get; set; } = new List<PlayerIbbaTeam>();
     }
 }

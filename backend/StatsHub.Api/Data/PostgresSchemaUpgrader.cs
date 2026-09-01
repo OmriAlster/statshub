@@ -66,7 +66,6 @@ namespace StatsHub.Api.Data
 
             // ---- IBBA integration ----
             db.ExecuteSqlRaw(@"ALTER TABLE ""Games"" ADD COLUMN IF NOT EXISTS ""IbbaGameCode"" TEXT;");
-            db.ExecuteSqlRaw(@"ALTER TABLE ""Games"" ADD COLUMN IF NOT EXISTS ""IbbaTeamLinkId"" integer;");
             db.ExecuteSqlRaw(@"ALTER TABLE ""Games"" ADD COLUMN IF NOT EXISTS ""IsHomeGame"" boolean;");
 
             db.ExecuteSqlRaw(@"
@@ -80,29 +79,40 @@ namespace StatsHub.Api.Data
                 );");
             db.ExecuteSqlRaw(@"CREATE UNIQUE INDEX IF NOT EXISTS ""IX_PlayerIbbaLinks_PlayerId"" ON ""PlayerIbbaLinks"" (""PlayerId"");");
 
-            db.ExecuteSqlRaw(@"
-                CREATE TABLE IF NOT EXISTS ""IbbaTeamLinks"" (
-                    ""Id"" SERIAL PRIMARY KEY,
-                    ""PlayerIbbaLinkId"" integer NOT NULL REFERENCES ""PlayerIbbaLinks"" (""Id"") ON DELETE CASCADE,
-                    ""IbbaTeamSlugId"" TEXT NOT NULL,
-                    ""IbbaTeamExportId"" TEXT NOT NULL,
-                    ""TeamName"" TEXT NOT NULL,
-                    ""TeamUrl"" TEXT NOT NULL,
-                    ""TeamLogoUrl"" TEXT,
-                    ""LinkedTeamId"" integer REFERENCES ""Teams"" (""Id"") ON DELETE SET NULL,
-                    ""IbbaLeagueUrl"" TEXT,
-                    ""IbbaLeagueName"" TEXT
-                );");
-            db.ExecuteSqlRaw(@"CREATE INDEX IF NOT EXISTS ""IX_IbbaTeamLinks_PlayerIbbaLinkId"" ON ""IbbaTeamLinks"" (""PlayerIbbaLinkId"");");
+            // Redesign: IbbaTeamLinks (per-player, duplicated team data) +
+            // IbbaStandings (per-league rows) + IbbaTeamCrests (logo cache) are
+            // replaced by one IbbaTeam table (one row per real team, shared by
+            // everyone) plus a lean PlayerIbbaTeams join. No data migration - this
+            // is IBBA-derived data, fully rebuilt by the next sync. Postgres (unlike
+            // SQLite) allows dropping a column that carries a foreign key without
+            // ceremony, but this is wrapped defensively anyway - the new
+            // OpponentIbbaTeamId column below is all the new code actually needs,
+            // so a failure here just leaves a harmless orphaned column/tables
+            // rather than blocking startup.
+            try
+            {
+                db.ExecuteSqlRaw(@"DROP TABLE IF EXISTS ""IbbaTeamLinks"";");
+                db.ExecuteSqlRaw(@"DROP TABLE IF EXISTS ""IbbaStandings"";");
+                db.ExecuteSqlRaw(@"DROP TABLE IF EXISTS ""IbbaTeamCrests"";");
+                db.ExecuteSqlRaw(@"ALTER TABLE ""Games"" DROP COLUMN IF EXISTS ""IbbaTeamLinkId"";");
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"Could not drop old IBBA tables/column (leaving them in place): {ex.Message}");
+            }
+            db.ExecuteSqlRaw(@"ALTER TABLE ""Games"" ADD COLUMN IF NOT EXISTS ""OpponentIbbaTeamId"" integer;");
 
             db.ExecuteSqlRaw(@"
-                CREATE TABLE IF NOT EXISTS ""IbbaStandings"" (
+                CREATE TABLE IF NOT EXISTS ""IbbaTeams"" (
                     ""Id"" SERIAL PRIMARY KEY,
-                    ""IbbaLeagueUrl"" TEXT NOT NULL,
-                    ""IbbaLeagueName"" TEXT NOT NULL,
-                    ""Position"" integer NOT NULL,
-                    ""TeamName"" TEXT NOT NULL,
+                    ""IbbaTeamId"" TEXT NOT NULL,
                     ""TeamUrl"" TEXT NOT NULL,
+                    ""Name"" TEXT NOT NULL,
+                    ""LogoUrl"" TEXT,
+                    ""LeagueUrl"" TEXT NOT NULL,
+                    ""LeagueName"" TEXT NOT NULL,
+                    ""LeaguePosition"" integer,
+                    ""LeagueTotalTeams"" integer,
                     ""GamesPlayed"" integer NOT NULL,
                     ""Wins"" integer NOT NULL,
                     ""Losses"" integer NOT NULL,
@@ -111,9 +121,21 @@ namespace StatsHub.Api.Data
                     ""PointsAgainst"" integer NOT NULL,
                     ""Diff"" integer NOT NULL,
                     ""LeaguePoints"" integer NOT NULL,
-                    ""SyncedAt"" timestamptz NOT NULL
+                    ""SyncedAt"" timestamptz NOT NULL,
+                    ""LinkedTeamId"" integer REFERENCES ""Teams"" (""Id"") ON DELETE SET NULL
                 );");
-            db.ExecuteSqlRaw(@"CREATE INDEX IF NOT EXISTS ""IX_IbbaStandings_IbbaLeagueUrl"" ON ""IbbaStandings"" (""IbbaLeagueUrl"");");
+            db.ExecuteSqlRaw(@"CREATE UNIQUE INDEX IF NOT EXISTS ""IX_IbbaTeams_TeamUrl"" ON ""IbbaTeams"" (""TeamUrl"");");
+            db.ExecuteSqlRaw(@"CREATE INDEX IF NOT EXISTS ""IX_IbbaTeams_LeagueUrl"" ON ""IbbaTeams"" (""LeagueUrl"");");
+            db.ExecuteSqlRaw(@"CREATE UNIQUE INDEX IF NOT EXISTS ""IX_IbbaTeams_LinkedTeamId"" ON ""IbbaTeams"" (""LinkedTeamId"") WHERE ""LinkedTeamId"" IS NOT NULL;");
+
+            db.ExecuteSqlRaw(@"
+                CREATE TABLE IF NOT EXISTS ""PlayerIbbaTeams"" (
+                    ""Id"" SERIAL PRIMARY KEY,
+                    ""PlayerIbbaLinkId"" integer NOT NULL REFERENCES ""PlayerIbbaLinks"" (""Id"") ON DELETE CASCADE,
+                    ""IbbaTeamId"" integer NOT NULL REFERENCES ""IbbaTeams"" (""Id"") ON DELETE CASCADE
+                );");
+            db.ExecuteSqlRaw(@"CREATE UNIQUE INDEX IF NOT EXISTS ""IX_PlayerIbbaTeams_PlayerIbbaLinkId_IbbaTeamId"" ON ""PlayerIbbaTeams"" (""PlayerIbbaLinkId"", ""IbbaTeamId"");");
+
             db.ExecuteSqlRaw(@"CREATE INDEX IF NOT EXISTS ""IX_Games_IbbaGameCode"" ON ""Games"" (""IbbaGameCode"");");
 
             // ---- Push notifications ----
@@ -144,16 +166,6 @@ namespace StatsHub.Api.Data
             {
                 Console.Error.WriteLine($"Could not create unique index on Games.IbbaGameCode (likely pre-existing duplicates): {ex.Message}");
             }
-
-            // ---- Team crest cache ----
-            db.ExecuteSqlRaw(@"
-                CREATE TABLE IF NOT EXISTS ""IbbaTeamCrests"" (
-                    ""Id"" SERIAL PRIMARY KEY,
-                    ""TeamUrl"" TEXT NOT NULL,
-                    ""LogoUrl"" TEXT,
-                    ""FetchedAt"" timestamptz NOT NULL
-                );");
-            db.ExecuteSqlRaw(@"CREATE UNIQUE INDEX IF NOT EXISTS ""IX_IbbaTeamCrests_TeamUrl"" ON ""IbbaTeamCrests"" (""TeamUrl"");");
         }
 
         private static bool ColumnExists(AppDbContext context, string table, string column)

@@ -19,9 +19,8 @@ namespace StatsHub.Api.Data
         public DbSet<Shot> Shots { get; set; }
         public DbSet<ShareLink> ShareLinks { get; set; }
         public DbSet<PlayerIbbaLink> PlayerIbbaLinks { get; set; }
-        public DbSet<IbbaTeamLink> IbbaTeamLinks { get; set; }
-        public DbSet<IbbaStanding> IbbaStandings { get; set; }
-        public DbSet<IbbaTeamCrest> IbbaTeamCrests { get; set; }
+        public DbSet<IbbaTeam> IbbaTeams { get; set; }
+        public DbSet<PlayerIbbaTeam> PlayerIbbaTeams { get; set; }
         public DbSet<PushSubscription> PushSubscriptions { get; set; }
 
         // SQLite never validated DateTime.Kind, so call sites across the app
@@ -202,35 +201,50 @@ namespace StatsHub.Api.Data
                 .HasForeignKey(pil => pil.PlayerId)
                 .OnDelete(DeleteBehavior.Cascade);
 
-            // IbbaTeamLink configuration
-            modelBuilder.Entity<IbbaTeamLink>()
-                .HasKey(itl => itl.Id);
-            modelBuilder.Entity<IbbaTeamLink>()
-                .HasIndex(itl => itl.PlayerIbbaLinkId);
-            modelBuilder.Entity<IbbaTeamLink>()
-                .HasOne(itl => itl.PlayerIbbaLink)
-                .WithMany(pil => pil.TeamLinks)
-                .HasForeignKey(itl => itl.PlayerIbbaLinkId)
-                .OnDelete(DeleteBehavior.Cascade);
-            modelBuilder.Entity<IbbaTeamLink>()
-                .HasOne(itl => itl.LinkedTeam)
+            // IbbaTeam configuration - one row per real IBBA team, shared across
+            // every player/game that references it. Doubles as its current
+            // league standing and crest cache.
+            modelBuilder.Entity<IbbaTeam>()
+                .HasKey(t => t.Id);
+            modelBuilder.Entity<IbbaTeam>()
+                .HasIndex(t => t.TeamUrl)
+                .IsUnique();
+            modelBuilder.Entity<IbbaTeam>()
+                .HasIndex(t => t.LeagueUrl);
+            modelBuilder.Entity<IbbaTeam>()
+                .HasIndex(t => t.LinkedTeamId)
+                .IsUnique()
+                .HasFilter("\"LinkedTeamId\" IS NOT NULL");
+            modelBuilder.Entity<IbbaTeam>()
+                .HasOne(t => t.LinkedTeam)
                 .WithMany()
-                .HasForeignKey(itl => itl.LinkedTeamId)
+                .HasForeignKey(t => t.LinkedTeamId)
                 .OnDelete(DeleteBehavior.SetNull);
 
-            // IbbaStanding configuration - shared per league, not per player/team
-            modelBuilder.Entity<IbbaStanding>()
-                .HasKey(s => s.Id);
-            modelBuilder.Entity<IbbaStanding>()
-                .HasIndex(s => s.IbbaLeagueUrl);
+            // PlayerIbbaTeam configuration (which teams a player currently plays for)
+            modelBuilder.Entity<PlayerIbbaTeam>()
+                .HasKey(pit => pit.Id);
+            modelBuilder.Entity<PlayerIbbaTeam>()
+                .HasIndex(pit => new { pit.PlayerIbbaLinkId, pit.IbbaTeamId })
+                .IsUnique();
+            modelBuilder.Entity<PlayerIbbaTeam>()
+                .HasOne(pit => pit.PlayerIbbaLink)
+                .WithMany(pil => pil.Teams)
+                .HasForeignKey(pit => pit.PlayerIbbaLinkId)
+                .OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<PlayerIbbaTeam>()
+                .HasOne(pit => pit.IbbaTeam)
+                .WithMany()
+                .HasForeignKey(pit => pit.IbbaTeamId)
+                .OnDelete(DeleteBehavior.Cascade);
 
-            // Game -> IbbaTeamLink: a synced game's source. SetNull (not Cascade) so
-            // unlinking a team from IBBA never deletes the real, stats-bearing games
-            // it produced - only the sync attribution.
+            // Game -> IbbaTeam (opponent): resolved by id at sync time, never by
+            // name. SetNull so removing/relinking a team never deletes the real,
+            // stats-bearing game it appeared in - only the opponent's crest link.
             modelBuilder.Entity<Game>()
-                .HasOne(g => g.IbbaTeamLink)
-                .WithMany(itl => itl.Games)
-                .HasForeignKey(g => g.IbbaTeamLinkId)
+                .HasOne(g => g.OpponentIbbaTeam)
+                .WithMany()
+                .HasForeignKey(g => g.OpponentIbbaTeamId)
                 .OnDelete(DeleteBehavior.SetNull);
             // Unique per real fixture - guards against two concurrent syncs (e.g. two
             // different parents each following a teammate on the same IBBA team)
@@ -243,13 +257,6 @@ namespace StatsHub.Api.Data
                 .HasIndex(g => g.IbbaGameCode)
                 .IsUnique()
                 .HasFilter("\"IbbaGameCode\" IS NOT NULL");
-
-            // IbbaTeamCrest configuration (logo cache, keyed by team URL)
-            modelBuilder.Entity<IbbaTeamCrest>()
-                .HasKey(c => c.Id);
-            modelBuilder.Entity<IbbaTeamCrest>()
-                .HasIndex(c => c.TeamUrl)
-                .IsUnique();
 
             // PushSubscription configuration
             modelBuilder.Entity<PushSubscription>()

@@ -19,8 +19,12 @@ namespace StatsHub.Api.Models
         // IbbaGameCode is the dedup key from IBBA's own per-game "Code" column,
         // so re-syncing never creates duplicate Games for the same fixture.
         public string? IbbaGameCode { get; set; }
-        public int? IbbaTeamLinkId { get; set; }
         public bool? IsHomeGame { get; set; }
+
+        // The opponent's IbbaTeam, resolved by team id at sync time (never by
+        // name) - null for a manually-created game, or an IBBA game whose
+        // opponent isn't in the same synced league yet.
+        public int? OpponentIbbaTeamId { get; set; }
 
         // Set once the "starting soon" push has gone out for this game, so the
         // reminder background service never sends it twice.
@@ -28,7 +32,7 @@ namespace StatsHub.Api.Models
 
         // Navigation properties
         public Team Team { get; set; } = null!;
-        public IbbaTeamLink? IbbaTeamLink { get; set; }
+        public IbbaTeam? OpponentIbbaTeam { get; set; }
         public ICollection<GameStats> GameStats { get; set; } = new List<GameStats>();
     }
 }

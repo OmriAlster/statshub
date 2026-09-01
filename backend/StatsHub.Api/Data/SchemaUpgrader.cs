@@ -65,7 +65,6 @@ namespace StatsHub.Api.Data
 
                 // IBBA integration
                 AddColumnIfMissing(connection, "Games", "IbbaGameCode", "TEXT");
-                AddColumnIfMissing(connection, "Games", "IbbaTeamLinkId", "INTEGER");
                 AddColumnIfMissing(connection, "Games", "IsHomeGame", "INTEGER");
 
                 CreateTableIfMissing(connection, @"
@@ -80,6 +79,29 @@ namespace StatsHub.Api.Data
                     );");
                 ExecuteNonQuery(connection, "CREATE UNIQUE INDEX IF NOT EXISTS \"IX_PlayerIbbaLinks_PlayerId\" ON \"PlayerIbbaLinks\" (\"PlayerId\");");
 
+                // Redesign: IbbaTeamLinks (per-player, duplicated team data) +
+                // IbbaStandings (per-league rows) + IbbaTeamCrests (logo cache) are
+                // replaced by one IbbaTeam table (one row per real team, shared by
+                // everyone) plus a lean PlayerIbbaTeams join. No data migration -
+                // this is IBBA-derived data, fully rebuilt by the next sync.
+                // IbbaStandings/IbbaTeamCrests have no incoming foreign keys from
+                // any surviving table, so dropping them outright is safe.
+                DropTableIfExists(connection, "IbbaStandings");
+                DropTableIfExists(connection, "IbbaTeamCrests");
+
+                // IbbaTeamLinks is different: Games.IbbaTeamLinkId still has a
+                // foreign key pointing at it baked into Games' own on-disk schema
+                // (SQLite refuses to DROP COLUMN a column that's part of an FK
+                // definition, even once the table it references is gone - that's
+                // not a "the table doesn't exist yet" check, it's unconditional).
+                // Dropping the referenced table anyway leaves that FK orphaned,
+                // and SQLite's FK enforcement then fails on *every* future write
+                // to Games with "no such table: IbbaTeamLinks" - not a hypothetical,
+                // this actually happened. So the table has to stay - recreated here
+                // if an earlier version of this upgrader already dropped it - as
+                // inert, empty, never-written-to-by-new-code dead weight, rather
+                // than attempting SQLite's full rebuild-and-rename dance to
+                // properly remove a column nothing needs gone.
                 CreateTableIfMissing(connection, @"
                     CREATE TABLE IF NOT EXISTS ""IbbaTeamLinks"" (
                         ""Id"" INTEGER NOT NULL CONSTRAINT ""PK_IbbaTeamLinks"" PRIMARY KEY AUTOINCREMENT,
@@ -95,16 +117,20 @@ namespace StatsHub.Api.Data
                         CONSTRAINT ""FK_IbbaTeamLinks_PlayerIbbaLinks_PlayerIbbaLinkId"" FOREIGN KEY (""PlayerIbbaLinkId"") REFERENCES ""PlayerIbbaLinks"" (""Id"") ON DELETE CASCADE,
                         CONSTRAINT ""FK_IbbaTeamLinks_Teams_LinkedTeamId"" FOREIGN KEY (""LinkedTeamId"") REFERENCES ""Teams"" (""Id"") ON DELETE SET NULL
                     );");
-                ExecuteNonQuery(connection, "CREATE INDEX IF NOT EXISTS \"IX_IbbaTeamLinks_PlayerIbbaLinkId\" ON \"IbbaTeamLinks\" (\"PlayerIbbaLinkId\");");
+
+                AddColumnIfMissing(connection, "Games", "OpponentIbbaTeamId", "INTEGER");
 
                 CreateTableIfMissing(connection, @"
-                    CREATE TABLE IF NOT EXISTS ""IbbaStandings"" (
-                        ""Id"" INTEGER NOT NULL CONSTRAINT ""PK_IbbaStandings"" PRIMARY KEY AUTOINCREMENT,
-                        ""IbbaLeagueUrl"" TEXT NOT NULL,
-                        ""IbbaLeagueName"" TEXT NOT NULL,
-                        ""Position"" INTEGER NOT NULL,
-                        ""TeamName"" TEXT NOT NULL,
+                    CREATE TABLE IF NOT EXISTS ""IbbaTeams"" (
+                        ""Id"" INTEGER NOT NULL CONSTRAINT ""PK_IbbaTeams"" PRIMARY KEY AUTOINCREMENT,
+                        ""IbbaTeamId"" TEXT NOT NULL,
                         ""TeamUrl"" TEXT NOT NULL,
+                        ""Name"" TEXT NOT NULL,
+                        ""LogoUrl"" TEXT NULL,
+                        ""LeagueUrl"" TEXT NOT NULL,
+                        ""LeagueName"" TEXT NOT NULL,
+                        ""LeaguePosition"" INTEGER NULL,
+                        ""LeagueTotalTeams"" INTEGER NULL,
                         ""GamesPlayed"" INTEGER NOT NULL,
                         ""Wins"" INTEGER NOT NULL,
                         ""Losses"" INTEGER NOT NULL,
@@ -113,9 +139,24 @@ namespace StatsHub.Api.Data
                         ""PointsAgainst"" INTEGER NOT NULL,
                         ""Diff"" INTEGER NOT NULL,
                         ""LeaguePoints"" INTEGER NOT NULL,
-                        ""SyncedAt"" TEXT NOT NULL
+                        ""SyncedAt"" TEXT NOT NULL,
+                        ""LinkedTeamId"" INTEGER NULL,
+                        CONSTRAINT ""FK_IbbaTeams_Teams_LinkedTeamId"" FOREIGN KEY (""LinkedTeamId"") REFERENCES ""Teams"" (""Id"") ON DELETE SET NULL
                     );");
-                ExecuteNonQuery(connection, "CREATE INDEX IF NOT EXISTS \"IX_IbbaStandings_IbbaLeagueUrl\" ON \"IbbaStandings\" (\"IbbaLeagueUrl\");");
+                ExecuteNonQuery(connection, "CREATE UNIQUE INDEX IF NOT EXISTS \"IX_IbbaTeams_TeamUrl\" ON \"IbbaTeams\" (\"TeamUrl\");");
+                ExecuteNonQuery(connection, "CREATE INDEX IF NOT EXISTS \"IX_IbbaTeams_LeagueUrl\" ON \"IbbaTeams\" (\"LeagueUrl\");");
+                ExecuteNonQuery(connection, "CREATE UNIQUE INDEX IF NOT EXISTS \"IX_IbbaTeams_LinkedTeamId\" ON \"IbbaTeams\" (\"LinkedTeamId\") WHERE \"LinkedTeamId\" IS NOT NULL;");
+
+                CreateTableIfMissing(connection, @"
+                    CREATE TABLE IF NOT EXISTS ""PlayerIbbaTeams"" (
+                        ""Id"" INTEGER NOT NULL CONSTRAINT ""PK_PlayerIbbaTeams"" PRIMARY KEY AUTOINCREMENT,
+                        ""PlayerIbbaLinkId"" INTEGER NOT NULL,
+                        ""IbbaTeamId"" INTEGER NOT NULL,
+                        CONSTRAINT ""FK_PlayerIbbaTeams_PlayerIbbaLinks_PlayerIbbaLinkId"" FOREIGN KEY (""PlayerIbbaLinkId"") REFERENCES ""PlayerIbbaLinks"" (""Id"") ON DELETE CASCADE,
+                        CONSTRAINT ""FK_PlayerIbbaTeams_IbbaTeams_IbbaTeamId"" FOREIGN KEY (""IbbaTeamId"") REFERENCES ""IbbaTeams"" (""Id"") ON DELETE CASCADE
+                    );");
+                ExecuteNonQuery(connection, "CREATE UNIQUE INDEX IF NOT EXISTS \"IX_PlayerIbbaTeams_PlayerIbbaLinkId_IbbaTeamId\" ON \"PlayerIbbaTeams\" (\"PlayerIbbaLinkId\", \"IbbaTeamId\");");
+
                 ExecuteNonQuery(connection, "CREATE INDEX IF NOT EXISTS \"IX_Games_IbbaGameCode\" ON \"Games\" (\"IbbaGameCode\");");
 
                 // Push notifications
@@ -148,16 +189,6 @@ namespace StatsHub.Api.Data
                 {
                     Console.Error.WriteLine($"Could not create unique index on Games.IbbaGameCode (likely pre-existing duplicates): {ex.Message}");
                 }
-
-                // Team crest cache
-                CreateTableIfMissing(connection, @"
-                    CREATE TABLE IF NOT EXISTS ""IbbaTeamCrests"" (
-                        ""Id"" INTEGER NOT NULL CONSTRAINT ""PK_IbbaTeamCrests"" PRIMARY KEY AUTOINCREMENT,
-                        ""TeamUrl"" TEXT NOT NULL,
-                        ""LogoUrl"" TEXT NULL,
-                        ""FetchedAt"" TEXT NOT NULL
-                    );");
-                ExecuteNonQuery(connection, "CREATE UNIQUE INDEX IF NOT EXISTS \"IX_IbbaTeamCrests_TeamUrl\" ON \"IbbaTeamCrests\" (\"TeamUrl\");");
             }
             finally
             {
@@ -196,6 +227,9 @@ namespace StatsHub.Api.Data
 
         private static void CreateTableIfMissing(System.Data.Common.DbConnection connection, string createSql) =>
             ExecuteNonQuery(connection, createSql);
+
+        private static void DropTableIfExists(System.Data.Common.DbConnection connection, string table) =>
+            ExecuteNonQuery(connection, $"DROP TABLE IF EXISTS \"{table}\";");
 
         private static void ExecuteNonQuery(System.Data.Common.DbConnection connection, string sql)
         {
