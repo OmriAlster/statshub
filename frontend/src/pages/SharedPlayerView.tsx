@@ -1,10 +1,14 @@
+import type { ReactNode } from 'react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { api } from '../api/client'
-import type { GameDto, SharedPlayerDto, SharedTeamDto } from '../api/types'
+import type { GameDto, ShotDto, SharedPlayerDto, SharedTeamDto } from '../api/types'
 import CourtShotChart from '../components/CourtShotChart'
+import GameDetailView from '../components/GameDetailView'
+import GameStatusBadge from '../components/GameStatusBadge'
 import SegmentedControl from '../components/SegmentedControl'
 import TeamCrest from '../components/TeamCrest'
+import { useElementVisible } from '../hooks/useElementVisible'
 
 export default function SharedPlayerView() {
   const { token, gameId } = useParams<{ token: string; gameId?: string }>()
@@ -12,6 +16,7 @@ export default function SharedPlayerView() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [selectedTeamId, setSelectedTeamId] = useState<number | null>(null)
+  const [tab, setTab] = useState<'stats' | 'schedule' | 'season'>('stats')
 
   const load = useCallback(async () => {
     if (!token) return
@@ -34,7 +39,10 @@ export default function SharedPlayerView() {
   // Poll while the shared game is still live so viewers see updates in near real time.
   // Keyed on status (not `data` itself) so the interval isn't torn down and
   // recreated on every single poll tick - only when the game actually ends.
-  const gameStatus = data?.game?.status
+  // Covers both a single-game share token (`data.game`) and a specific game
+  // being viewed from inside a full profile share (`gameId` route param).
+  const viewedGameStatus = gameId ? data?.games.find((g) => String(g.id) === gameId)?.status : undefined
+  const gameStatus = data?.game?.status ?? viewedGameStatus
   useEffect(() => {
     if (gameStatus !== 'In Progress') return
     const interval = setInterval(load, 5000)
@@ -67,7 +75,7 @@ export default function SharedPlayerView() {
       <div className="shared-view">
         <div className="page-container">
           <Link to={`/share/${token}`} className="back-link">← Back to profile</Link>
-          <SharedGame game={viewedGame} />
+          <GameDetailView game={viewedGame} />
           <p className="shared-footer">Shared via StatsHub 🏀</p>
         </div>
       </div>
@@ -93,7 +101,7 @@ export default function SharedPlayerView() {
         </div>
 
         {data.game ? (
-          <SharedGame game={data.game} />
+          <GameDetailView game={data.game} />
         ) : data.teams.length === 0 ? (
           <p>No teams yet.</p>
         ) : (
@@ -118,28 +126,20 @@ export default function SharedPlayerView() {
 
             {selectedTeam && <TeamMetaStrip team={selectedTeam} />}
 
-            {selectedTeam && (
-              <div className="season-summary">
-                <div className="summary-stat">
-                  <span className="summary-value">{selectedTeam.gamesPlayed}</span>
-                  <span className="summary-label">Games Played</span>
-                </div>
-                <div className="summary-stat">
-                  <span className="summary-value">{selectedTeam.pointsPerGame.toFixed(1)}</span>
-                  <span className="summary-label">PPG</span>
-                </div>
-                <div className="summary-stat">
-                  <span className="summary-value">{selectedTeam.reboundsPerGame.toFixed(1)}</span>
-                  <span className="summary-label">RPG</span>
-                </div>
-                <div className="summary-stat">
-                  <span className="summary-value">{selectedTeam.assistsPerGame.toFixed(1)}</span>
-                  <span className="summary-label">APG</span>
-                </div>
-              </div>
-            )}
+            <SegmentedControl
+              className="stats-tab-switch"
+              options={[
+                { value: 'stats', label: '📊 Stats' },
+                { value: 'schedule', label: '🗓️ Schedule' },
+                { value: 'season', label: '📈 Season' },
+              ]}
+              value={tab}
+              onChange={setTab}
+            />
 
-            <SharedGamesTable games={teamGames} token={token!} />
+            {tab === 'stats' && <SharedStatsPanel games={teamGames} />}
+            {tab === 'schedule' && <SharedSchedulePanel games={teamGames} token={token!} />}
+            {tab === 'season' && selectedTeam && <SharedSeasonPanel team={selectedTeam} games={teamGames} />}
           </>
         )}
 
@@ -167,36 +167,64 @@ function TeamMetaStrip({ team }: { team: SharedTeamDto }) {
   )
 }
 
-function SharedGamesTable({ games, token }: { games: GameDto[]; token: string }) {
-  const { completedGames, averages } = useMemo(() => {
+// Mirrors the authenticated Stats tab: completed games only, with an
+// averages row - same table shape, just read-only.
+function SharedStatsPanel({ games }: { games: GameDto[] }) {
+  const { completedGames, wins, losses, ppg, averages } = useMemo(() => {
     const completedGames = games
       .filter((g) => g.status === 'Completed')
       .sort((a, b) => new Date(b.gameDate).getTime() - new Date(a.gameDate).getTime())
+    const wins = completedGames.filter((g) => (g.teamScore ?? 0) > (g.opponentScore ?? 0)).length
+    const losses = completedGames.filter((g) => (g.teamScore ?? 0) < (g.opponentScore ?? 0)).length
     const gamesWithStats = completedGames.filter((g) => g.playerStats.length > 0)
     const avg = (pick: (g: GameDto) => number) =>
       gamesWithStats.length ? gamesWithStats.reduce((sum, g) => sum + pick(g), 0) / gamesWithStats.length : 0
+    const ppg = avg((g) => g.playerStats[0]?.totalPoints ?? 0).toFixed(1)
     const averages = gamesWithStats.length
       ? {
-          pts: avg((g) => g.playerStats[0]?.totalPoints ?? 0).toFixed(1),
+          count: gamesWithStats.length,
+          pts: ppg,
+          fgm: avg((g) => g.playerStats[0]?.fieldGoalsMade ?? 0).toFixed(1),
+          fga: avg((g) => g.playerStats[0]?.fieldGoalsAttempted ?? 0).toFixed(1),
+          tpm: avg((g) => g.playerStats[0]?.threePointersMade ?? 0).toFixed(1),
+          tpa: avg((g) => g.playerStats[0]?.threePointersAttempted ?? 0).toFixed(1),
+          ftm: avg((g) => g.playerStats[0]?.freeThrowsMade ?? 0).toFixed(1),
+          fta: avg((g) => g.playerStats[0]?.freeThrowsAttempted ?? 0).toFixed(1),
           reb: avg((g) => g.playerStats[0]?.totalRebounds ?? 0).toFixed(1),
           ast: avg((g) => g.playerStats[0]?.assists ?? 0).toFixed(1),
+          stl: avg((g) => g.playerStats[0]?.steals ?? 0).toFixed(1),
+          blk: avg((g) => g.playerStats[0]?.blocks ?? 0).toFixed(1),
+          to: avg((g) => g.playerStats[0]?.turnovers ?? 0).toFixed(1),
         }
       : null
-    return { completedGames, averages }
+    return { completedGames, wins, losses, ppg, averages }
   }, [games])
 
-  const upcomingGames = useMemo(
-    () =>
-      games
-        .filter((g) => g.status !== 'Completed')
-        .sort((a, b) => new Date(a.gameDate).getTime() - new Date(b.gameDate).getTime()),
-    [games]
-  )
+  const [wrapRef, wrapVisible] = useElementVisible<HTMLDivElement>()
+  const [footRef, footVisible] = useElementVisible<HTMLTableSectionElement>()
+  const showFloatingAvg = !!averages && wrapVisible && !footVisible
 
   return (
-    <>
-      {completedGames.length > 0 && (
-        <div className="games-table-wrap">
+    <div>
+      <div className="season-summary">
+        <div className="summary-stat">
+          <span className="summary-value">{averages?.count ?? 0}</span>
+          <span className="summary-label">Games Played</span>
+        </div>
+        <div className="summary-stat">
+          <span className="summary-value">{ppg}</span>
+          <span className="summary-label">PPG</span>
+        </div>
+        <div className="summary-stat">
+          <span className="summary-value">{wins}-{losses}</span>
+          <span className="summary-label">Record</span>
+        </div>
+      </div>
+
+      {completedGames.length === 0 ? (
+        <p>No completed games yet.</p>
+      ) : (
+        <div className="games-table-wrap" ref={wrapRef}>
           <table className="games-table">
             <thead>
               <tr>
@@ -205,8 +233,14 @@ function SharedGamesTable({ games, token }: { games: GameDto[]; token: string })
                 <th>Type</th>
                 <th className="num">Score</th>
                 <th className="num">Pts</th>
+                <th className="num">2PT</th>
+                <th className="num">3PT</th>
+                <th className="num">FT</th>
                 <th className="num">Reb</th>
                 <th className="num">Ast</th>
+                <th className="num">Stl</th>
+                <th className="num">Blk</th>
+                <th className="num">TO</th>
               </tr>
             </thead>
             <tbody>
@@ -214,114 +248,225 @@ function SharedGamesTable({ games, token }: { games: GameDto[]; token: string })
                 const stats = game.playerStats[0]
                 const won = (game.teamScore ?? 0) > (game.opponentScore ?? 0)
                 return (
-                  <tr key={game.id}>
-                    <td>
-                      <Link to={`/share/${token}/games/${game.id}`} className="games-table-date-link">
-                        {new Date(game.gameDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                      </Link>
-                    </td>
-                    <td>
-                      {game.isHomeGame != null && <span>{game.isHomeGame ? '🏠' : '✈️'} </span>}
-                      <Link to={`/share/${token}/games/${game.id}`}>{game.opponentName}</Link>
-                      {game.isFromIbba && (
-                        <img
-                          src="/icons/ibba-logo.png"
-                          alt=""
-                          title="Synced from IBBA"
-                          style={{ width: 12, height: 12, marginLeft: '0.35rem', verticalAlign: '-1px', borderRadius: 2 }}
-                        />
-                      )}
-                    </td>
-                    <td><span className={`game-type-badge ${game.gameType.toLowerCase()}`}>{game.gameType}</span></td>
+                  <GameRow key={game.id} game={game}>
                     <td className={`num ${won ? 'win' : 'loss'}`}>{game.teamScore}&ndash;{game.opponentScore}</td>
                     <td className="num">{stats?.totalPoints ?? '-'}</td>
+                    <td className="num">{stats ? `${stats.fieldGoalsMade}/${stats.fieldGoalsAttempted}` : '-'}</td>
+                    <td className="num">{stats ? `${stats.threePointersMade}/${stats.threePointersAttempted}` : '-'}</td>
+                    <td className="num">{stats ? `${stats.freeThrowsMade}/${stats.freeThrowsAttempted}` : '-'}</td>
                     <td className="num">{stats?.totalRebounds ?? '-'}</td>
                     <td className="num">{stats?.assists ?? '-'}</td>
-                  </tr>
+                    <td className="num">{stats?.steals ?? '-'}</td>
+                    <td className="num">{stats?.blocks ?? '-'}</td>
+                    <td className="num">{stats?.turnovers ?? '-'}</td>
+                  </GameRow>
                 )
               })}
-              {averages && (
+            </tbody>
+            {averages && (
+              <tfoot ref={footRef}>
                 <tr className="avg-row">
-                  <td colSpan={4}>Avg</td>
+                  <td colSpan={3}>Avg</td>
+                  <td className="num">&mdash;</td>
                   <td className="num">{averages.pts}</td>
+                  <td className="num">{averages.fgm}/{averages.fga}</td>
+                  <td className="num">{averages.tpm}/{averages.tpa}</td>
+                  <td className="num">{averages.ftm}/{averages.fta}</td>
                   <td className="num">{averages.reb}</td>
                   <td className="num">{averages.ast}</td>
+                  <td className="num">{averages.stl}</td>
+                  <td className="num">{averages.blk}</td>
+                  <td className="num">{averages.to}</td>
                 </tr>
-              )}
-            </tbody>
+              </tfoot>
+            )}
           </table>
         </div>
       )}
 
-      {upcomingGames.length > 0 && (
-        <div className="recent-games-section">
-          <h3>Upcoming</h3>
-          <div className="mini-game-list">
-            {upcomingGames.map((game) => (
-              <Link className="mini-game" key={game.id} to={`/share/${token}/games/${game.id}`}>
-                <div className="game-date">
-                  {new Date(game.gameDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                </div>
-                <div className="game-info">
-                  <div>
-                    {game.isHomeGame != null && <span>{game.isHomeGame ? '🏠' : '✈️'} </span>}
-                    vs {game.opponentName}
-                    <span className={`game-type-badge ${game.gameType.toLowerCase()}`}>{game.gameType}</span>
-                  </div>
-                </div>
-                <div className="game-result">{game.status}</div>
-              </Link>
-            ))}
+      {showFloatingAvg && averages && (
+        <div className="floating-avg-bar">
+          <span className="floating-avg-label">Avg</span>
+          <div className="floating-avg-stats">
+            <div><b>{averages.pts}</b><span>PTS</span></div>
+            <div><b>{averages.reb}</b><span>REB</span></div>
+            <div><b>{averages.ast}</b><span>AST</span></div>
+            <div><b>{averages.stl}</b><span>STL</span></div>
+            <div><b>{averages.blk}</b><span>BLK</span></div>
           </div>
         </div>
       )}
-    </>
+    </div>
   )
 }
 
-function SharedGame({ game }: { game: SharedPlayerDto['game'] }) {
-  if (!game) return null
-  const stats = game.playerStats[0]
+// Mirrors the authenticated Schedule tab's table shape (every game, not just
+// completed ones) minus the edit/delete actions column - view only.
+function SharedSchedulePanel({ games, token }: { games: GameDto[]; token: string }) {
+  const sorted = useMemo(
+    () => [...games].sort((a, b) => new Date(a.gameDate).getTime() - new Date(b.gameDate).getTime()),
+    [games]
+  )
+
+  if (sorted.length === 0) return <p>No games scheduled yet.</p>
+
   return (
-    <div className="stats-card-enhanced">
-      {game.status === 'In Progress' && <div className="live-badge">🔴 LIVE</div>}
-      <h3>
-        vs {game.opponentName}
-        <span className={`game-type-badge ${game.gameType.toLowerCase()}`}>{game.gameType}</span>
-      </h3>
-      <p>
-        {game.teamName} • {new Date(game.gameDate).toLocaleDateString()} •{' '}
-        {game.isHomeGame != null && <>{game.isHomeGame ? '🏠' : '✈️'} </>}
-        {game.location}
-      </p>
-      {game.status === 'Completed' && (
-        <div className="score-display">
-          <span>{game.teamScore}</span>
-          <span className="vs">-</span>
-          <span>{game.opponentScore}</span>
+    <div className="games-table-wrap">
+      <table className="games-table">
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Opponent</th>
+            <th>Type</th>
+            <th className="num">Result</th>
+          </tr>
+        </thead>
+        <tbody>
+          {sorted.map((game) => {
+            const won = (game.teamScore ?? 0) > (game.opponentScore ?? 0)
+            return (
+              <GameRow key={game.id} game={game} token={token}>
+                {game.status === 'Completed' ? (
+                  <td className={`num ${won ? 'win' : 'loss'}`}>{won ? 'W' : 'L'} {game.teamScore}&ndash;{game.opponentScore}</td>
+                ) : (
+                  <td className="games-table-status"><GameStatusBadge status={game.status} /></td>
+                )}
+              </GameRow>
+            )
+          })}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+function GameRow({ game, token, children }: { game: GameDto; token?: string; children: ReactNode }) {
+  const { token: tokenFromRoute } = useParams<{ token: string }>()
+  const shareToken = token ?? tokenFromRoute
+  return (
+    <tr className={game.status !== 'Completed' ? 'upcoming-row' : ''}>
+      <td>
+        <Link to={`/share/${shareToken}/games/${game.id}`}>
+          {new Date(game.gameDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+        </Link>
+      </td>
+      <td>
+        {game.isHomeGame != null && <span title={game.isHomeGame ? 'Home' : 'Away'}>{game.isHomeGame ? '🏠' : '✈️'} </span>}
+        <Link to={`/share/${shareToken}/games/${game.id}`}>{game.opponentName}</Link>
+        {game.isFromIbba && (
+          <img
+            src="/icons/ibba-logo.png"
+            alt=""
+            title="Synced from IBBA"
+            style={{ width: 12, height: 12, marginLeft: '0.35rem', verticalAlign: '-1px', borderRadius: 2 }}
+          />
+        )}
+      </td>
+      <td><span className={`game-type-badge ${game.gameType.toLowerCase()}`}>{game.gameType}</span></td>
+      {children}
+    </tr>
+  )
+}
+
+// Mirrors the authenticated Season tab: averages/totals toggle, key stats,
+// shooting percentages, and a shot chart - the chart is built client-side
+// from shots already embedded on this team's games, since there's no
+// separate authenticated shots-by-team endpoint available on a public link.
+function SharedSeasonPanel({ team, games }: { team: SharedTeamDto; games: GameDto[] }) {
+  const [showTotals, setShowTotals] = useState(false)
+
+  const shots: ShotDto[] = useMemo(
+    () => games.flatMap((g) => g.playerStats.flatMap((s) => s.shots ?? [])),
+    [games]
+  )
+
+  return (
+    <div>
+      <div className="stats-toolbar">
+        <div className="game-type-toggle">
+          <button type="button" className={`toggle-option ${!showTotals ? 'active' : ''}`} onClick={() => setShowTotals(false)}>
+            Averages
+          </button>
+          <button type="button" className={`toggle-option ${showTotals ? 'active' : ''}`} onClick={() => setShowTotals(true)}>
+            Totals
+          </button>
         </div>
-      )}
-      {stats && (
-        <div className="stats-grid-enhanced">
-          <div className="stat-box-enhanced"><span className="stat-value">{stats.totalPoints}</span><span className="stat-label">Points</span></div>
-          <div className="stat-box-enhanced"><span className="stat-value">{stats.totalRebounds}</span><span className="stat-label">Rebounds</span></div>
-          <div className="stat-box-enhanced"><span className="stat-value">{stats.assists}</span><span className="stat-label">Assists</span></div>
-          <div className="stat-box-enhanced"><span className="stat-value">{stats.steals}</span><span className="stat-label">Steals</span></div>
-          <div className="stat-box-enhanced"><span className="stat-value">{stats.blocks}</span><span className="stat-label">Blocks</span></div>
+      </div>
+
+      <div className="stats-tables">
+        <div className="stats-card-enhanced">
+          <div className="player-header-enhanced">
+            <div className="player-info">
+              <div className="jersey">{team.jerseyNumber}</div>
+              <div>
+                <h3>{team.playerName}</h3>
+                <p>{team.position} · {team.teamName}</p>
+              </div>
+            </div>
+            <div className="games-badge">{team.gamesPlayed} Games</div>
+          </div>
+
+          <div className="primary-stats">
+            <h4>{showTotals ? 'Totals' : 'Key Averages'}</h4>
+            <div className="stats-grid-enhanced">
+              <div className="stat-box-enhanced">
+                <span className="stat-value">{showTotals ? team.totalPoints : team.pointsPerGame.toFixed(1)}</span>
+                <span className="stat-label">{showTotals ? 'PTS' : 'PPG'}</span>
+              </div>
+              <div className="stat-box-enhanced">
+                <span className="stat-value">{showTotals ? team.totalRebounds : team.reboundsPerGame.toFixed(1)}</span>
+                <span className="stat-label">{showTotals ? 'REB' : 'RPG'}</span>
+              </div>
+              <div className="stat-box-enhanced">
+                <span className="stat-value">{showTotals ? team.totalAssists : team.assistsPerGame.toFixed(1)}</span>
+                <span className="stat-label">{showTotals ? 'AST' : 'APG'}</span>
+              </div>
+              <div className="stat-box-enhanced">
+                <span className="stat-value">{showTotals ? team.totalSteals : team.stealsPerGame.toFixed(1)}</span>
+                <span className="stat-label">{showTotals ? 'STL' : 'STL/G'}</span>
+              </div>
+              <div className="stat-box-enhanced">
+                <span className="stat-value">{showTotals ? team.totalBlocks : team.blocksPerGame.toFixed(1)}</span>
+                <span className="stat-label">{showTotals ? 'BLK' : 'BLK/G'}</span>
+              </div>
+              <div className="stat-box-enhanced">
+                <span className="stat-value">{showTotals ? team.totalTurnovers : team.turnoversPerGame.toFixed(1)}</span>
+                <span className="stat-label">{showTotals ? 'TO' : 'TO/G'}</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="shooting-stats">
+            <h4>Shooting Percentages</h4>
+            <div className="percentage-bars">
+              <div className="percentage-item">
+                <div className="percentage-label">Field Goal %</div>
+                <div className="percentage-bar"><div className="percentage-fill" style={{ width: `${team.fieldGoalPercentage}%` }} /></div>
+                <span className="percentage-value">{team.fieldGoalPercentage}%</span>
+              </div>
+              <div className="percentage-item">
+                <div className="percentage-label">3-Point %</div>
+                <div className="percentage-bar"><div className="percentage-fill" style={{ width: `${team.threePointPercentage}%` }} /></div>
+                <span className="percentage-value">{team.threePointPercentage}%</span>
+              </div>
+              <div className="percentage-item">
+                <div className="percentage-label">Free Throw %</div>
+                <div className="percentage-bar"><div className="percentage-fill" style={{ width: `${team.freeThrowPercentage}%` }} /></div>
+                <span className="percentage-value">{team.freeThrowPercentage}%</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="season-chart-section">
+            <h4>🎯 {team.teamName} Shot Chart ({shots.length} shots)</h4>
+            {shots.length === 0 ? (
+              <p className="no-shots-note">No shots logged for this team yet.</p>
+            ) : (
+              <CourtShotChart shots={shots} interactive={false} />
+            )}
+          </div>
         </div>
-      )}
-      {stats && (
-        <div className="breakdown">
-          2P: {stats.fieldGoalsMade}/{stats.fieldGoalsAttempted} | 3P: {stats.threePointersMade}/{stats.threePointersAttempted} | FT: {stats.freeThrowsMade}/{stats.freeThrowsAttempted}
-        </div>
-      )}
-      {stats && stats.shots && stats.shots.length > 0 && (
-        <div className="season-chart-section">
-          <h4>🎯 Shot Chart ({stats.shots.length} shots)</h4>
-          <CourtShotChart shots={stats.shots} interactive={false} />
-        </div>
-      )}
-      {!stats && game.status !== 'Completed' && <p>This game hasn't been played yet.</p>}
+      </div>
     </div>
   )
 }

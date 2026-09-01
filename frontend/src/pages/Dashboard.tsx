@@ -122,7 +122,7 @@ export default function Dashboard() {
       <div className="dashboard-grid">
         {players.map(({ player, teamStats, ibba, gamesByTeam }) => (
           <div className="card player-card-v2" key={player.id}>
-            <div className="player-card-head">
+            <Link className="player-card-head" to={`/stats/${player.id}`}>
               {player.profilePictureUrl ? (
                 <img className="player-card-avatar" src={player.profilePictureUrl} alt="" />
               ) : (
@@ -135,7 +135,7 @@ export default function Dashboard() {
                 </h3>
                 <p className="player-card-role">{player.position || 'Player'}</p>
               </div>
-            </div>
+            </Link>
             {teamStats.length > 0 ? (
               <div className="player-card-teams">
                 {teamStats.map((s) => {
@@ -201,7 +201,7 @@ export default function Dashboard() {
             ) : (
               <p>No team yet</p>
             )}
-            <Link className="view-link" to="/stats">View Stats →</Link>
+            <Link className="view-link" to={`/stats/${player.id}`}>View Stats →</Link>
           </div>
         ))}
       </div>

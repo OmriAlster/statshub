@@ -28,9 +28,22 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend", policy =>
     {
-        policy.WithOrigins(allowedOrigins)
-            .AllowAnyMethod()
-            .AllowAnyHeader();
+        if (builder.Environment.IsDevelopment())
+        {
+            // Any origin in dev - testing from a phone on the same WiFi means
+            // a LAN IP that changes machine to machine and network to
+            // network, so a fixed allow-list just breaks every time. Not a
+            // concern outside Development, which is never publicly exposed.
+            policy.SetIsOriginAllowed(_ => true)
+                .AllowAnyMethod()
+                .AllowAnyHeader();
+        }
+        else
+        {
+            policy.WithOrigins(allowedOrigins)
+                .AllowAnyMethod()
+                .AllowAnyHeader();
+        }
     });
 });
 

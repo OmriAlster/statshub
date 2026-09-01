@@ -62,6 +62,8 @@ namespace StatsHub.Api.Services
                 .Include(g => g.Team)
                 .Include(g => g.GameStats)
                 .ThenInclude(gs => gs.Player)
+                .Include(g => g.GameStats)
+                .ThenInclude(gs => gs.Shots)
                 .FirstOrDefaultAsync(g => g.Id == id);
 
             if (game == null || !await CanAccessGameAsync(game, requestingUserId)) return null;
@@ -200,7 +202,19 @@ namespace StatsHub.Api.Services
             Turnovers = gs.Turnovers,
             Fouls = gs.Fouls,
             MinutesPlayed = gs.MinutesPlayed,
-            TotalPoints = gs.TotalPoints
+            TotalPoints = gs.TotalPoints,
+            Shots = gs.Shots.Select(s => new ShotDto
+            {
+                Id = s.Id,
+                GameStatsId = s.GameStatsId,
+                GameId = gs.GameId,
+                PlayerId = gs.PlayerId,
+                Quarter = s.Quarter,
+                X = s.X,
+                Y = s.Y,
+                Made = s.Made,
+                Value = s.Value
+            }).ToList()
         };
     }
 }

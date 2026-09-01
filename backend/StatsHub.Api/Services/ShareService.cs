@@ -29,8 +29,16 @@ namespace StatsHub.Api.Services
 
             if (dto.GameId.HasValue)
             {
-                var gameExists = await _context.GameStats.AnyAsync(gs => gs.GameId == dto.GameId && gs.PlayerId == dto.PlayerId);
-                if (!gameExists) return null;
+                // A game is shareable if it's this player's - via team membership
+                // (the common case, works even with no box score yet, e.g. an
+                // IBBA-synced game nobody has tracked stats for) or via existing
+                // GameStats (in case the player has since left that team).
+                var game = await _context.Games.FindAsync(dto.GameId.Value);
+                if (game == null) return null;
+
+                var isPlayersGame = await _context.PlayerTeams.AnyAsync(pt => pt.PlayerId == dto.PlayerId && pt.TeamId == game.TeamId)
+                    || await _context.GameStats.AnyAsync(gs => gs.GameId == dto.GameId && gs.PlayerId == dto.PlayerId);
+                if (!isPlayersGame) return null;
             }
 
             var link = new ShareLink

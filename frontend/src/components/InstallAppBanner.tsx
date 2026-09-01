@@ -1,41 +1,42 @@
 import { useState } from 'react'
 import { useInstallPrompt } from '../hooks/useInstallPrompt'
 
-// One button, not a banner: tap it and the app handles everything it can.
-// On Android/Chrome that's the real native install dialog, triggered
-// directly. On iOS there's no such API - Apple never built one - so the
-// button instead reveals the two-step manual instructions in place.
-export default function InstallAppButton() {
+const DISMISSED_KEY = 'statshub_install_banner_dismissed'
+
+export default function InstallAppBanner() {
   const { isStandalone, isIOS, canPromptInstall, promptInstall } = useInstallPrompt()
-  const [showIOSHint, setShowIOSHint] = useState(false)
+  const [dismissed, setDismissed] = useState(() => localStorage.getItem(DISMISSED_KEY) === '1')
 
-  if (isStandalone) return null
-  if (!canPromptInstall && !isIOS) return null
-
-  const handleClick = () => {
-    if (canPromptInstall) {
-      promptInstall()
-    } else {
-      setShowIOSHint((v) => !v)
-    }
+  const dismiss = () => {
+    localStorage.setItem(DISMISSED_KEY, '1')
+    setDismissed(true)
   }
 
+  if (isStandalone || dismissed) return null
+  if (!canPromptInstall && !isIOS) return null // desktop browser with nothing to offer
+
   return (
-    <div className="install-btn-wrap">
-      <button className="nav-btn install-btn" onClick={handleClick}>
-        <svg className="icon"><use href="#i-install" /></svg>
-        <span>Install App</span>
-      </button>
-      {showIOSHint && (
-        <div className="install-hint">
-          <span>
-            Tap <svg className="icon"><use href="#i-share" /></svg> <b>Share</b>, then <b>"Add to Home Screen"</b>
-          </span>
-          <button className="install-hint-close" onClick={() => setShowIOSHint(false)} aria-label="Close">
-            <svg className="icon"><use href="#i-x" /></svg>
-          </button>
-        </div>
+    <div className="install-banner">
+      <span className="install-banner-icon">📲</span>
+      <div className="install-banner-text">
+        {canPromptInstall ? (
+          <>
+            <strong>Install StatsHub</strong>
+            <span>Add it to your home screen for one-tap access, no browser bar.</span>
+          </>
+        ) : (
+          <>
+            <strong>Install StatsHub</strong>
+            <span>Tap <svg className="icon install-banner-share-icon"><use href="#i-share" /></svg> Share, then "Add to Home Screen".</span>
+          </>
+        )}
+      </div>
+      {canPromptInstall && (
+        <button className="install-banner-btn" onClick={promptInstall}>Install</button>
       )}
+      <button className="install-banner-close" onClick={dismiss} aria-label="Dismiss">
+        <svg className="icon"><use href="#i-x" /></svg>
+      </button>
     </div>
   )
 }

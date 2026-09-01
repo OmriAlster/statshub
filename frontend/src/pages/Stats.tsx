@@ -4,12 +4,14 @@ import { api } from '../api/client'
 import type {
   CreateGameStatsDto,
   GameDto,
+  GameStatsDto,
   GameType,
   IbbaLinkStatusDto,
   PlayerDto,
   PlayerTeamStatsDto,
   ShotDto,
   UpdateGameDto,
+  UpdateGameStatsDto,
 } from '../api/types'
 import { useAuth } from '../auth/AuthContext'
 import CourtShotChart from '../components/CourtShotChart'
@@ -18,6 +20,7 @@ import GameStatusBadge from '../components/GameStatusBadge'
 import SegmentedControl from '../components/SegmentedControl'
 import StandingsModal from '../components/StandingsModal'
 import TeamCrest from '../components/TeamCrest'
+import { useElementVisible } from '../hooks/useElementVisible'
 import { useLiveGameOverlay } from '../live/LiveGameContext'
 
 export default function Stats() {
@@ -240,7 +243,7 @@ function PlayerProfilePanel({ player }: { player: PlayerDto }) {
         onChange={setTab}
       />
 
-      {tab === 'stats' && <StatsPanel games={gamesForTeam} />}
+      {tab === 'stats' && <StatsPanel games={gamesForTeam} playerId={player.id} />}
       {tab === 'schedule' && (
         <SchedulePanel
           player={player}
@@ -266,7 +269,7 @@ function PlayerProfilePanel({ player }: { player: PlayerDto }) {
   )
 }
 
-function StatsPanel({ games }: { games: GameDto[] }) {
+function StatsPanel({ games, playerId }: { games: GameDto[]; playerId: number }) {
   const { completedGames, wins, losses, ppg, averages } = useMemo(() => {
     const completedGames = games
       .filter((g) => g.status === 'Completed')
@@ -303,6 +306,10 @@ function StatsPanel({ games }: { games: GameDto[] }) {
     return { completedGames, wins, losses, ppg, averages }
   }, [games])
 
+  const [wrapRef, wrapVisible] = useElementVisible<HTMLDivElement>()
+  const [footRef, footVisible] = useElementVisible<HTMLTableSectionElement>()
+  const showFloatingAvg = !!averages && wrapVisible && !footVisible
+
   return (
     <div>
       <div className="season-summary">
@@ -323,7 +330,7 @@ function StatsPanel({ games }: { games: GameDto[] }) {
       {completedGames.length === 0 ? (
         <p>No completed games yet.</p>
       ) : (
-        <div className="games-table-wrap">
+        <div className="games-table-wrap" ref={wrapRef}>
           <table className="games-table">
             <thead>
               <tr>
@@ -349,13 +356,13 @@ function StatsPanel({ games }: { games: GameDto[] }) {
                 return (
                   <tr key={game.id}>
                     <td>
-                      <Link to={`/games/${game.id}`} className="games-table-date-link">
+                      <Link to={`/games/${game.id}?playerId=${playerId}`} className="games-table-date-link">
                         {new Date(game.gameDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                       </Link>
                     </td>
                     <td>
                       {game.isHomeGame != null && <span title={game.isHomeGame ? 'Home' : 'Away'}>{game.isHomeGame ? '🏠' : '✈️'} </span>}
-                      <Link to={`/games/${game.id}`}>{game.opponentName}</Link>
+                      <Link to={`/games/${game.id}?playerId=${playerId}`}>{game.opponentName}</Link>
                       {game.isFromIbba && (
                         <img
                           src="/icons/ibba-logo.png"
@@ -383,7 +390,9 @@ function StatsPanel({ games }: { games: GameDto[] }) {
                   </tr>
                 )
               })}
-              {averages && (
+            </tbody>
+            {averages && (
+              <tfoot ref={footRef}>
                 <tr className="avg-row">
                   <td colSpan={3}>Avg</td>
                   <td className="num">&mdash;</td>
@@ -397,9 +406,22 @@ function StatsPanel({ games }: { games: GameDto[] }) {
                   <td className="num">{averages.blk}</td>
                   <td className="num">{averages.to}</td>
                 </tr>
-              )}
-            </tbody>
+              </tfoot>
+            )}
           </table>
+        </div>
+      )}
+
+      {showFloatingAvg && averages && (
+        <div className="floating-avg-bar">
+          <span className="floating-avg-label">Avg</span>
+          <div className="floating-avg-stats">
+            <div><b>{averages.pts}</b><span>PTS</span></div>
+            <div><b>{averages.reb}</b><span>REB</span></div>
+            <div><b>{averages.ast}</b><span>AST</span></div>
+            <div><b>{averages.stl}</b><span>STL</span></div>
+            <div><b>{averages.blk}</b><span>BLK</span></div>
+          </div>
         </div>
       )}
     </div>
@@ -674,6 +696,7 @@ function ScheduleEditPanel({
   onClose: () => void
 }) {
   const existingStats = game.playerStats.find((s) => s.playerId === player.id)
+  const [statsMode, setStatsMode] = useState<'track' | 'quick'>('track')
 
   const [form, setForm] = useState<EditGameForm>({
     opponentName: game.opponentName,
@@ -753,61 +776,174 @@ function ScheduleEditPanel({
 
   return (
     <div className="edit-panel">
-      <div className="form-row">
-        <label>
-          Opponent
-          <input value={form.opponentName} onChange={(e) => setForm({ ...form, opponentName: e.target.value })} />
-        </label>
-        <label>
-          Date
-          <input type="date" value={form.gameDate} onChange={(e) => setForm({ ...form, gameDate: e.target.value })} />
-        </label>
-        <label>
-          Location
-          <input value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} />
-        </label>
-        <label>
-          Type
-          <select value={form.gameType} onChange={(e) => setForm({ ...form, gameType: e.target.value as GameType })}>
-            <option value="League">League</option>
-            <option value="Cup">Cup</option>
-            <option value="Friendly">Friendly</option>
-          </select>
-        </label>
-        <label>
-          Home/Away
-          <select value={form.isHomeGame} onChange={(e) => setForm({ ...form, isHomeGame: e.target.value as 'home' | 'away' })}>
-            <option value="home">🏠 Home</option>
-            <option value="away">✈️ Away</option>
-          </select>
-        </label>
-        <label>
-          {game.teamName} Score
-          <input type="number" value={form.teamScore} onChange={(e) => setForm({ ...form, teamScore: e.target.value })} />
-        </label>
-        <label>
-          Opponent Score
-          <input type="number" value={form.opponentScore} onChange={(e) => setForm({ ...form, opponentScore: e.target.value })} />
-        </label>
-      </div>
+      {game.isFromIbba ? (
+        <div className="ibba-locked-info">
+          <img src="/icons/ibba-logo.png" alt="" style={{ width: 14, height: 14, borderRadius: 2 }} />
+          <span>
+            {game.isHomeGame != null && <>{game.isHomeGame ? '🏠' : '✈️'} </>}
+            vs {game.opponentName} · {game.gameType}
+            {game.teamScore != null && game.opponentScore != null && <> · {game.teamScore}–{game.opponentScore}</>}
+          </span>
+          <span className="ibba-locked-note">Synced from IBBA - game info can't be edited here.</span>
+        </div>
+      ) : (
+        <>
+          <div className="form-row">
+            <label>
+              Opponent
+              <input value={form.opponentName} onChange={(e) => setForm({ ...form, opponentName: e.target.value })} />
+            </label>
+            <label>
+              Date
+              <input type="date" value={form.gameDate} onChange={(e) => setForm({ ...form, gameDate: e.target.value })} />
+            </label>
+            <label>
+              Location
+              <input value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} />
+            </label>
+            <label>
+              Type
+              <select value={form.gameType} onChange={(e) => setForm({ ...form, gameType: e.target.value as GameType })}>
+                <option value="League">League</option>
+                <option value="Cup">Cup</option>
+                <option value="Friendly">Friendly</option>
+              </select>
+            </label>
+            <label>
+              Home/Away
+              <select value={form.isHomeGame} onChange={(e) => setForm({ ...form, isHomeGame: e.target.value as 'home' | 'away' })}>
+                <option value="home">🏠 Home</option>
+                <option value="away">✈️ Away</option>
+              </select>
+            </label>
+            <label>
+              {game.teamName} Score
+              <input type="number" value={form.teamScore} onChange={(e) => setForm({ ...form, teamScore: e.target.value })} />
+            </label>
+            <label>
+              Opponent Score
+              <input type="number" value={form.opponentScore} onChange={(e) => setForm({ ...form, opponentScore: e.target.value })} />
+            </label>
+          </div>
 
-      {error && <p className="error">{error}</p>}
-      <div className="flex gap-1">
-        <button className="submit-btn" onClick={saveGameInfo} disabled={saving}>{saving ? 'Saving...' : 'Save Game Info'}</button>
-      </div>
+          {error && <p className="error">{error}</p>}
+          <div className="flex gap-1">
+            <button className="submit-btn" onClick={saveGameInfo} disabled={saving}>{saving ? 'Saving...' : 'Save Game Info'}</button>
+          </div>
+        </>
+      )}
 
       <h4 style={{ marginTop: '1.25rem' }}>Box Score</h4>
       {statsSeed ? (
-        <GameStatsEditor gameStatsId={statsSeed.id} initialStats={statsSeed} />
+        <>
+          <SegmentedControl
+            className="stats-mode-switch"
+            options={[
+              { value: 'track', label: '📍 Track Shots' },
+              { value: 'quick', label: '🔢 Quick Numbers' },
+            ]}
+            value={statsMode}
+            onChange={setStatsMode}
+          />
+          {statsMode === 'track' ? (
+            <GameStatsEditor gameStatsId={statsSeed.id} initialStats={statsSeed} />
+          ) : (
+            <QuickStatsForm statsId={statsSeed.id} initialStats={statsSeed} onSaved={(updated) => setStatsSeed(updated)} />
+          )}
+        </>
       ) : (
-        <button className="submit-btn" onClick={startTrackingStats} disabled={startingStats}>
-          {startingStats ? 'Starting...' : 'Start Tracking Stats'}
-        </button>
+        <div className="flex gap-1">
+          <button className="submit-btn" onClick={() => { setStatsMode('track'); startTrackingStats() }} disabled={startingStats}>
+            {startingStats ? 'Starting...' : '📍 Track Shots'}
+          </button>
+          <button className="submit-btn" onClick={() => { setStatsMode('quick'); startTrackingStats() }} disabled={startingStats}>
+            {startingStats ? 'Starting...' : '🔢 Enter Numbers'}
+          </button>
+        </div>
       )}
 
       <div className="flex gap-1" style={{ marginTop: '1rem' }}>
         <button className="nav-btn" onClick={onClose}>Done</button>
       </div>
+    </div>
+  )
+}
+
+function QuickStatsForm({
+  statsId,
+  initialStats,
+  onSaved,
+}: {
+  statsId: number
+  initialStats: GameStatsDto
+  onSaved: (stats: GameStatsDto) => void
+}) {
+  const [form, setForm] = useState({
+    fieldGoalsMade: String(initialStats.fieldGoalsMade),
+    fieldGoalsAttempted: String(initialStats.fieldGoalsAttempted),
+    threePointersMade: String(initialStats.threePointersMade),
+    threePointersAttempted: String(initialStats.threePointersAttempted),
+    freeThrowsMade: String(initialStats.freeThrowsMade),
+    freeThrowsAttempted: String(initialStats.freeThrowsAttempted),
+    offensiveRebounds: String(initialStats.offensiveRebounds),
+    defensiveRebounds: String(initialStats.defensiveRebounds),
+    assists: String(initialStats.assists),
+    steals: String(initialStats.steals),
+    blocks: String(initialStats.blocks),
+    turnovers: String(initialStats.turnovers),
+    fouls: String(initialStats.fouls),
+    minutesPlayed: String(initialStats.minutesPlayed),
+  })
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const field = (key: keyof typeof form, label: string) => (
+    <label>
+      {label}
+      <input
+        type="number"
+        value={form[key]}
+        onChange={(e) => setForm({ ...form, [key]: e.target.value })}
+      />
+    </label>
+  )
+
+  const save = async () => {
+    setSaving(true)
+    setError(null)
+    try {
+      const dto: UpdateGameStatsDto = Object.fromEntries(
+        Object.entries(form).map(([k, v]) => [k, Number(v) || 0])
+      )
+      const { data } = await api.put<GameStatsDto>(`/gamestats/${statsId}`, dto)
+      onSaved(data)
+    } catch {
+      setError('Could not save those stats.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="quick-stats-form">
+      <div className="stat-fields">
+        {field('fieldGoalsMade', '2PM')}
+        {field('fieldGoalsAttempted', '2PA')}
+        {field('threePointersMade', '3PM')}
+        {field('threePointersAttempted', '3PA')}
+        {field('freeThrowsMade', 'FTM')}
+        {field('freeThrowsAttempted', 'FTA')}
+        {field('offensiveRebounds', 'Off Reb')}
+        {field('defensiveRebounds', 'Def Reb')}
+        {field('assists', 'Ast')}
+        {field('steals', 'Stl')}
+        {field('blocks', 'Blk')}
+        {field('turnovers', 'TO')}
+        {field('fouls', 'Fouls')}
+        {field('minutesPlayed', 'Min')}
+      </div>
+      {error && <p className="error">{error}</p>}
+      <button className="submit-btn" onClick={save} disabled={saving}>{saving ? 'Saving...' : 'Save Stats'}</button>
     </div>
   )
 }
