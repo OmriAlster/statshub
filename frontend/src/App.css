@@ -325,6 +325,77 @@ select:focus {
   padding: 1.1rem 1.1rem calc(4.75rem + env(safe-area-inset-bottom, 0px));
 }
 
+.install-banner {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  padding: 0.75rem 0.9rem;
+  margin-bottom: 1.1rem;
+}
+
+.install-banner-icon {
+  font-size: 1.4rem;
+  flex-shrink: 0;
+}
+
+.install-banner-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
+  flex: 1;
+}
+
+.install-banner-text strong {
+  font-size: 0.85rem;
+}
+
+.install-banner-text span {
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+}
+
+.install-banner-share-icon {
+  width: 13px;
+  height: 13px;
+  vertical-align: -2px;
+}
+
+.install-banner-btn {
+  background: var(--gradient-accent);
+  color: #1a0d00;
+  border: none;
+  border-radius: var(--radius-pill);
+  padding: 0.45rem 1rem;
+  font-weight: 700;
+  font-size: 0.82rem;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.install-banner-close {
+  background: none;
+  border: none;
+  color: var(--color-text-faint);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  padding: 0.3rem;
+}
+
+.install-banner-close .icon {
+  width: 15px;
+  height: 15px;
+}
+
 /* Desktop: nav becomes a persistent left sidebar; the compact
    mobile header is no longer needed since the sidebar carries
    brand + user. */
