@@ -132,9 +132,10 @@ namespace StatsHub.Api.Services
             await _push.NotifyTeamAsync(
                 game.TeamId,
                 "🏀 New game scheduled",
-                $"vs {game.OpponentName} on {game.GameDate:MMM d, h:mm tt}",
+                $"vs {game.OpponentName} on {{datetime}}",
                 $"/games/{game.Id}",
-                excludeUserId: requestingUserId);
+                excludeUserId: requestingUserId,
+                gameDate: game.GameDate);
 
             return await GetGameByIdAsync(game.Id, requestingUserId) ?? throw new InvalidOperationException("Game was not created");
         }

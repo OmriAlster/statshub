@@ -69,8 +69,9 @@ namespace StatsHub.Api.Services
                 await push.NotifyTeamAsync(
                     game.TeamId,
                     "⏰ Game starting soon",
-                    $"vs {game.OpponentName} at {game.GameDate:h:mm tt}",
-                    $"/games/{game.Id}");
+                    $"vs {game.OpponentName} at {{time}}",
+                    $"/games/{game.Id}",
+                    gameDate: game.GameDate);
             }
         }
     }

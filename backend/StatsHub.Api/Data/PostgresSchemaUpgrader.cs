@@ -130,6 +130,20 @@ namespace StatsHub.Api.Data
                 );");
             db.ExecuteSqlRaw(@"CREATE UNIQUE INDEX IF NOT EXISTS ""IX_PushSubscriptions_Endpoint"" ON ""PushSubscriptions"" (""Endpoint"");");
             db.ExecuteSqlRaw(@"CREATE INDEX IF NOT EXISTS ""IX_PushSubscriptions_UserId"" ON ""PushSubscriptions"" (""UserId"");");
+
+            // Guards against a race between two concurrent IBBA syncs inserting the
+            // same fixture twice. Isolated in its own try/catch: if any duplicate
+            // already snuck in before this shipped, creating the constraint would
+            // fail - better to skip the safety net for now than crash every future
+            // startup over it.
+            try
+            {
+                db.ExecuteSqlRaw(@"CREATE UNIQUE INDEX IF NOT EXISTS ""IX_Games_IbbaGameCode_Unique"" ON ""Games"" (""IbbaGameCode"") WHERE ""IbbaGameCode"" IS NOT NULL;");
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"Could not create unique index on Games.IbbaGameCode (likely pre-existing duplicates): {ex.Message}");
+            }
         }
 
         private static bool ColumnExists(AppDbContext context, string table, string column)

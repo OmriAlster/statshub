@@ -231,8 +231,17 @@ namespace StatsHub.Api.Data
                 .WithMany(itl => itl.Games)
                 .HasForeignKey(g => g.IbbaTeamLinkId)
                 .OnDelete(DeleteBehavior.SetNull);
+            // Unique per real fixture - guards against two concurrent syncs (e.g. two
+            // different parents each following a teammate on the same IBBA team)
+            // racing past the "does this game already exist" check and both
+            // inserting it. Filtered so manually-created games (IbbaGameCode null)
+            // are unaffected - Postgres and SQLite both treat NULLs as distinct in a
+            // unique index regardless, but the filter also keeps this off the
+            // (much larger) set of non-IBBA rows.
             modelBuilder.Entity<Game>()
-                .HasIndex(g => g.IbbaGameCode);
+                .HasIndex(g => g.IbbaGameCode)
+                .IsUnique()
+                .HasFilter("\"IbbaGameCode\" IS NOT NULL");
 
             // PushSubscription configuration
             modelBuilder.Entity<PushSubscription>()

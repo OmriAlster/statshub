@@ -25,10 +25,28 @@ self.addEventListener('push', (event) => {
     return
   }
 
-  const { title, body, url } = payload
+  const { title, body, url, gameDateIso } = payload
+
+  // The server sends the game's raw UTC instant, never a formatted string -
+  // it has no idea what timezone this device is in. {time}/{datetime} in the
+  // body get swapped for the device's own local rendering right here.
+  let finalBody = body
+  if (gameDateIso && typeof finalBody === 'string') {
+    const d = new Date(gameDateIso)
+    if (finalBody.includes('{time}')) {
+      finalBody = finalBody.replace('{time}', d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }))
+    }
+    if (finalBody.includes('{datetime}')) {
+      finalBody = finalBody.replace(
+        '{datetime}',
+        d.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+      )
+    }
+  }
+
   event.waitUntil(
     self.registration.showNotification(title || 'StatsHub', {
-      body,
+      body: finalBody,
       icon: '/icons/icon-192.png',
       badge: '/icons/icon-192.png',
       data: { url: url || '/' },

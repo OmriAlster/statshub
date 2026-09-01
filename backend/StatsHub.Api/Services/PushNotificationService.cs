@@ -13,8 +13,15 @@ namespace StatsHub.Api.Services
         // "who cares about this team" set used for edit-access checks
         // elsewhere (GameService.OwnsTeamAsync et al), just enumerated
         // instead of tested against a single user.
-        Task NotifyTeamAsync(int teamId, string title, string body, string? url = null, int? excludeUserId = null);
-        Task NotifyUsersAsync(IEnumerable<int> userIds, string title, string body, string? url = null);
+        //
+        // gameDate, when given, travels as a raw UTC instant in the payload -
+        // the server has no idea what timezone the recipient's device is in,
+        // so it never formats a date into the body text itself. If body
+        // contains the token "{time}" or "{datetime}", the service worker
+        // replaces it with that instant formatted in the device's own local
+        // time before the notification is shown.
+        Task NotifyTeamAsync(int teamId, string title, string body, string? url = null, int? excludeUserId = null, DateTime? gameDate = null);
+        Task NotifyUsersAsync(IEnumerable<int> userIds, string title, string body, string? url = null, DateTime? gameDate = null);
     }
 
     public class PushNotificationService : IPushNotificationService
@@ -41,7 +48,7 @@ namespace StatsHub.Api.Services
             }
         }
 
-        public async Task NotifyTeamAsync(int teamId, string title, string body, string? url = null, int? excludeUserId = null)
+        public async Task NotifyTeamAsync(int teamId, string title, string body, string? url = null, int? excludeUserId = null, DateTime? gameDate = null)
         {
             var parentUserIds = await _context.PlayerTeams
                 .Where(pt => pt.TeamId == teamId)
@@ -56,10 +63,10 @@ namespace StatsHub.Api.Services
             var recipientUserIds = parentUserIds.Concat(linkedPlayerUserIds).Distinct();
             if (excludeUserId.HasValue) recipientUserIds = recipientUserIds.Where(id => id != excludeUserId.Value);
 
-            await NotifyUsersAsync(recipientUserIds, title, body, url);
+            await NotifyUsersAsync(recipientUserIds, title, body, url, gameDate);
         }
 
-        public async Task NotifyUsersAsync(IEnumerable<int> userIds, string title, string body, string? url = null)
+        public async Task NotifyUsersAsync(IEnumerable<int> userIds, string title, string body, string? url = null, DateTime? gameDate = null)
         {
             var ids = userIds.Distinct().ToList();
             if (ids.Count == 0) return;
@@ -73,7 +80,7 @@ namespace StatsHub.Api.Services
             var subscriptions = await _context.PushSubscriptions.Where(ps => ids.Contains(ps.UserId)).ToListAsync();
             if (subscriptions.Count == 0) return;
 
-            var payload = JsonSerializer.Serialize(new { title, body, url });
+            var payload = JsonSerializer.Serialize(new { title, body, url, gameDateIso = gameDate?.ToString("O") });
             var client = new WebPushClient();
             var expired = new List<Models.PushSubscription>();
 

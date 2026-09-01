@@ -24,13 +24,15 @@ namespace StatsHub.Api.Services
         private readonly IPlayerService _playerService;
         private readonly IHttpClientFactory _httpClientFactory;
         private readonly IPushNotificationService _push;
+        private readonly ILogger<IbbaService> _logger;
 
-        public IbbaService(AppDbContext context, IPlayerService playerService, IHttpClientFactory httpClientFactory, IPushNotificationService push)
+        public IbbaService(AppDbContext context, IPlayerService playerService, IHttpClientFactory httpClientFactory, IPushNotificationService push, ILogger<IbbaService> logger)
         {
             _context = context;
             _playerService = playerService;
             _httpClientFactory = httpClientFactory;
             _push = push;
+            _logger = logger;
         }
 
         private HttpClient CreateIbbaHttpClient() => _httpClientFactory.CreateClient("Ibba");
@@ -351,15 +353,32 @@ namespace StatsHub.Api.Services
                 }
             }
 
-            await _context.SaveChangesAsync();
+            try
+            {
+                await _context.SaveChangesAsync();
+            }
+            catch (DbUpdateException ex)
+            {
+                // Another sync (e.g. a different parent following a teammate on the
+                // same IBBA team) won the race and committed one of these fixtures
+                // first - the unique constraint on IbbaGameCode caught it. Nothing to
+                // recover mid-request: whichever game(s) actually got inserted are
+                // already correct, and the next sync (this one or theirs) will find
+                // them via the normal "existing" lookup instead of trying to
+                // duplicate them again. Skip this round's push notifications since
+                // it's unclear which rows actually committed.
+                _logger.LogWarning(ex, "IBBA game sync hit a duplicate-fixture race for team link {TeamLinkId}", teamLink.Id);
+                return;
+            }
 
             foreach (var game in newlyUpcoming)
             {
                 await _push.NotifyTeamAsync(
                     game.TeamId,
                     "🏀 New game scheduled",
-                    $"vs {game.OpponentName} on {game.GameDate:MMM d, h:mm tt}",
-                    $"/games/{game.Id}");
+                    $"vs {game.OpponentName} on {{datetime}}",
+                    $"/games/{game.Id}",
+                    gameDate: game.GameDate);
             }
 
             foreach (var game in newlyCompleted)
@@ -377,8 +396,9 @@ namespace StatsHub.Api.Services
                 await _push.NotifyTeamAsync(
                     game.TeamId,
                     "📅 Game rescheduled",
-                    $"vs {game.OpponentName} moved to {game.GameDate:MMM d, h:mm tt}",
-                    $"/games/{game.Id}");
+                    $"vs {game.OpponentName} moved to {{datetime}}",
+                    $"/games/{game.Id}",
+                    gameDate: game.GameDate);
             }
         }
 
