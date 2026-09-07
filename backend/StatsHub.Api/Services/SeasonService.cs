@@ -61,23 +61,23 @@ namespace StatsHub.Api.Services
             var seasons = await _context.Seasons
                 .Where(s => s.UserId == userId)
                 .Include(s => s.Teams)
-                .ThenInclude(t => t.Games)
                 .OrderByDescending(s => s.StartDate)
                 .ToListAsync();
 
-            return seasons.Select(MapToDto).ToList();
+            var result = new List<SeasonDto>();
+            foreach (var season in seasons) result.Add(await MapToDtoAsync(season));
+            return result;
         }
 
         public async Task<SeasonDto?> GetSeasonByIdAsync(int id, int requestingUserId)
         {
             var season = await _context.Seasons
                 .Include(s => s.Teams)
-                .ThenInclude(t => t.Games)
                 .FirstOrDefaultAsync(s => s.Id == id);
 
             if (season == null || season.UserId != requestingUserId) return null;
 
-            return MapToDto(season);
+            return await MapToDtoAsync(season);
         }
 
         public async Task<SeasonDto> CreateSeasonAsync(int userId, CreateSeasonDto dto)
@@ -96,7 +96,7 @@ namespace StatsHub.Api.Services
             _context.Seasons.Add(season);
             await _context.SaveChangesAsync();
 
-            return MapToDto(season);
+            return await MapToDtoAsync(season);
         }
 
         public async Task<SeasonDto?> UpdateSeasonAsync(int id, UpdateSeasonDto dto, int requestingUserId)
@@ -125,15 +125,30 @@ namespace StatsHub.Api.Services
             return true;
         }
 
-        private static SeasonDto MapToDto(Season season) => new SeasonDto
+        // No Games nav on Team to sum (HomeTeamId/AwayTeamId aren't a formal FK
+        // to it - see Game.cs), so this counts explicitly per team instead: a
+        // manual game by literal team id, an IBBA-synced one by the team's
+        // linked IbbaTeamId on either side of the fixture.
+        private async Task<SeasonDto> MapToDtoAsync(Season season)
         {
-            Id = season.Id,
-            Name = season.Name,
-            Sport = season.Sport,
-            Year = season.Year,
-            StartDate = season.StartDate,
-            EndDate = season.EndDate,
-            TotalGames = season.Teams?.Sum(t => t.Games.Count) ?? 0
-        };
+            var totalGames = 0;
+            foreach (var team in season.Teams ?? new List<Team>())
+            {
+                totalGames += await _context.Games.CountAsync(g =>
+                    (g.IbbaGameCode == null && (g.HomeTeamId == team.Id || g.AwayTeamId == team.Id)) ||
+                    (g.IbbaGameCode != null && team.IbbaTeamId != null && (g.HomeTeamId == team.IbbaTeamId || g.AwayTeamId == team.IbbaTeamId)));
+            }
+
+            return new SeasonDto
+            {
+                Id = season.Id,
+                Name = season.Name,
+                Sport = season.Sport,
+                Year = season.Year,
+                StartDate = season.StartDate,
+                EndDate = season.EndDate,
+                TotalGames = totalGames
+            };
+        }
     }
 }

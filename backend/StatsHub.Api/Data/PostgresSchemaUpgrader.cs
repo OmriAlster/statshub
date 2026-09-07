@@ -86,21 +86,56 @@ namespace StatsHub.Api.Data
             // is IBBA-derived data, fully rebuilt by the next sync. Postgres (unlike
             // SQLite) allows dropping a column that carries a foreign key without
             // ceremony, but this is wrapped defensively anyway - the new
-            // OpponentIbbaTeamId column below is all the new code actually needs,
-            // so a failure here just leaves a harmless orphaned column/tables
-            // rather than blocking startup.
+            // HomeTeamId/AwayTeamId columns below are all the new code actually
+            // needs, so a failure here just leaves a harmless orphaned
+            // column/tables rather than blocking startup.
             try
             {
                 db.ExecuteSqlRaw(@"DROP TABLE IF EXISTS ""IbbaTeamLinks"";");
                 db.ExecuteSqlRaw(@"DROP TABLE IF EXISTS ""IbbaStandings"";");
                 db.ExecuteSqlRaw(@"DROP TABLE IF EXISTS ""IbbaTeamCrests"";");
                 db.ExecuteSqlRaw(@"ALTER TABLE ""Games"" DROP COLUMN IF EXISTS ""IbbaTeamLinkId"";");
+                // The link moved from IbbaTeams.LinkedTeamId (one IbbaTeam -> at
+                // most one Team - the actual bug, since two different players'
+                // app Teams couldn't both link to the same real IBBA team) to
+                // Teams.IbbaTeamId (many Teams -> one IbbaTeam). Postgres drops a
+                // column's own FK/index along with it, so this is a clean drop
+                // (unlike SQLite, which can't).
+                db.ExecuteSqlRaw(@"ALTER TABLE ""IbbaTeams"" DROP COLUMN IF EXISTS ""LinkedTeamId"";");
             }
             catch (Exception ex)
             {
                 Console.Error.WriteLine($"Could not drop old IBBA tables/column (leaving them in place): {ex.Message}");
             }
-            db.ExecuteSqlRaw(@"ALTER TABLE ""Games"" ADD COLUMN IF NOT EXISTS ""OpponentIbbaTeamId"" integer;");
+            // Games.TeamId (a separate field for a manually-created game's
+            // owner) and IsHomeGame (a separate bool alongside it) are both
+            // gone - a manual game's own team id now lives in the very same
+            // HomeTeamId/AwayTeamId pair an IBBA game uses (IbbaGameCode says
+            // which table they mean: Teams for a manual game, IbbaTeams for a
+            // synced one), with home/away encoded purely by which of the two
+            // columns it's in. No formal FK on either column - a single column
+            // can't reference two different tables - so every read resolves
+            // them explicitly instead (GameService et al.). OpponentIbbaTeamId/
+            // OwnIbbaTeamId (an earlier, still perspective-relative attempt)
+            // are gone too. No data migration - this is dev-only data wiped
+            // between iterations of this exact redesign.
+            try
+            {
+                db.ExecuteSqlRaw(@"ALTER TABLE ""Games"" DROP CONSTRAINT IF EXISTS ""FK_Games_Teams_TeamId"";");
+                db.ExecuteSqlRaw(@"DROP INDEX IF EXISTS ""IX_Games_TeamId"";");
+                db.ExecuteSqlRaw(@"ALTER TABLE ""Games"" DROP COLUMN IF EXISTS ""TeamId"";");
+                db.ExecuteSqlRaw(@"ALTER TABLE ""Games"" DROP COLUMN IF EXISTS ""IsHomeGame"";");
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"Could not drop old Games.TeamId/IsHomeGame columns (leaving them in place): {ex.Message}");
+            }
+            db.ExecuteSqlRaw(@"ALTER TABLE ""Games"" DROP COLUMN IF EXISTS ""OpponentIbbaTeamId"";");
+            db.ExecuteSqlRaw(@"ALTER TABLE ""Games"" DROP COLUMN IF EXISTS ""OwnIbbaTeamId"";");
+            db.ExecuteSqlRaw(@"ALTER TABLE ""Games"" ADD COLUMN IF NOT EXISTS ""HomeTeamId"" integer;");
+            db.ExecuteSqlRaw(@"ALTER TABLE ""Games"" ADD COLUMN IF NOT EXISTS ""AwayTeamId"" integer;");
+            db.ExecuteSqlRaw(@"CREATE INDEX IF NOT EXISTS ""IX_Games_HomeTeamId"" ON ""Games"" (""HomeTeamId"");");
+            db.ExecuteSqlRaw(@"CREATE INDEX IF NOT EXISTS ""IX_Games_AwayTeamId"" ON ""Games"" (""AwayTeamId"");");
 
             db.ExecuteSqlRaw(@"
                 CREATE TABLE IF NOT EXISTS ""IbbaTeams"" (
@@ -121,12 +156,13 @@ namespace StatsHub.Api.Data
                     ""PointsAgainst"" integer NOT NULL,
                     ""Diff"" integer NOT NULL,
                     ""LeaguePoints"" integer NOT NULL,
-                    ""SyncedAt"" timestamptz NOT NULL,
-                    ""LinkedTeamId"" integer REFERENCES ""Teams"" (""Id"") ON DELETE SET NULL
+                    ""SyncedAt"" timestamptz NOT NULL
                 );");
             db.ExecuteSqlRaw(@"CREATE UNIQUE INDEX IF NOT EXISTS ""IX_IbbaTeams_TeamUrl"" ON ""IbbaTeams"" (""TeamUrl"");");
             db.ExecuteSqlRaw(@"CREATE INDEX IF NOT EXISTS ""IX_IbbaTeams_LeagueUrl"" ON ""IbbaTeams"" (""LeagueUrl"");");
-            db.ExecuteSqlRaw(@"CREATE UNIQUE INDEX IF NOT EXISTS ""IX_IbbaTeams_LinkedTeamId"" ON ""IbbaTeams"" (""LinkedTeamId"") WHERE ""LinkedTeamId"" IS NOT NULL;");
+
+            db.ExecuteSqlRaw(@"ALTER TABLE ""Teams"" ADD COLUMN IF NOT EXISTS ""IbbaTeamId"" integer REFERENCES ""IbbaTeams"" (""Id"") ON DELETE SET NULL;");
+            db.ExecuteSqlRaw(@"CREATE INDEX IF NOT EXISTS ""IX_Teams_IbbaTeamId"" ON ""Teams"" (""IbbaTeamId"");");
 
             db.ExecuteSqlRaw(@"
                 CREATE TABLE IF NOT EXISTS ""PlayerIbbaTeams"" (
@@ -140,6 +176,10 @@ namespace StatsHub.Api.Data
 
             // ---- Push notifications ----
             db.ExecuteSqlRaw(@"ALTER TABLE ""Games"" ADD COLUMN IF NOT EXISTS ""ReminderSentAt"" timestamptz;");
+
+            // Whoever starts a live game claims recording rights until it's no
+            // longer "In Progress" - see Game.cs.
+            db.ExecuteSqlRaw(@"ALTER TABLE ""Games"" ADD COLUMN IF NOT EXISTS ""LiveTrackedByUserId"" integer;");
 
             db.ExecuteSqlRaw(@"
                 CREATE TABLE IF NOT EXISTS ""PushSubscriptions"" (

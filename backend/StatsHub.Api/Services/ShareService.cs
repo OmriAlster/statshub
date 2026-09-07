@@ -31,13 +31,26 @@ namespace StatsHub.Api.Services
             {
                 // A game is shareable if it's this player's - via team membership
                 // (the common case, works even with no box score yet, e.g. an
-                // IBBA-synced game nobody has tracked stats for) or via existing
-                // GameStats (in case the player has since left that team).
+                // IBBA-synced game nobody has tracked stats for), via a shared
+                // IbbaTeam on either side of the fixture (a teammate's or an
+                // opponent's own app Team, also linked to one of the two real
+                // teams, counts too), or via existing GameStats (in case the
+                // player has since left that team).
                 var game = await _context.Games.FindAsync(dto.GameId.Value);
                 if (game == null) return null;
 
-                var isPlayersGame = await _context.PlayerTeams.AnyAsync(pt => pt.PlayerId == dto.PlayerId && pt.TeamId == game.TeamId)
-                    || await _context.GameStats.AnyAsync(gs => gs.GameId == dto.GameId && gs.PlayerId == dto.PlayerId);
+                bool isPlayersGame;
+                if (game.IbbaGameCode == null)
+                {
+                    var manualTeamId = game.HomeTeamId ?? game.AwayTeamId;
+                    isPlayersGame = manualTeamId.HasValue && await _context.PlayerTeams.AnyAsync(pt => pt.PlayerId == dto.PlayerId && pt.TeamId == manualTeamId.Value);
+                }
+                else
+                {
+                    var sideIds = new[] { game.HomeTeamId, game.AwayTeamId }.Where(id => id.HasValue).Select(id => id!.Value).ToList();
+                    isPlayersGame = sideIds.Count > 0 && await _context.PlayerTeams.AnyAsync(pt => pt.PlayerId == dto.PlayerId && pt.Team.IbbaTeamId != null && sideIds.Contains(pt.Team.IbbaTeamId.Value));
+                }
+                isPlayersGame = isPlayersGame || await _context.GameStats.AnyAsync(gs => gs.GameId == dto.GameId && gs.PlayerId == dto.PlayerId);
                 if (!isPlayersGame) return null;
             }
 
@@ -82,8 +95,6 @@ namespace StatsHub.Api.Services
             if (link.GameId.HasValue)
             {
                 var game = await _context.Games
-                    .Include(g => g.Team)
-                    .Include(g => g.OpponentIbbaTeam)
                     .Include(g => g.GameStats.Where(gs => gs.PlayerId == link.PlayerId))
                     .ThenInclude(gs => gs.Player)
                     .Include(g => g.GameStats.Where(gs => gs.PlayerId == link.PlayerId))
@@ -92,7 +103,27 @@ namespace StatsHub.Api.Services
 
                 if (game != null)
                 {
-                    dto.Game = MapGameToDto(game);
+                    // Attribute to this player's own team - the side ids on the
+                    // game row may actually belong to a teammate's (or an
+                    // opponent's) app Team if their sync created this shared row
+                    // first, for an IBBA game.
+                    Team? ownTeam;
+                    if (game.IbbaGameCode == null)
+                    {
+                        var manualTeamId = game.HomeTeamId ?? game.AwayTeamId;
+                        ownTeam = manualTeamId.HasValue
+                            ? await _context.PlayerTeams.Where(pt => pt.PlayerId == link.PlayerId && pt.TeamId == manualTeamId.Value).Include(pt => pt.Team).ThenInclude(t => t.IbbaTeam).Select(pt => pt.Team).FirstOrDefaultAsync()
+                            : null;
+                    }
+                    else
+                    {
+                        var sideIds = new[] { game.HomeTeamId, game.AwayTeamId }.Where(id => id.HasValue).Select(id => id!.Value).ToList();
+                        ownTeam = sideIds.Count > 0
+                            ? await _context.PlayerTeams.Where(pt => pt.PlayerId == link.PlayerId && pt.Team.IbbaTeamId != null && sideIds.Contains(pt.Team.IbbaTeamId.Value)).Include(pt => pt.Team).ThenInclude(t => t.IbbaTeam).Select(pt => pt.Team).FirstOrDefaultAsync()
+                            : null;
+                    }
+
+                    dto.Game = await MapGameToDtoAsync(game, ownTeam);
                 }
             }
             else
@@ -101,17 +132,19 @@ namespace StatsHub.Api.Services
 
                 // Crest, league, and standing per team - same IBBA info the signed-in
                 // Profiles page shows, resolved directly since a public share link
-                // can't go through the authorized IBBA endpoints.
-                var ibbaTeams = await _context.PlayerIbbaTeams
-                    .Include(pit => pit.PlayerIbbaLink)
-                    .Include(pit => pit.IbbaTeam)
-                    .Where(pit => pit.PlayerIbbaLink.PlayerId == link.PlayerId && pit.IbbaTeam.LinkedTeamId != null)
-                    .Select(pit => pit.IbbaTeam)
-                    .ToListAsync();
+                // can't go through the authorized IBBA endpoints. Keyed by the app
+                // Team's own IbbaTeamId, not through PlayerIbbaTeams - the link now
+                // lives on Team, and a Team's own link is unambiguous regardless of
+                // which player is being viewed.
+                var statsTeamIds = stats.Select(s => s.TeamId).Distinct().ToList();
+                var ibbaByTeamId = await _context.Teams
+                    .Include(t => t.IbbaTeam)
+                    .Where(t => statsTeamIds.Contains(t.Id) && t.IbbaTeamId != null)
+                    .ToDictionaryAsync(t => t.Id, t => t.IbbaTeam!);
 
                 dto.Teams = stats.Select(s =>
                 {
-                    var ibba = ibbaTeams.FirstOrDefault(t => t.LinkedTeamId == s.TeamId);
+                    ibbaByTeamId.TryGetValue(s.TeamId, out var ibba);
                     return new SharedTeamDto
                     {
                         PlayerId = s.PlayerId,
@@ -148,20 +181,29 @@ namespace StatsHub.Api.Services
 
                 // Every game for a team the player's rostered on, or already has stats
                 // for - same rule as the signed-in Games endpoint, so a game synced
-                // from IBBA that has no box score yet still shows up here.
-                var teamIds = await _context.PlayerTeams
+                // from IBBA that has no box score yet still shows up here. A shared
+                // real-world team can have its game synced under a different
+                // player's own app Team, on either side - Home/AwayTeamId (IbbaTeam
+                // ids for an IBBA game) are matched, not just literal app Team ids.
+                var myTeams = await _context.PlayerTeams
                     .Where(pt => pt.PlayerId == link.PlayerId)
-                    .Select(pt => pt.TeamId)
+                    .Include(pt => pt.Team)
+                    .ThenInclude(t => t.IbbaTeam)
+                    .Select(pt => pt.Team)
                     .ToListAsync();
+                var teamIds = myTeams.Select(t => t.Id).ToList();
+                var teamByIbbaTeamId = myTeams.Where(t => t.IbbaTeamId.HasValue).ToDictionary(t => t.IbbaTeamId!.Value);
+
                 var statsGameIds = await _context.GameStats
                     .Where(gs => gs.PlayerId == link.PlayerId)
                     .Select(gs => gs.GameId)
                     .ToListAsync();
 
                 var games = await _context.Games
-                    .Where(g => teamIds.Contains(g.TeamId) || statsGameIds.Contains(g.Id))
-                    .Include(g => g.Team)
-                    .Include(g => g.OpponentIbbaTeam)
+                    .Where(g =>
+                        (g.IbbaGameCode == null && ((g.HomeTeamId != null && teamIds.Contains(g.HomeTeamId.Value)) || (g.AwayTeamId != null && teamIds.Contains(g.AwayTeamId.Value)))) ||
+                        (g.IbbaGameCode != null && ((g.HomeTeamId != null && teamByIbbaTeamId.Keys.Contains(g.HomeTeamId.Value)) || (g.AwayTeamId != null && teamByIbbaTeamId.Keys.Contains(g.AwayTeamId.Value)))) ||
+                        statsGameIds.Contains(g.Id))
                     .Include(g => g.GameStats.Where(gs => gs.PlayerId == link.PlayerId))
                     .ThenInclude(gs => gs.Player)
                     .Include(g => g.GameStats.Where(gs => gs.PlayerId == link.PlayerId))
@@ -169,68 +211,140 @@ namespace StatsHub.Api.Services
                     .OrderByDescending(g => g.GameDate)
                     .ToListAsync();
 
-                dto.Games = games.Select(MapGameToDto).ToList();
+                var ibbaTeamIds = games.Where(g => g.IbbaGameCode != null)
+                    .SelectMany(g => new[] { g.HomeTeamId, g.AwayTeamId })
+                    .Where(id => id.HasValue).Select(id => id!.Value)
+                    .Distinct().ToList();
+                var ibbaTeams = ibbaTeamIds.Count > 0
+                    ? await _context.IbbaTeams.Where(t => ibbaTeamIds.Contains(t.Id)).ToDictionaryAsync(t => t.Id)
+                    : new Dictionary<int, IbbaTeam>();
+
+                dto.Games = games.Select(g =>
+                {
+                    Team? viewTeam = null;
+                    if (g.IbbaGameCode == null)
+                    {
+                        var manualTeamId = g.HomeTeamId ?? g.AwayTeamId;
+                        viewTeam = myTeams.FirstOrDefault(t => t.Id == manualTeamId);
+                    }
+                    else
+                    {
+                        if (g.HomeTeamId.HasValue) teamByIbbaTeamId.TryGetValue(g.HomeTeamId.Value, out viewTeam);
+                        if (viewTeam == null && g.AwayTeamId.HasValue) teamByIbbaTeamId.TryGetValue(g.AwayTeamId.Value, out viewTeam);
+                    }
+                    return MapGameToDto(g, viewTeam, ibbaTeams);
+                }).ToList();
             }
 
             return dto;
         }
 
-        private static GameDto MapGameToDto(Game game) => new GameDto
+        private async Task<GameDto> MapGameToDtoAsync(Game game, Team? viewTeam)
         {
-            Id = game.Id,
-            TeamId = game.TeamId,
-            TeamName = game.Team?.Name ?? string.Empty,
-            GameType = game.GameType,
-            OpponentName = game.OpponentName,
-            // Resolved by id at sync time (Game.OpponentIbbaTeamId), never by name -
-            // null for a manually-created game, or an opponent not in a synced league.
-            OpponentLogoUrl = game.OpponentIbbaTeam?.LogoUrl,
-            GameDate = game.GameDate,
-            Location = game.Location,
-            Status = game.Status,
-            TeamScore = game.TeamScore,
-            OpponentScore = game.OpponentScore,
-            Notes = game.Notes,
-            IsHomeGame = game.IsHomeGame,
-            IsFromIbba = game.IbbaGameCode != null,
-            PlayerStats = game.GameStats.Select(gs => new GameStatsDto
+            var ibbaTeams = new Dictionary<int, IbbaTeam>();
+            if (game.IbbaGameCode != null)
             {
-                Id = gs.Id,
-                GameId = gs.GameId,
-                PlayerId = gs.PlayerId,
-                PlayerName = $"{gs.Player.FirstName} {gs.Player.LastName}",
-                FieldGoalsMade = gs.FieldGoalsMade,
-                FieldGoalsAttempted = gs.FieldGoalsAttempted,
-                FieldGoalPercentage = gs.FieldGoalPercentage,
-                ThreePointersMade = gs.ThreePointersMade,
-                ThreePointersAttempted = gs.ThreePointersAttempted,
-                ThreePointPercentage = gs.ThreePointPercentage,
-                FreeThrowsMade = gs.FreeThrowsMade,
-                FreeThrowsAttempted = gs.FreeThrowsAttempted,
-                FreeThrowPercentage = gs.FreeThrowPercentage,
-                OffensiveRebounds = gs.OffensiveRebounds,
-                DefensiveRebounds = gs.DefensiveRebounds,
-                TotalRebounds = gs.TotalRebounds,
-                Assists = gs.Assists,
-                Steals = gs.Steals,
-                Blocks = gs.Blocks,
-                Turnovers = gs.Turnovers,
-                Fouls = gs.Fouls,
-                MinutesPlayed = gs.MinutesPlayed,
-                TotalPoints = gs.TotalPoints,
-                Shots = gs.Shots.Select(s => new ShotDto
+                var sideIds = new[] { game.HomeTeamId, game.AwayTeamId }.Where(id => id.HasValue).Select(id => id!.Value).ToList();
+                if (sideIds.Count > 0) ibbaTeams = await _context.IbbaTeams.Where(t => sideIds.Contains(t.Id)).ToDictionaryAsync(t => t.Id);
+            }
+            return MapGameToDto(game, viewTeam, ibbaTeams);
+        }
+
+        // Same perspective-derivation as GameService.MapToDto - everything
+        // relative to "us" (opponent name/logo, our score vs. theirs, home/away)
+        // is derived here from the game's objective Home/Away ids compared
+        // against viewTeam's own, never stored pre-baked on the row.
+        private static GameDto MapGameToDto(Game game, Team? viewTeam, Dictionary<int, IbbaTeam> ibbaTeams)
+        {
+            var isIbba = game.IbbaGameCode != null;
+            string opponentName;
+            string? opponentLogoUrl;
+            int? teamScore, opponentScore;
+            bool? isHomeGame;
+
+            if (isIbba)
+            {
+                bool? viewerIsHome = viewTeam?.IbbaTeamId is int viewIbbaId
+                    ? (game.HomeTeamId == viewIbbaId ? true : game.AwayTeamId == viewIbbaId ? false : (bool?)null)
+                    : null;
+
+                var opponentTeamId = viewerIsHome == false ? game.HomeTeamId : game.AwayTeamId;
+                var opponent = opponentTeamId.HasValue && ibbaTeams.TryGetValue(opponentTeamId.Value, out var opp) ? opp : null;
+
+                opponentName = opponent?.Name ?? string.Empty;
+                opponentLogoUrl = opponent?.LogoUrl;
+                teamScore = viewerIsHome == false ? game.AwayScore : game.HomeScore;
+                opponentScore = viewerIsHome == false ? game.HomeScore : game.AwayScore;
+                isHomeGame = viewerIsHome;
+            }
+            else
+            {
+                opponentName = game.OpponentName;
+                opponentLogoUrl = null;
+                teamScore = game.TeamScore;
+                opponentScore = game.OpponentScore;
+                isHomeGame = viewTeam != null
+                    ? (game.HomeTeamId == viewTeam.Id ? true : game.AwayTeamId == viewTeam.Id ? false : (bool?)null)
+                    : null;
+            }
+
+            return new GameDto
+            {
+                Id = game.Id,
+                TeamId = viewTeam?.Id ?? 0,
+                TeamName = viewTeam?.Name ?? string.Empty,
+                TeamLogoUrl = viewTeam?.IbbaTeam?.LogoUrl,
+                GameType = game.GameType,
+                OpponentName = opponentName,
+                OpponentLogoUrl = opponentLogoUrl,
+                GameDate = game.GameDate,
+                Location = game.Location,
+                Status = game.Status,
+                TeamScore = teamScore,
+                OpponentScore = opponentScore,
+                Notes = game.Notes,
+                IsHomeGame = isHomeGame,
+                IsFromIbba = isIbba,
+                CanRecordLive = false, // public share view is always read-only
+                PlayerStats = game.GameStats.Select(gs => new GameStatsDto
                 {
-                    Id = s.Id,
-                    GameStatsId = s.GameStatsId,
+                    Id = gs.Id,
                     GameId = gs.GameId,
                     PlayerId = gs.PlayerId,
-                    Quarter = s.Quarter,
-                    X = s.X,
-                    Y = s.Y,
-                    Made = s.Made,
-                    Value = s.Value
+                    PlayerName = $"{gs.Player.FirstName} {gs.Player.LastName}",
+                    FieldGoalsMade = gs.FieldGoalsMade,
+                    FieldGoalsAttempted = gs.FieldGoalsAttempted,
+                    FieldGoalPercentage = gs.FieldGoalPercentage,
+                    ThreePointersMade = gs.ThreePointersMade,
+                    ThreePointersAttempted = gs.ThreePointersAttempted,
+                    ThreePointPercentage = gs.ThreePointPercentage,
+                    FreeThrowsMade = gs.FreeThrowsMade,
+                    FreeThrowsAttempted = gs.FreeThrowsAttempted,
+                    FreeThrowPercentage = gs.FreeThrowPercentage,
+                    OffensiveRebounds = gs.OffensiveRebounds,
+                    DefensiveRebounds = gs.DefensiveRebounds,
+                    TotalRebounds = gs.TotalRebounds,
+                    Assists = gs.Assists,
+                    Steals = gs.Steals,
+                    Blocks = gs.Blocks,
+                    Turnovers = gs.Turnovers,
+                    Fouls = gs.Fouls,
+                    MinutesPlayed = gs.MinutesPlayed,
+                    TotalPoints = gs.TotalPoints,
+                    Shots = gs.Shots.Select(s => new ShotDto
+                    {
+                        Id = s.Id,
+                        GameStatsId = s.GameStatsId,
+                        GameId = gs.GameId,
+                        PlayerId = gs.PlayerId,
+                        Quarter = s.Quarter,
+                        X = s.X,
+                        Y = s.Y,
+                        Made = s.Made,
+                        Value = s.Value
+                    }).ToList()
                 }).ToList()
-            }).ToList()
-        };
+            };
+        }
     }
 }

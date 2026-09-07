@@ -79,6 +79,7 @@ export interface GameDto {
   id: number
   teamId: number
   teamName: string
+  teamLogoUrl?: string | null
   gameType: GameType
   opponentName: string
   opponentLogoUrl?: string | null
@@ -90,6 +91,7 @@ export interface GameDto {
   notes?: string | null
   isHomeGame?: boolean | null
   isFromIbba: boolean
+  canRecordLive: boolean
   playerStats: GameStatsDto[]
 }
 

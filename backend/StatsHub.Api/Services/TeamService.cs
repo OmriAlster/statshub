@@ -19,11 +19,13 @@ namespace StatsHub.Api.Services
     {
         private readonly AppDbContext _context;
         private readonly ISeasonService _seasonService;
+        private readonly IGameService _gameService;
 
-        public TeamService(AppDbContext context, ISeasonService seasonService)
+        public TeamService(AppDbContext context, ISeasonService seasonService, IGameService gameService)
         {
             _context = context;
             _seasonService = seasonService;
+            _gameService = gameService;
         }
 
         public async Task<List<TeamDto>> GetMyTeamsAsync(int userId)
@@ -64,6 +66,8 @@ namespace StatsHub.Api.Services
         {
             var team = await _context.Teams.Include(t => t.Season).FirstOrDefaultAsync(t => t.Id == teamId);
             if (team == null || team.Season.UserId != userId) return false;
+
+            await _gameService.DeleteGamesExclusiveToTeamAsync(teamId);
 
             _context.Teams.Remove(team);
             await _context.SaveChangesAsync();

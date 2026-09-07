@@ -23,10 +23,12 @@ namespace StatsHub.Api.Services
     public class PlayerService : IPlayerService
     {
         private readonly AppDbContext _context;
+        private readonly IGameService _gameService;
 
-        public PlayerService(AppDbContext context)
+        public PlayerService(AppDbContext context, IGameService gameService)
         {
             _context = context;
+            _gameService = gameService;
         }
 
         private IQueryable<Player> PlayersWithTeams() =>
@@ -124,7 +126,14 @@ namespace StatsHub.Api.Services
                 if (otherMembers == 0)
                 {
                     var team = await _context.Teams.FindAsync(teamId);
-                    if (team != null) _context.Teams.Remove(team);
+                    if (team != null)
+                    {
+                        // A shared IBBA game (another player's team on the same
+                        // real team, or on the opponent's) must survive this -
+                        // only games exclusively this team's actually go away.
+                        await _gameService.DeleteGamesExclusiveToTeamAsync(teamId);
+                        _context.Teams.Remove(team);
+                    }
                 }
             }
 

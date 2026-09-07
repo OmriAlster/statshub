@@ -2,13 +2,13 @@
 // local time via the browser's own Date/Intl handling - never format a raw
 // ISO string by hand.
 
-// Compact form for table rows: "Sep 1, 4:17 PM"
-export function formatGameDateTime(iso: string) {
-  return new Date(iso).toLocaleString('en-US', {
-    month: 'short',
+// Date only, no time - for list rows, which lead with the opponent now and
+// keep the time-of-day tucked inside the game's own detail view: "May 9, 2026"
+export function formatGameDateOnly(iso: string) {
+  return new Date(iso).toLocaleDateString('en-US', {
+    month: 'long',
     day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
+    year: 'numeric',
   })
 }
 

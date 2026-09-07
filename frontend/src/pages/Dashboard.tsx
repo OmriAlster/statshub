@@ -6,6 +6,7 @@ import { useAuth } from '../auth/AuthContext'
 import IbbaBadge from '../components/IbbaBadge'
 import StandingsModal from '../components/StandingsModal'
 import TeamCrest from '../components/TeamCrest'
+import { formatGameDateOnly } from '../utils/formatGameDate'
 
 interface PlayerCard {
   player: PlayerDto
@@ -176,7 +177,11 @@ export default function Dashboard() {
                             <span className="glance-label">Last</span>
                             {last ? (
                               <>
-                                <div className="glance-line">{last.isHomeGame === false ? '✈️' : '🏠'} <span className="truncate">{last.opponentName}</span></div>
+                                <div className="glance-line opponent-cell">
+                                  <span>{last.isHomeGame === false ? '✈️' : '🏠'}</span>
+                                  {last.opponentLogoUrl && <img className="opponent-logo-sm" src={last.opponentLogoUrl} alt="" />}
+                                  <span className="truncate">{last.opponentName}</span>
+                                </div>
                                 <span className={`glance-score ${(last.teamScore ?? 0) > (last.opponentScore ?? 0) ? 'win' : 'loss'}`}>
                                   {(last.teamScore ?? 0) > (last.opponentScore ?? 0) ? 'W' : 'L'} {last.teamScore}–{last.opponentScore}
                                 </span>
@@ -187,9 +192,13 @@ export default function Dashboard() {
                             <span className="glance-label">Next</span>
                             {next ? (
                               <>
-                                <div className="glance-line">{next.isHomeGame === false ? '✈️' : '🏠'} <span className="truncate">{next.opponentName}</span></div>
+                                <div className="glance-line opponent-cell">
+                                  <span>{next.isHomeGame === false ? '✈️' : '🏠'}</span>
+                                  {next.opponentLogoUrl && <img className="opponent-logo-sm" src={next.opponentLogoUrl} alt="" />}
+                                  <span className="truncate">{next.opponentName}</span>
+                                </div>
                                 <span className="glance-score upcoming">
-                                  {new Date(next.gameDate).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                                  {formatGameDateOnly(next.gameDate)}
                                 </span>
                               </>
                             ) : <span className="glance-line" style={{ color: 'var(--color-text-faint)' }}>None scheduled</span>}

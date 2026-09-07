@@ -32,11 +32,9 @@ namespace StatsHub.Api.Models
         public int LeaguePoints { get; set; }
         public DateTime SyncedAt { get; set; } = DateTime.UtcNow;
 
-        // Which StatsHub team this maps to - null until a user links one.
-        // Lives on the team itself (not per-player) since it's the same real
-        // team regardless of which of your players happens to be on it.
-        public int? LinkedTeamId { get; set; }
-
-        public Team? LinkedTeam { get; set; }
+        // Which StatsHub team(s) map to this real team - the FK lives on Team
+        // (Team.IbbaTeamId), not here, because this is the shared side: two
+        // different players (each with their own app Team row) can be on the
+        // same real IBBA team and both need to link to this same row.
     }
 }

@@ -907,7 +907,9 @@ select:focus {
 
 /* Game type badge */
 .game-type-badge {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
   font-size: 0.66rem;
   font-weight: 800;
   text-transform: uppercase;
@@ -2075,6 +2077,53 @@ select:focus {
 .score-display .vs {
   color: var(--color-text-faint);
   font-size: 1.4rem;
+}
+
+.score-home-icon {
+  font-size: 1.1rem;
+  margin-right: 0.15rem;
+}
+
+/* Flanks the score with both teams' names (and the opponent's crest), so a
+   final score reads as an actual matchup rather than a bare number pair. */
+.score-matchup {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1.25rem;
+}
+
+.score-side {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.score-side:first-child {
+  justify-content: flex-end;
+}
+
+.score-side:last-child {
+  justify-content: flex-start;
+}
+
+.score-side-name {
+  font-weight: 600;
+  color: var(--color-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 480px) {
+  .score-matchup {
+    gap: 0.6rem;
+  }
+  .score-side-name {
+    max-width: 90px;
+  }
 }
 
 .player-stats {
@@ -3423,28 +3472,64 @@ select:focus {
   margin-bottom: 0.4rem;
 }
 
+/* Type/IBBA badges - who's playing already reads from the score matchup's
+   real names and crests below, so the header itself just carries this meta. */
+.game-meta-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.4rem;
+}
+.game-meta-row .game-type-badge {
+  margin-left: 0;
+}
+
 .game-detail-header p {
   color: var(--color-text-muted);
   margin: 0;
 }
 
+/* Wraps an opponent logo + name as a real flex pair (not inline vertical-align
+   hacks), so the logo sits consistently to the left of the name with a clean
+   gap in every context it appears - list rows, dashboard cards, live widget,
+   game detail header. */
+.opponent-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+}
+.opponent-cell > span,
+.opponent-cell > a {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .game-opponent-logo {
-  width: 28px;
-  height: 28px;
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
   object-fit: cover;
-  vertical-align: -6px;
-  margin-right: 0.5rem;
+  flex-shrink: 0;
   background: var(--color-surface-alt);
 }
 
 .opponent-logo-sm {
-  width: 15px;
-  height: 15px;
+  width: 20px;
+  height: 20px;
   border-radius: 50%;
   object-fit: cover;
-  vertical-align: -3px;
-  margin-right: 0.3rem;
+  flex-shrink: 0;
+  background: var(--color-surface-alt);
+}
+
+.opponent-logo-md {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
   background: var(--color-surface-alt);
 }
 
@@ -4083,6 +4168,24 @@ select:focus {
   0% { box-shadow: 0 0 0 0 rgba(255, 122, 26, 0.55); }
   70% { box-shadow: 0 0 0 9px rgba(255, 122, 26, 0); }
   100% { box-shadow: 0 0 0 0 rgba(255, 122, 26, 0); }
+}
+
+.live-watching-view {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.watching-banner {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: var(--color-surface-2, rgba(255, 122, 26, 0.08));
+  border: 1px solid var(--color-accent);
+  border-radius: 10px;
+  padding: 0.7rem 1rem;
+  font-weight: 600;
+  font-size: 0.9rem;
 }
 
 .live-title-tag {
@@ -4861,6 +4964,27 @@ button.crest-cluster:hover .crest-main {
   background: var(--color-purple-soft);
   color: var(--color-purple);
   border-color: rgba(185, 139, 255, 0.35);
+}
+
+/* Wraps the home/away icon and the type chip together in a table cell - the
+   icon sits outside the chip itself, just next to it. */
+.type-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.type-cell-icon {
+  display: inline-flex;
+  font-size: 0.85rem;
+  line-height: 1;
+}
+
+.type-chip-ibba {
+  width: 11px;
+  height: 11px;
+  border-radius: 2px;
+  vertical-align: middle;
 }
 
 /* IBBA connect panel (Players page) */

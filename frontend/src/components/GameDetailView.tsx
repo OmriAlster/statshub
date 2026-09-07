@@ -21,31 +21,54 @@ export default function GameDetailView({ game, headerActions }: GameDetailViewPr
     <div>
       <div className="game-detail-header">
         <div>
-          <h2>
-            {game.opponentLogoUrl && <img className="game-opponent-logo" src={game.opponentLogoUrl} alt="" />}
-            vs {game.opponentName}
+          <div className="game-meta-row">
             <span className={`game-type-badge ${game.gameType.toLowerCase()}`}>{game.gameType}</span>
             {game.isFromIbba && <IbbaBadge />}
-          </h2>
-          <p>
-            {game.teamName} · {formatGameDateTimeFull(game.gameDate)} ·{' '}
-            {game.isHomeGame === false ? '✈️' : '🏠'} {game.location || 'TBD'}
-          </p>
+          </div>
+          <p>{formatGameDateTimeFull(game.gameDate)} · {game.isHomeGame != null && (
+                <span className="score-home-icon" title={game.isHomeGame ? 'Home' : 'Away'}>{game.isHomeGame ? '🏠' : '✈️'}</span>
+              )} {game.location || 'TBD'}</p>
         </div>
         {headerActions && <div className="flex gap-1">{headerActions}</div>}
       </div>
 
       {game.status === 'Completed' ? (
         <div className="game-score">
-          <div className={`score-display ${won ? 'win' : 'loss'}`}>
-            <span>{game.teamScore}</span>
-            <span className="vs">-</span>
-            <span>{game.opponentScore}</span>
+          <div className="score-matchup">
+            <div className="score-side">
+              <span className="score-side-name">{game.teamName}</span>
+              {game.teamLogoUrl && <img className="opponent-logo-md" src={game.teamLogoUrl} alt="" />}
+            </div>
+            <div className={`score-display ${won ? 'win' : 'loss'}`}>
+              <span>{game.teamScore}</span>
+              <span className="vs">-</span>
+              <span>{game.opponentScore}</span>
+            </div>
+            <div className="score-side">
+              {game.opponentLogoUrl && <img className="opponent-logo-md" src={game.opponentLogoUrl} alt="" />}
+              <span className="score-side-name">{game.opponentName}</span>
+            </div>
           </div>
         </div>
       ) : (
         <div className="game-upcoming">
           <p><GameStatusBadge status={game.status} /></p>
+          {(game.teamLogoUrl || game.opponentLogoUrl) && (
+            <div className="score-matchup" style={{ marginTop: '0.6rem' }}>
+              <div className="score-side">
+                {game.isHomeGame != null && (
+                  <span title={game.isHomeGame ? 'Home' : 'Away'}>{game.isHomeGame ? '🏠' : '✈️'}</span>
+                )}
+                {game.teamLogoUrl && <img className="opponent-logo-md" src={game.teamLogoUrl} alt="" />}
+                <span className="score-side-name">{game.teamName}</span>
+              </div>
+              <span className="vs">vs</span>
+              <div className="score-side">
+                {game.opponentLogoUrl && <img className="opponent-logo-md" src={game.opponentLogoUrl} alt="" />}
+                <span className="score-side-name">{game.opponentName}</span>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

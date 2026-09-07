@@ -10,6 +10,7 @@ namespace StatsHub.Api.Services
     public interface IIbbaService
     {
         Task<IbbaPreviewDto> PreviewAsync(string playerUrl);
+        Task<CreatePlayerFromIbbaResultDto> CreatePlayerFromIbbaAsync(string ibbaPlayerUrl, int requestingUserId);
         Task<IbbaLinkStatusDto?> LinkPlayerAsync(int playerId, string ibbaPlayerUrl, int requestingUserId);
         Task<bool> UnlinkPlayerAsync(int playerId, int requestingUserId);
         Task<IbbaLinkStatusDto?> SyncPlayerAsync(int playerId, int requestingUserId);
@@ -25,14 +26,16 @@ namespace StatsHub.Api.Services
         private readonly IHttpClientFactory _httpClientFactory;
         private readonly IPushNotificationService _push;
         private readonly ILogger<IbbaService> _logger;
+        private readonly IServiceScopeFactory _scopeFactory;
 
-        public IbbaService(AppDbContext context, IPlayerService playerService, IHttpClientFactory httpClientFactory, IPushNotificationService push, ILogger<IbbaService> logger)
+        public IbbaService(AppDbContext context, IPlayerService playerService, IHttpClientFactory httpClientFactory, IPushNotificationService push, ILogger<IbbaService> logger, IServiceScopeFactory scopeFactory)
         {
             _context = context;
             _playerService = playerService;
             _httpClientFactory = httpClientFactory;
             _push = push;
             _logger = logger;
+            _scopeFactory = scopeFactory;
         }
 
         private HttpClient CreateIbbaHttpClient() => _httpClientFactory.CreateClient("Ibba");
@@ -80,6 +83,54 @@ namespace StatsHub.Api.Services
             return await GetLinkStatusAsync(playerId, requestingUserId);
         }
 
+        // Creates a brand-new StatsHub player straight from an IBBA profile URL
+        // and links/syncs it in one call. Fetches the player's own IBBA page
+        // exactly once - previously the controller called PreviewAsync (to
+        // validate the URL and get a name/DOB to create the player with)
+        // and then LinkPlayerAsync re-fetched that same page again a moment
+        // later inside RunSyncAsync, a second full page load for data already
+        // in hand. That, plus IbbaReportBuilder re-fetching each team's own
+        // page four separate times (see IbbaTeamScraper), was most of the real
+        // cost behind "creating a player from IBBA" feeling slow.
+        public async Task<CreatePlayerFromIbbaResultDto> CreatePlayerFromIbbaAsync(string ibbaPlayerUrl, int requestingUserId)
+        {
+            var scraper = new IbbaPlayerScraper(CreateIbbaHttpClient());
+            var info = await scraper.GetPlayerInfoAsync(ibbaPlayerUrl);
+
+            if (info.Teams.Count == 0)
+                throw new InvalidOperationException("Could not find any current team for this player on the IBBA page. Check the URL is a player profile page.");
+            if (info.DateOfBirth == null)
+                throw new InvalidOperationException("This IBBA profile doesn't list a birth date - add this player manually instead.");
+
+            var nameParts = info.PlayerName.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            var firstName = nameParts.Length > 1 ? string.Join(' ', nameParts[..^1]) : info.PlayerName;
+            var lastName = nameParts.Length > 1 ? nameParts[^1] : "";
+
+            var player = await _playerService.CreatePlayerAsync(requestingUserId, new CreatePlayerDto
+            {
+                FirstName = firstName,
+                LastName = lastName,
+                Position = "",
+                DateOfBirth = info.DateOfBirth.Value,
+            });
+
+            var link = new PlayerIbbaLink { PlayerId = player.Id, IbbaPlayerUrl = ibbaPlayerUrl, CreatedAt = DateTime.UtcNow };
+            _context.PlayerIbbaLinks.Add(link);
+            await _context.SaveChangesAsync();
+
+            await RunSyncAsync(link, info);
+
+            // RunSyncAsync just set the profile picture from the IBBA photo (on
+            // a separately-fetched, separately-tracked Player entity) - the
+            // "player" object above was captured before that write, so
+            // returning it as-is would hand back a stale DTO with no photo,
+            // and the frontend would show a blank avatar until a full reload.
+            var refreshedPlayer = await _playerService.GetPlayerByIdAsync(player.Id, requestingUserId) ?? player;
+            var ibba = await GetLinkStatusAsync(player.Id, requestingUserId);
+
+            return new CreatePlayerFromIbbaResultDto { Player = refreshedPlayer, Ibba = ibba };
+        }
+
         public async Task<bool> UnlinkPlayerAsync(int playerId, int requestingUserId)
         {
             if (!await _playerService.CanAccessPlayerAsync(playerId, requestingUserId)) return false;
@@ -113,22 +164,34 @@ namespace StatsHub.Api.Services
             var link = await _context.PlayerIbbaLinks
                 .Include(l => l.Teams)
                 .ThenInclude(pit => pit.IbbaTeam)
-                .ThenInclude(t => t.LinkedTeam)
                 .FirstOrDefaultAsync(l => l.PlayerId == playerId);
             if (link == null) return null;
 
-            var teamDtos = link.Teams.Select(pit => new IbbaTeamLinkDto
+            // The same IbbaTeam can be linked from multiple players' own app
+            // Teams (one per parent tracking the same real-world team), so
+            // "which app Team is THIS player's" is scoped by playerId, not by
+            // the IbbaTeam alone.
+            var ibbaTeamIds = link.Teams.Select(pit => pit.IbbaTeamId).ToList();
+            var linkedAppTeams = await _context.Teams
+                .Where(t => t.IbbaTeamId != null && ibbaTeamIds.Contains(t.IbbaTeamId!.Value) && t.PlayerTeams.Any(pt => pt.PlayerId == playerId))
+                .ToListAsync();
+
+            var teamDtos = link.Teams.Select(pit =>
             {
-                Id = pit.IbbaTeam.Id,
-                TeamName = pit.IbbaTeam.Name,
-                TeamUrl = pit.IbbaTeam.TeamUrl,
-                TeamLogoUrl = pit.IbbaTeam.LogoUrl,
-                LinkedTeamId = pit.IbbaTeam.LinkedTeamId,
-                LinkedTeamName = pit.IbbaTeam.LinkedTeam?.Name,
-                IbbaLeagueUrl = pit.IbbaTeam.LeagueUrl,
-                IbbaLeagueName = pit.IbbaTeam.LeagueName,
-                Position = pit.IbbaTeam.LeaguePosition,
-                TotalTeams = pit.IbbaTeam.LeagueTotalTeams,
+                var appTeam = linkedAppTeams.FirstOrDefault(t => t.IbbaTeamId == pit.IbbaTeamId);
+                return new IbbaTeamLinkDto
+                {
+                    Id = pit.IbbaTeam.Id,
+                    TeamName = pit.IbbaTeam.Name,
+                    TeamUrl = pit.IbbaTeam.TeamUrl,
+                    TeamLogoUrl = pit.IbbaTeam.LogoUrl,
+                    LinkedTeamId = appTeam?.Id,
+                    LinkedTeamName = appTeam?.Name,
+                    IbbaLeagueUrl = pit.IbbaTeam.LeagueUrl,
+                    IbbaLeagueName = pit.IbbaTeam.LeagueName,
+                    Position = pit.IbbaTeam.LeaguePosition,
+                    TotalTeams = pit.IbbaTeam.LeagueTotalTeams,
+                };
             }).ToList();
 
             return new IbbaLinkStatusDto
@@ -166,7 +229,12 @@ namespace StatsHub.Api.Services
             if (accessibleLink == null) return null;
             if (!await OwnsTeamAsync(teamId, requestingUserId)) return null;
 
-            ibbaTeam.LinkedTeamId = teamId;
+            // The link lives on the app Team, not the IbbaTeam - so two
+            // different players' own app Teams can each link to this same
+            // shared IbbaTeam without one overwriting the other.
+            var team = await _context.Teams.FindAsync(teamId);
+            if (team == null) return null;
+            team.IbbaTeamId = ibbaTeamId;
             await _context.SaveChangesAsync();
 
             // Now that this team has somewhere to put games, sync it immediately
@@ -202,12 +270,12 @@ namespace StatsHub.Api.Services
 
         // ---- Sync orchestration ----
 
-        private async Task RunSyncAsync(PlayerIbbaLink link)
+        private async Task RunSyncAsync(PlayerIbbaLink link, IbbaPlayerInfo? prefetchedPlayer = null)
         {
             try
             {
                 var builder = new IbbaReportBuilder(CreateIbbaHttpClient());
-                var (player, teamReports) = await builder.BuildAsync(link.IbbaPlayerUrl);
+                var (player, teamReports) = await builder.BuildAsync(link.IbbaPlayerUrl, prefetchedPlayer);
 
                 if (!string.IsNullOrEmpty(player.PhotoUrl))
                 {
@@ -232,11 +300,17 @@ namespace StatsHub.Api.Services
                     // resolution needs those IbbaTeam rows to already exist.
                     if (!string.IsNullOrEmpty(ownTeam.LeagueUrl) && report.Standings.Count > 0)
                     {
-                        await UpsertStandingsAsync(ownTeam.LeagueUrl, ownTeam.LeagueName, report.Standings);
-                        await EnsureTeamCrestsAsync(report.Standings);
+                        var standingsTeamIds = await UpsertStandingsAsync(ownTeam.LeagueUrl, ownTeam.LeagueName, report.Standings);
+                        EnqueueCrestBackfill(standingsTeamIds);
                     }
 
-                    if (ownTeam.LinkedTeamId.HasValue)
+                    // Games only get synced once this player's own app Team is
+                    // actually linked - there's nowhere meaningful to attribute
+                    // them to otherwise. (The row itself no longer needs to know
+                    // which app Team triggered this - see UpsertGamesAsync.)
+                    var hasLinkedAppTeam = await _context.Teams
+                        .AnyAsync(t => t.IbbaTeamId == ownTeam.Id && t.PlayerTeams.Any(pt => pt.PlayerId == link.PlayerId));
+                    if (hasLinkedAppTeam)
                     {
                         await UpsertGamesAsync(ownTeam, report.Games);
                     }
@@ -279,11 +353,12 @@ namespace StatsHub.Api.Services
 
         // Every team in the league's standings gets upserted here, not just the
         // one the player is on - this is what lets an opponent be resolved by id
-        // and get a logo, the same as your own team.
-        private async Task UpsertStandingsAsync(string leagueUrl, string leagueName, List<IbbaStandingRow> rows)
+        // and get a logo, the same as your own team. Returns every touched
+        // team's id, so the caller can queue a crest backfill for them.
+        private async Task<List<int>> UpsertStandingsAsync(string leagueUrl, string leagueName, List<IbbaStandingRow> rows)
         {
             var urls = rows.Where(r => !string.IsNullOrEmpty(r.TeamUrl)).Select(r => r.TeamUrl).Distinct().ToList();
-            if (urls.Count == 0) return;
+            if (urls.Count == 0) return new List<int>();
 
             var existingTeams = await _context.IbbaTeams
                 .Where(t => urls.Contains(t.TeamUrl))
@@ -317,41 +392,99 @@ namespace StatsHub.Api.Services
                 team.SyncedAt = DateTime.UtcNow;
                 // LogoUrl is deliberately untouched here - a standings sync never
                 // overwrites a crest, whether it's already set or still missing
-                // (EnsureTeamCrestsAsync below is the only thing that sets it).
+                // (EnqueueCrestBackfill is the only thing that sets it, and does
+                // so in the background - see below).
             }
 
             await _context.SaveChangesAsync();
+            return existingTeams.Values.Select(t => t.Id).ToList();
         }
 
-        // Every team still missing a logo gets one fetched from its own page (the
-        // same technique used for the player's own team), in parallel since a
-        // full league is 12-16 teams and this only matters the first time any of
-        // them is seen - once a team has a logo, it's never re-fetched.
-        private async Task EnsureTeamCrestsAsync(List<IbbaStandingRow> rows)
+        // Fetches crests in the background instead of blocking the sync/player
+        // creation on it - a full league is 12-16 teams, and visiting every one
+        // of their pages before responding was making "create player from IBBA"
+        // noticeably slower, entirely for a cosmetic enrichment nobody's
+        // actually waiting to see. Runs in its own DI scope since the request's
+        // own scoped AppDbContext gets disposed once the response is sent; best-
+        // effort - on failure, or if the app shuts down mid-fetch, a still-
+        // missing logo just gets retried by the next sync that touches this team
+        // (LogoUrl == null is the only condition ever checked).
+        private void EnqueueCrestBackfill(List<int> ibbaTeamIds)
         {
-            var urls = rows.Where(r => !string.IsNullOrEmpty(r.TeamUrl)).Select(r => r.TeamUrl).Distinct().ToList();
-            if (urls.Count == 0) return;
+            if (ibbaTeamIds.Count == 0) return;
 
-            var missing = await _context.IbbaTeams
-                .Where(t => urls.Contains(t.TeamUrl) && t.LogoUrl == null)
-                .ToListAsync();
-            if (missing.Count == 0) return;
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    using var scope = _scopeFactory.CreateScope();
+                    var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
-            var scraper = new IbbaTeamScraper(CreateIbbaHttpClient());
+                    var missing = await context.IbbaTeams
+                        .Where(t => ibbaTeamIds.Contains(t.Id) && t.LogoUrl == null)
+                        .ToListAsync();
+                    if (missing.Count == 0) return;
+
+                    var scraper = new IbbaTeamScraper(CreateIbbaHttpClient());
+                    using var throttle = new SemaphoreSlim(5);
+                    var results = new System.Collections.Concurrent.ConcurrentBag<(int Id, string? LogoUrl)>();
+
+                    await Task.WhenAll(missing.Select(async team =>
+                    {
+                        await throttle.WaitAsync();
+                        try
+                        {
+                            var logo = await scraper.FindTeamLogoUrlAsync(team.TeamUrl, team.Name);
+                            results.Add((team.Id, logo));
+                        }
+                        catch
+                        {
+                            results.Add((team.Id, null));
+                        }
+                        finally
+                        {
+                            throttle.Release();
+                        }
+                    }));
+
+                    foreach (var (id, logoUrl) in results)
+                    {
+                        if (string.IsNullOrEmpty(logoUrl)) continue;
+                        missing.First(t => t.Id == id).LogoUrl = logoUrl;
+                    }
+                    await context.SaveChangesAsync();
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Background crest backfill failed for {Count} teams", ibbaTeamIds.Count);
+                }
+            });
+        }
+
+        // Resolves opponent teams that never appeared in our own league's
+        // standings scrape - fetched by id straight from each team's own page,
+        // so a cup/friendly opponent still gets a real IbbaTeam row instead of
+        // staying a bare name with no id. Name and crest come off the same
+        // page load. Always called from the background (see
+        // EnqueueOpponentBackfill) - takes an explicit context since the
+        // request's own scoped one is gone by the time this runs.
+        private async Task<List<IbbaTeam>> ResolveUnknownOpponentsAsync(AppDbContext context, IbbaTeamScraper scraper, List<string> codes)
+        {
             using var throttle = new SemaphoreSlim(5);
-            var results = new System.Collections.Concurrent.ConcurrentBag<(int Id, string? LogoUrl)>();
+            var results = new System.Collections.Concurrent.ConcurrentBag<(string Code, string Url, string Name, string? LogoUrl)>();
 
-            await Task.WhenAll(missing.Select(async team =>
+            await Task.WhenAll(codes.Select(async code =>
             {
                 await throttle.WaitAsync();
                 try
                 {
-                    var logo = await scraper.FindTeamLogoUrlAsync(team.TeamUrl, team.Name);
-                    results.Add((team.Id, logo));
+                    var resolved = await scraper.ResolveTeamByIdAsync(code);
+                    if (resolved != null) results.Add((code, resolved.Value.CanonicalUrl, resolved.Value.Name, resolved.Value.LogoUrl));
                 }
                 catch
                 {
-                    results.Add((team.Id, null));
+                    // Network hiccup or unexpected page shape - not fatal, this
+                    // opponent just stays unresolved until the next sync retries.
                 }
                 finally
                 {
@@ -359,46 +492,132 @@ namespace StatsHub.Api.Services
                 }
             }));
 
-            foreach (var (id, logoUrl) in results)
+            if (results.IsEmpty) return new List<IbbaTeam>();
+
+            // A concurrent sync (another player, another team) could have already
+            // created one of these under the same canonical URL - the unique
+            // index on TeamUrl would reject a duplicate insert, so reuse it.
+            var urls = results.Select(r => r.Url).Distinct().ToList();
+            var existingByUrl = await context.IbbaTeams.Where(t => urls.Contains(t.TeamUrl)).ToDictionaryAsync(t => t.TeamUrl);
+
+            var teams = new List<IbbaTeam>();
+            foreach (var (code, url, name, logoUrl) in results)
             {
-                if (string.IsNullOrEmpty(logoUrl)) continue;
-                var team = missing.First(t => t.Id == id);
-                team.LogoUrl = logoUrl;
+                if (existingByUrl.TryGetValue(url, out var existing))
+                {
+                    teams.Add(existing);
+                    continue;
+                }
+                var team = new IbbaTeam { IbbaTeamId = code, TeamUrl = url, Name = name, LogoUrl = string.IsNullOrEmpty(logoUrl) ? null : logoUrl };
+                context.IbbaTeams.Add(team);
+                existingByUrl[url] = team;
+                teams.Add(team);
             }
-            await _context.SaveChangesAsync();
+
+            try
+            {
+                await context.SaveChangesAsync();
+            }
+            catch (DbUpdateException ex)
+            {
+                _logger.LogWarning(ex, "Opponent team resolution hit a duplicate-team race");
+                // Not fatal - these just won't be linked to their games this
+                // round; the next sync will find them via the normal lookup.
+                return new List<IbbaTeam>();
+            }
+
+            return teams;
+        }
+
+        // A cup/friendly opponent from outside our own league's standings has
+        // no known IbbaTeam yet, and resolving one means visiting a page nobody
+        // asked to wait on - the game itself already has everything it needs to
+        // display (the opponent's plain name straight from the Excel export),
+        // so this runs after the response, in its own DI scope, and patches in
+        // Home/AwayTeamId on whichever of these specific rows are still
+        // missing it once resolution finishes.
+        private void EnqueueOpponentBackfill(List<string> unresolvedCodes, List<IbbaGameRow> rows)
+        {
+            if (unresolvedCodes.Count == 0) return;
+
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    using var scope = _scopeFactory.CreateScope();
+                    var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+                    var scraper = new IbbaTeamScraper(CreateIbbaHttpClient());
+
+                    var resolved = await ResolveUnknownOpponentsAsync(context, scraper, unresolvedCodes);
+                    if (resolved.Count == 0) return;
+
+                    var teamsByCode = resolved.ToDictionary(t => t.IbbaTeamId);
+
+                    foreach (var row in rows)
+                    {
+                        if (string.IsNullOrEmpty(row.Code)) continue;
+
+                        var game = await context.Games.FirstOrDefaultAsync(g => g.IbbaGameCode == row.Code);
+                        if (game == null) continue;
+
+                        if (game.HomeTeamId == null && !string.IsNullOrEmpty(row.HomeTeamCode) && teamsByCode.TryGetValue(row.HomeTeamCode, out var home))
+                            game.HomeTeamId = home.Id;
+                        if (game.AwayTeamId == null && !string.IsNullOrEmpty(row.AwayTeamCode) && teamsByCode.TryGetValue(row.AwayTeamCode, out var away))
+                            game.AwayTeamId = away.Id;
+                    }
+
+                    await context.SaveChangesAsync();
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Background opponent backfill failed for {Count} teams", unresolvedCodes.Count);
+                }
+            });
         }
 
         private async Task UpsertGamesAsync(IbbaTeam ownTeam, List<IbbaGameRow> rows)
         {
-            // Collected so pushes fire only after SaveChangesAsync assigns real
-            // IDs, and only once per game regardless of how many rows touched it.
-            var newlyUpcoming = new List<Game>();
-            var newlyCompleted = new List<Game>();
-            var rescheduled = new List<Game>();
+            // Collected as (Game, OpponentName) so pushes fire only after
+            // SaveChangesAsync assigns real IDs, only once per game regardless
+            // of how many rows touched it, and without a second lookup for the
+            // push body text - OpponentName is never stored on the row itself
+            // (see Game.cs), just known briefly here from the export.
+            var newlyUpcoming = new List<(Game Game, string OpponentName)>();
+            var newlyCompleted = new List<(Game Game, string OpponentName)>();
+            var rescheduled = new List<(Game Game, string OpponentName)>();
 
-            // Resolve every opponent code seen in this batch to an IbbaTeam, by id,
-            // within the same league - never by name.
-            var opponentCodes = rows
-                .Select(row => row.HomeTeamCode == ownTeam.IbbaTeamId ? row.AwayTeamCode : row.HomeTeamCode)
+            // Resolve every team code seen in this batch to an IbbaTeam, by id,
+            // globally - never by name. IbbaTeamId is the site's own team id, so
+            // it's a safe join key across leagues too (not scoped to ownTeam's
+            // league - a team already known from some other context, e.g. being
+            // someone else's own team, should still be reused as-is).
+            var allCodes = rows
+                .SelectMany(row => new[] { row.HomeTeamCode, row.AwayTeamCode })
                 .Where(code => !string.IsNullOrEmpty(code))
                 .Distinct()
                 .ToList();
-            var opponentsByCode = await _context.IbbaTeams
-                .Where(t => t.LeagueUrl == ownTeam.LeagueUrl && opponentCodes.Contains(t.IbbaTeamId))
+            var teamsByCode = await _context.IbbaTeams
+                .Where(t => allCodes.Contains(t.IbbaTeamId))
                 .ToDictionaryAsync(t => t.IbbaTeamId);
+
+            // Any team not already known by id (typically a cup/friendly game
+            // against a team from a different league/age group, which our own
+            // league's standings scrape above never sees) gets resolved from
+            // its own page in the background instead (see
+            // EnqueueOpponentBackfill below) - these Home/AwayTeamId just stay
+            // null for now and get patched in once that finishes. Nothing
+            // about the game itself is missing in the meantime: the opponent's
+            // plain name is already known straight from the Excel export.
+            var unresolvedCodes = allCodes.Where(c => !teamsByCode.ContainsKey(c)).ToList();
 
             foreach (var row in rows)
             {
                 if (string.IsNullOrEmpty(row.Code)) continue;
 
+                var homeTeamId = !string.IsNullOrEmpty(row.HomeTeamCode) && teamsByCode.TryGetValue(row.HomeTeamCode, out var home) ? home.Id : (int?)null;
+                var awayTeamId = !string.IsNullOrEmpty(row.AwayTeamCode) && teamsByCode.TryGetValue(row.AwayTeamCode, out var away) ? away.Id : (int?)null;
                 var isHome = row.HomeTeamCode == ownTeam.IbbaTeamId;
                 var opponentName = isHome ? row.AwayTeam : row.HomeTeam;
-                var opponentCode = isHome ? row.AwayTeamCode : row.HomeTeamCode;
-                var opponentTeamId = !string.IsNullOrEmpty(opponentCode) && opponentsByCode.TryGetValue(opponentCode, out var opp)
-                    ? opp.Id
-                    : (int?)null;
-                var teamScore = isHome ? row.HomeScore : row.AwayScore;
-                var opponentScore = isHome ? row.AwayScore : row.HomeScore;
                 var gameDate = ParseGameDate(row.Date, row.Time);
 
                 var existing = await _context.Games.FirstOrDefaultAsync(g => g.IbbaGameCode == row.Code);
@@ -406,17 +625,15 @@ namespace StatsHub.Api.Services
                 {
                     var game = new Game
                     {
-                        TeamId = ownTeam.LinkedTeamId!.Value,
                         IbbaGameCode = row.Code,
-                        OpponentIbbaTeamId = opponentTeamId,
-                        IsHomeGame = isHome,
+                        HomeTeamId = homeTeamId,
+                        AwayTeamId = awayTeamId,
                         GameType = row.IsCup ? "Cup" : "League",
-                        OpponentName = opponentName,
                         GameDate = gameDate,
                         Location = row.Venue,
-                        Status = teamScore.HasValue ? "Completed" : "Upcoming",
-                        TeamScore = teamScore,
-                        OpponentScore = opponentScore,
+                        Status = row.HomeScore.HasValue ? "Completed" : "Upcoming",
+                        HomeScore = row.HomeScore,
+                        AwayScore = row.AwayScore,
                         CreatedAt = DateTime.UtcNow,
                         UpdatedAt = DateTime.UtcNow,
                     };
@@ -425,21 +642,20 @@ namespace StatsHub.Api.Services
                     // Only a brand-new *upcoming* fixture is worth a "new game
                     // added" push - a completed one just showed up via a
                     // historical backfill, nobody needs to be told about it.
-                    if (game.Status == "Upcoming") newlyUpcoming.Add(game);
+                    if (game.Status == "Upcoming") newlyUpcoming.Add((game, opponentName));
                 }
                 else
                 {
-                    // Schedule facts (opponent, venue, home/away, type, date/time) always
+                    // Schedule facts (home/away teams, venue, type, date/time) always
                     // track IBBA - the Schedule tab locks editing these fields for an
                     // IBBA-synced game specifically because IBBA is the only source for
                     // them, so there's no risk of clobbering something the user set
                     // themselves. The score/status stays conservative below: once a game
                     // has a real result (live-tracked or already synced), a resync never
                     // overwrites it.
-                    existing.OpponentName = opponentName;
-                    existing.OpponentIbbaTeamId = opponentTeamId;
+                    existing.HomeTeamId = homeTeamId;
+                    existing.AwayTeamId = awayTeamId;
                     existing.Location = row.Venue;
-                    existing.IsHomeGame = isHome;
                     existing.GameType = row.IsCup ? "Cup" : "League";
 
                     // Date/time always tracks IBBA too, regardless of status - no
@@ -452,15 +668,15 @@ namespace StatsHub.Api.Services
                     {
                         existing.GameDate = gameDate;
                         existing.ReminderSentAt = null;
-                        rescheduled.Add(existing);
+                        rescheduled.Add((existing, opponentName));
                     }
 
-                    if (existing.Status == "Upcoming" && teamScore.HasValue)
+                    if (existing.Status == "Upcoming" && row.HomeScore.HasValue)
                     {
-                        existing.TeamScore = teamScore;
-                        existing.OpponentScore = opponentScore;
+                        existing.HomeScore = row.HomeScore;
+                        existing.AwayScore = row.AwayScore;
                         existing.Status = "Completed";
-                        newlyCompleted.Add(existing);
+                        newlyCompleted.Add((existing, opponentName));
                     }
 
                     existing.UpdatedAt = DateTime.UtcNow;
@@ -485,35 +701,70 @@ namespace StatsHub.Api.Services
                 return;
             }
 
-            foreach (var game in newlyUpcoming)
-            {
-                await _push.NotifyTeamAsync(
-                    game.TeamId,
-                    "🏀 New game scheduled",
-                    $"vs {game.OpponentName} on {{datetime}}",
-                    $"/games/{game.Id}",
-                    gameDate: game.GameDate);
-            }
+            EnqueueOpponentBackfill(unresolvedCodes, rows);
+            EnqueueGameNotifications(ownTeam.Id, newlyUpcoming, newlyCompleted, rescheduled);
+        }
 
-            foreach (var game in newlyCompleted)
-            {
-                var result = (game.TeamScore ?? 0) > (game.OpponentScore ?? 0) ? "W" : "L";
-                await _push.NotifyTeamAsync(
-                    game.TeamId,
-                    "Final score",
-                    $"{result} {game.TeamScore}-{game.OpponentScore} vs {game.OpponentName}",
-                    $"/games/{game.Id}");
-            }
+        // A first-ever sync of a team can easily mean dozens of "new game"
+        // pushes at once (every upcoming fixture on the schedule), each of
+        // which is its own round trip to the push service per subscriber -
+        // real, multi-second latency that nobody is actually waiting to see,
+        // since the games themselves are already saved and visible by the
+        // time this runs. Dispatched the same way as the other background
+        // work here: its own DI scope, best-effort.
+        private void EnqueueGameNotifications(
+            int ownIbbaTeamId,
+            List<(Game Game, string OpponentName)> newlyUpcoming,
+            List<(Game Game, string OpponentName)> newlyCompleted,
+            List<(Game Game, string OpponentName)> rescheduled)
+        {
+            if (newlyUpcoming.Count == 0 && newlyCompleted.Count == 0 && rescheduled.Count == 0) return;
 
-            foreach (var game in rescheduled)
+            _ = Task.Run(async () =>
             {
-                await _push.NotifyTeamAsync(
-                    game.TeamId,
-                    "📅 Game rescheduled",
-                    $"vs {game.OpponentName} moved to {{datetime}}",
-                    $"/games/{game.Id}",
-                    gameDate: game.GameDate);
-            }
+                try
+                {
+                    using var scope = _scopeFactory.CreateScope();
+                    var push = scope.ServiceProvider.GetRequiredService<IPushNotificationService>();
+
+                    foreach (var (game, opponentName) in newlyUpcoming)
+                    {
+                        await push.NotifyIbbaTeamAsync(
+                            ownIbbaTeamId,
+                            "🏀 New game scheduled",
+                            $"vs {opponentName} on {{datetime}}",
+                            $"/games/{game.Id}",
+                            gameDate: game.GameDate);
+                    }
+
+                    foreach (var (game, opponentName) in newlyCompleted)
+                    {
+                        var isHome = game.HomeTeamId == ownIbbaTeamId;
+                        var teamScore = isHome ? game.HomeScore : game.AwayScore;
+                        var oppScore = isHome ? game.AwayScore : game.HomeScore;
+                        var result = (teamScore ?? 0) > (oppScore ?? 0) ? "W" : "L";
+                        await push.NotifyIbbaTeamAsync(
+                            ownIbbaTeamId,
+                            "Final score",
+                            $"{result} {teamScore}-{oppScore} vs {opponentName}",
+                            $"/games/{game.Id}");
+                    }
+
+                    foreach (var (game, opponentName) in rescheduled)
+                    {
+                        await push.NotifyIbbaTeamAsync(
+                            ownIbbaTeamId,
+                            "📅 Game rescheduled",
+                            $"vs {opponentName} moved to {{datetime}}",
+                            $"/games/{game.Id}",
+                            gameDate: game.GameDate);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Background game-notification dispatch failed");
+                }
+            });
         }
 
         // IBBA is an Israeli site - every date/time it publishes is Israel wall-clock

@@ -120,11 +120,6 @@ namespace StatsHub.Api.Data
                 .HasKey(t => t.Id);
             modelBuilder.Entity<Team>()
                 .HasIndex(t => t.SeasonId);
-            modelBuilder.Entity<Team>()
-                .HasMany(t => t.Games)
-                .WithOne(g => g.Team)
-                .HasForeignKey(g => g.TeamId)
-                .OnDelete(DeleteBehavior.Cascade);
 
             // PlayerTeam configuration (roster membership, many-to-many)
             modelBuilder.Entity<PlayerTeam>()
@@ -143,7 +138,15 @@ namespace StatsHub.Api.Data
                 .HasForeignKey(pt => pt.TeamId)
                 .OnDelete(DeleteBehavior.Cascade);
 
-            // Game configuration
+            // Game configuration. HomeTeamId/AwayTeamId deliberately have no
+            // formal FK here - IbbaGameCode says which table they actually mean
+            // (IbbaTeams for a synced game, Teams for a manual one), and EF
+            // can't express a single column that conditionally references two
+            // different tables. Every read resolves them explicitly instead
+            // (GameService et al.), so deleting a Team or IbbaTeam row never
+            // cascades into Games at the DB level - GameService.
+            // DeleteGamesExclusiveToTeamAsync is what decides, per game,
+            // whether it survives a Team's deletion.
             modelBuilder.Entity<Game>()
                 .HasKey(g => g.Id);
             modelBuilder.Entity<Game>()
@@ -152,7 +155,9 @@ namespace StatsHub.Api.Data
                 .HasForeignKey(gs => gs.GameId)
                 .OnDelete(DeleteBehavior.Cascade);
             modelBuilder.Entity<Game>()
-                .HasIndex(g => g.TeamId);
+                .HasIndex(g => g.HomeTeamId);
+            modelBuilder.Entity<Game>()
+                .HasIndex(g => g.AwayTeamId);
 
             // GameStats configuration
             modelBuilder.Entity<GameStats>()
@@ -211,14 +216,16 @@ namespace StatsHub.Api.Data
                 .IsUnique();
             modelBuilder.Entity<IbbaTeam>()
                 .HasIndex(t => t.LeagueUrl);
-            modelBuilder.Entity<IbbaTeam>()
-                .HasIndex(t => t.LinkedTeamId)
-                .IsUnique()
-                .HasFilter("\"LinkedTeamId\" IS NOT NULL");
-            modelBuilder.Entity<IbbaTeam>()
-                .HasOne(t => t.LinkedTeam)
+
+            // The link lives on Team, not IbbaTeam - many app Teams (one per
+            // player/parent) can point at the same shared IbbaTeam row, so no
+            // uniqueness here.
+            modelBuilder.Entity<Team>()
+                .HasIndex(t => t.IbbaTeamId);
+            modelBuilder.Entity<Team>()
+                .HasOne(t => t.IbbaTeam)
                 .WithMany()
-                .HasForeignKey(t => t.LinkedTeamId)
+                .HasForeignKey(t => t.IbbaTeamId)
                 .OnDelete(DeleteBehavior.SetNull);
 
             // PlayerIbbaTeam configuration (which teams a player currently plays for)
@@ -238,14 +245,6 @@ namespace StatsHub.Api.Data
                 .HasForeignKey(pit => pit.IbbaTeamId)
                 .OnDelete(DeleteBehavior.Cascade);
 
-            // Game -> IbbaTeam (opponent): resolved by id at sync time, never by
-            // name. SetNull so removing/relinking a team never deletes the real,
-            // stats-bearing game it appeared in - only the opponent's crest link.
-            modelBuilder.Entity<Game>()
-                .HasOne(g => g.OpponentIbbaTeam)
-                .WithMany()
-                .HasForeignKey(g => g.OpponentIbbaTeamId)
-                .OnDelete(DeleteBehavior.SetNull);
             // Unique per real fixture - guards against two concurrent syncs (e.g. two
             // different parents each following a teammate on the same IBBA team)
             // racing past the "does this game already exist" check and both

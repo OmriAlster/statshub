@@ -59,6 +59,17 @@ namespace StatsHub.Api.Services
                     && g.GameDate <= now + ReminderWindow)
                 .ToListAsync(stoppingToken);
 
+            // HomeTeamId/AwayTeamId mean IbbaTeam ids for a synced game - batch
+            // the name lookups for all of them up front rather than one query
+            // per game (there's no formal nav to Include, see Game.cs).
+            var ibbaTeamIds = games.Where(g => g.IbbaGameCode != null)
+                .SelectMany(g => new[] { g.HomeTeamId, g.AwayTeamId })
+                .Where(id => id.HasValue).Select(id => id!.Value)
+                .Distinct().ToList();
+            var ibbaTeamNames = ibbaTeamIds.Count > 0
+                ? await context.IbbaTeams.Where(t => ibbaTeamIds.Contains(t.Id)).ToDictionaryAsync(t => t.Id, t => t.Name, stoppingToken)
+                : new Dictionary<int, string>();
+
             foreach (var game in games)
             {
                 // Mark sent up front - if the push itself fails partway through
@@ -66,12 +77,45 @@ namespace StatsHub.Api.Services
                 game.ReminderSentAt = now;
                 await context.SaveChangesAsync(stoppingToken);
 
-                await push.NotifyTeamAsync(
-                    game.TeamId,
-                    "⏰ Game starting soon",
-                    $"vs {game.OpponentName} at {{time}}",
-                    $"/games/{game.Id}",
-                    gameDate: game.GameDate);
+                if (game.IbbaGameCode != null)
+                {
+                    // Symmetric - both real teams playing are "starting soon", so
+                    // each side's linked app Teams get notified with the other
+                    // side's name as the opponent.
+                    if (game.HomeTeamId.HasValue)
+                    {
+                        var awayName = game.AwayTeamId.HasValue && ibbaTeamNames.TryGetValue(game.AwayTeamId.Value, out var an) ? an : string.Empty;
+                        await push.NotifyIbbaTeamAsync(
+                            game.HomeTeamId.Value,
+                            "⏰ Game starting soon",
+                            $"vs {awayName} at {{time}}",
+                            $"/games/{game.Id}",
+                            gameDate: game.GameDate);
+                    }
+                    if (game.AwayTeamId.HasValue)
+                    {
+                        var homeName = game.HomeTeamId.HasValue && ibbaTeamNames.TryGetValue(game.HomeTeamId.Value, out var hn) ? hn : string.Empty;
+                        await push.NotifyIbbaTeamAsync(
+                            game.AwayTeamId.Value,
+                            "⏰ Game starting soon",
+                            $"vs {homeName} at {{time}}",
+                            $"/games/{game.Id}",
+                            gameDate: game.GameDate);
+                    }
+                }
+                else
+                {
+                    var teamId = game.HomeTeamId ?? game.AwayTeamId;
+                    if (teamId.HasValue)
+                    {
+                        await push.NotifyTeamAsync(
+                            teamId.Value,
+                            "⏰ Game starting soon",
+                            $"vs {game.OpponentName} at {{time}}",
+                            $"/games/{game.Id}",
+                            gameDate: game.GameDate);
+                    }
+                }
             }
         }
     }

@@ -9,7 +9,7 @@ import GameStatusBadge from '../components/GameStatusBadge'
 import SegmentedControl from '../components/SegmentedControl'
 import TeamCrest from '../components/TeamCrest'
 import { useElementVisible } from '../hooks/useElementVisible'
-import { formatGameDateTime } from '../utils/formatGameDate'
+import { formatGameDateOnly } from '../utils/formatGameDate'
 
 export default function SharedPlayerView() {
   const { token, gameId } = useParams<{ token: string; gameId?: string }>()
@@ -229,8 +229,8 @@ function SharedStatsPanel({ games }: { games: GameDto[] }) {
           <table className="games-table">
             <thead>
               <tr>
-                <th>Date</th>
                 <th>Opponent</th>
+                <th>Date</th>
                 <th>Type</th>
                 <th className="num">Score</th>
                 <th className="num">Pts</th>
@@ -305,7 +305,7 @@ function SharedStatsPanel({ games }: { games: GameDto[] }) {
 // completed ones) minus the edit/delete actions column - view only.
 function SharedSchedulePanel({ games, token }: { games: GameDto[]; token: string }) {
   const sorted = useMemo(
-    () => [...games].sort((a, b) => new Date(a.gameDate).getTime() - new Date(b.gameDate).getTime()),
+    () => [...games].sort((a, b) => new Date(b.gameDate).getTime() - new Date(a.gameDate).getTime()),
     [games]
   )
 
@@ -316,8 +316,8 @@ function SharedSchedulePanel({ games, token }: { games: GameDto[]; token: string
       <table className="games-table">
         <thead>
           <tr>
-            <th>Date</th>
             <th>Opponent</th>
+            <th>Date</th>
             <th>Type</th>
             <th className="num">Result</th>
           </tr>
@@ -347,24 +347,21 @@ function GameRow({ game, token, children }: { game: GameDto; token?: string; chi
   return (
     <tr className={game.status !== 'Completed' ? 'upcoming-row' : ''}>
       <td>
-        <Link to={`/share/${shareToken}/games/${game.id}`}>
-          {formatGameDateTime(game.gameDate)}
+        <Link to={`/share/${shareToken}/games/${game.id}`} className="opponent-cell">
+          {game.opponentLogoUrl && <img className="opponent-logo-sm" src={game.opponentLogoUrl} alt="" />}
+          <span>{game.opponentName}</span>
         </Link>
       </td>
+      <td>{formatGameDateOnly(game.gameDate)}</td>
       <td>
-        {game.isHomeGame != null && <span title={game.isHomeGame ? 'Home' : 'Away'}>{game.isHomeGame ? '🏠' : '✈️'} </span>}
-        {game.opponentLogoUrl && <img className="opponent-logo-sm" src={game.opponentLogoUrl} alt="" />}
-        <Link to={`/share/${shareToken}/games/${game.id}`}>{game.opponentName}</Link>
-        {game.isFromIbba && (
-          <img
-            src="/icons/ibba-logo.png"
-            alt=""
-            title="Synced from IBBA"
-            style={{ width: 12, height: 12, marginLeft: '0.35rem', verticalAlign: '-1px', borderRadius: 2 }}
-          />
-        )}
+        <span className="type-cell">
+          {game.isHomeGame != null && <span className="type-cell-icon" title={game.isHomeGame ? 'Home' : 'Away'}>{game.isHomeGame ? '🏠' : '✈️'}</span>}
+          <span className={`game-type-badge ${game.gameType.toLowerCase()}`}>
+            {game.gameType}
+            {game.isFromIbba && <img className="type-chip-ibba" src="/icons/ibba-logo.png" alt="" title="Synced from IBBA" />}
+          </span>
+        </span>
       </td>
-      <td><span className={`game-type-badge ${game.gameType.toLowerCase()}`}>{game.gameType}</span></td>
       {children}
     </tr>
   )

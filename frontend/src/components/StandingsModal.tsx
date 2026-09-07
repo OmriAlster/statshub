@@ -64,7 +64,7 @@ export default function StandingsModal({ leagueUrl, leagueName, highlightTeamUrl
                   return (
                   <tr key={r.teamName} className={isOwn ? 'own' : ''}>
                     <td className="num">{r.position}</td>
-                    <td className="opp" dir="rtl">
+                    <td className="opp" dir="ltr">
                       <span className="standings-team-cell">
                         {r.logoUrl ? <img className="standings-team-logo" src={r.logoUrl} alt="" /> : <span className="standings-team-logo-fallback" />}
                         {r.teamName}

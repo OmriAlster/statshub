@@ -11,13 +11,11 @@ namespace StatsHub.Api.Controllers
     public class IbbaController : ControllerBase
     {
         private readonly IIbbaService _ibbaService;
-        private readonly IPlayerService _playerService;
         private readonly ICurrentUserService _currentUser;
 
-        public IbbaController(IIbbaService ibbaService, IPlayerService playerService, ICurrentUserService currentUser)
+        public IbbaController(IIbbaService ibbaService, ICurrentUserService currentUser)
         {
             _ibbaService = ibbaService;
-            _playerService = playerService;
             _currentUser = currentUser;
         }
 
@@ -45,17 +43,22 @@ namespace StatsHub.Api.Controllers
         // Creates a brand-new player straight from an IBBA profile URL, instead of
         // requiring a manually-created player that gets connected to IBBA afterward.
         // Name comes from the scrape; jersey/position/DOB still need a human since
-        // IBBA's own player page doesn't carry them.
+        // IBBA's own player page doesn't carry them. Fetches the IBBA player page
+        // exactly once - this used to call PreviewAsync (fetch #1) then
+        // LinkPlayerAsync (a full sync - fetch #2 of the same page, plus every
+        // team page) then SyncPlayerAsync right after (a *second* full sync -
+        // fetch #3, and every team page again), which was most of the real
+        // slowness behind "create player from IBBA".
         [HttpPost("ibba/players")]
         public async Task<ActionResult<CreatePlayerFromIbbaResultDto>> CreatePlayerFromIbba([FromBody] CreatePlayerFromIbbaDto dto)
         {
             if (string.IsNullOrWhiteSpace(dto.IbbaPlayerUrl))
                 return BadRequest(new { message = "ibbaPlayerUrl is required" });
 
-            IbbaPreviewDto preview;
             try
             {
-                preview = await _ibbaService.PreviewAsync(dto.IbbaPlayerUrl);
+                var result = await _ibbaService.CreatePlayerFromIbbaAsync(dto.IbbaPlayerUrl, _currentUser.UserId);
+                return Ok(result);
             }
             catch (InvalidOperationException ex)
             {
@@ -65,27 +68,6 @@ namespace StatsHub.Api.Controllers
             {
                 return BadRequest(new { message = "Could not read that IBBA page. Double-check the URL is a player profile page." });
             }
-
-            if (preview.DateOfBirth == null)
-                return BadRequest(new { message = "This IBBA profile doesn't list a birth date - add this player manually instead." });
-
-            var nameParts = preview.PlayerName.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
-            var firstName = nameParts.Length > 1 ? string.Join(' ', nameParts[..^1]) : preview.PlayerName;
-            var lastName = nameParts.Length > 1 ? nameParts[^1] : "";
-
-            var player = await _playerService.CreatePlayerAsync(_currentUser.UserId, new CreatePlayerDto
-            {
-                FirstName = firstName,
-                LastName = lastName,
-                Position = "",
-                DateOfBirth = preview.DateOfBirth.Value,
-            });
-
-            var ibba = await _ibbaService.LinkPlayerAsync(player.Id, dto.IbbaPlayerUrl, _currentUser.UserId);
-            if (ibba != null)
-                ibba = await _ibbaService.SyncPlayerAsync(player.Id, _currentUser.UserId);
-
-            return Ok(new CreatePlayerFromIbbaResultDto { Player = player, Ibba = ibba });
         }
 
         [HttpPost("players/{playerId}/ibba/link")]

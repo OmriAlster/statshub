@@ -87,8 +87,15 @@ namespace StatsHub.Api.Services
 
         public async Task<GameStatsDto?> UpdateGameStatsAsync(int id, UpdateGameStatsDto dto, int requestingUserId)
         {
-            var gameStats = await _context.GameStats.FindAsync(id);
+            var gameStats = await _context.GameStats.Include(gs => gs.Game).FirstOrDefaultAsync(gs => gs.Id == id);
             if (gameStats == null || !await CanWritePlayerAsync(gameStats.PlayerId, requestingUserId)) return null;
+
+            // Same live-recording lock as GameService.UpdateGameAsync - once
+            // someone has claimed a live game, only they can keep writing its
+            // box score; everyone else with access just watches.
+            var game = gameStats.Game;
+            if (game.Status == "In Progress" && game.LiveTrackedByUserId.HasValue && game.LiveTrackedByUserId.Value != requestingUserId)
+                return null;
 
             if (dto.FieldGoalsMade.HasValue) gameStats.FieldGoalsMade = dto.FieldGoalsMade.Value;
             if (dto.FieldGoalsAttempted.HasValue) gameStats.FieldGoalsAttempted = dto.FieldGoalsAttempted.Value;
@@ -145,8 +152,14 @@ namespace StatsHub.Api.Services
                 .Select(pt => (int?)pt.JerseyNumber)
                 .FirstOrDefaultAsync() ?? 0;
 
+            // HomeTeamId/AwayTeamId mean app Team ids for a manual game
+            // (IbbaGameCode null) but IbbaTeam ids for a synced one - a
+            // teammate's stats for a shared game need the IbbaTeamId match,
+            // not literal team ids, on either side of the fixture.
             var gameStats = await _context.GameStats
-                .Where(gs => gs.PlayerId == playerId && gs.Game.TeamId == teamId)
+                .Where(gs => gs.PlayerId == playerId && (
+                    (gs.Game.IbbaGameCode == null && (gs.Game.HomeTeamId == teamId || gs.Game.AwayTeamId == teamId)) ||
+                    (gs.Game.IbbaGameCode != null && team.IbbaTeamId != null && (gs.Game.HomeTeamId == team.IbbaTeamId || gs.Game.AwayTeamId == team.IbbaTeamId))))
                 .ToListAsync();
 
             return BuildTeamStatsDto(player, team, jerseyNumber, gameStats);
@@ -167,7 +180,9 @@ namespace StatsHub.Api.Services
             foreach (var membership in teamMemberships)
             {
                 var gameStats = await _context.GameStats
-                    .Where(gs => gs.PlayerId == playerId && gs.Game.TeamId == membership.TeamId)
+                    .Where(gs => gs.PlayerId == playerId && (
+                        (gs.Game.IbbaGameCode == null && (gs.Game.HomeTeamId == membership.TeamId || gs.Game.AwayTeamId == membership.TeamId)) ||
+                        (gs.Game.IbbaGameCode != null && membership.Team.IbbaTeamId != null && (gs.Game.HomeTeamId == membership.Team.IbbaTeamId || gs.Game.AwayTeamId == membership.Team.IbbaTeamId))))
                     .ToListAsync();
 
                 result.Add(BuildTeamStatsDto(player, membership.Team, membership.JerseyNumber, gameStats));

@@ -4,7 +4,7 @@ import type { GameDto, GameType, IbbaLinkStatusDto, PlayerDto, ShotDto } from '.
 import { useAuth } from '../auth/AuthContext'
 import CourtShotChart, { type ChartShot } from '../components/CourtShotChart'
 import TeamCrest from '../components/TeamCrest'
-import { formatGameDateTime } from '../utils/formatGameDate'
+import { formatGameTime } from '../utils/formatGameDate'
 import { computeStatsFromEvents, EVENT_ICONS, EVENT_LABELS, seedEventsFromStats, type EventType, type GameEvent } from './gameEvents'
 import { useLiveGameOverlay } from './LiveGameContext'
 
@@ -36,6 +36,7 @@ interface ActiveGame {
   teamName: string
   gameType: GameType
   opponent: string
+  opponentLogoUrl?: string | null
   gameDate: string
   currentQuarter: number
   events: GameEvent[]
@@ -43,6 +44,11 @@ interface ActiveGame {
   actionLog: ActionLogEntry[]
   minutesPlayed: number
   shareUrl?: string
+  // False when someone else already claimed recording rights on this game -
+  // this account just watches (read-only), like the public share-player
+  // view, until the tracker finishes it. Defaults to true for entries
+  // restored from an older localStorage shape that predates this field.
+  canRecord: boolean
 }
 
 const STORAGE_KEY_PREFIX = 'statshub_active_live_game'
@@ -85,12 +91,12 @@ export default function LiveGameWidget() {
     if (!storageKey) return
 
     const saved = localStorage.getItem(storageKey)
-    let restoredLocally = false
+    let restoredGameId: number | null = null
     if (saved) {
       try {
         const parsed = JSON.parse(saved) as ActiveGame
-        setActive({ ...parsed, minutesPlayed: parsed.minutesPlayed ?? 0 })
-        restoredLocally = true
+        setActive({ ...parsed, minutesPlayed: parsed.minutesPlayed ?? 0, canRecord: parsed.canRecord ?? true })
+        restoredGameId = parsed.gameId
         api
           .get<ShotDto[]>(`/shots/gamestats/${parsed.gameStatsId}`)
           .then(({ data }) => setActive((prev) => (prev ? { ...prev, shots: data, actionLog: [] } : prev)))
@@ -101,7 +107,7 @@ export default function LiveGameWidget() {
     } else {
       setActive(null)
     }
-    loadSetupData(restoredLocally)
+    loadSetupData(restoredGameId)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storageKey])
 
@@ -116,13 +122,18 @@ export default function LiveGameWidget() {
         setError('Could not find that player.')
         return
       }
-      if (await playerHasActiveGame(playerId)) {
+      // canRecordLive is false once someone else has already claimed this
+      // game - unlike the "already in progress" check above, this doesn't
+      // block going in, it just determines whether we open the interactive
+      // editor or a read-only watching view.
+      const canRecord = game.canRecordLive
+      if (canRecord && await playerHasActiveGame(playerId, gameId)) {
         setError('This player already has a live game in progress. End it before starting a new one.')
         return
       }
 
       let stats: GameDto['playerStats'][number] | undefined = game.playerStats.find((s) => s.playerId === playerId)
-      if (!stats) {
+      if (!stats && canRecord) {
         const { data } = await api.post<GameDto['playerStats'][number]>('/gamestats', {
           gameId,
           playerId,
@@ -144,28 +155,33 @@ export default function LiveGameWidget() {
         stats = data
       }
 
-      if (game.status !== 'In Progress') {
+      if (canRecord && game.status !== 'In Progress') {
         await api.put(`/games/${gameId}`, { status: 'In Progress' })
       }
 
-      const shots = await api.get<ShotDto[]>(`/shots/gamestats/${stats.id}`).then((res) => res.data).catch(() => [])
+      // A watcher whose player has no stats row yet (rare - e.g. a co-parent
+      // looking at a teammate nobody's tracked stats for) just sees zeros;
+      // there's nothing to write, so no gamestats row is created for them.
+      const shots = stats ? await api.get<ShotDto[]>(`/shots/gamestats/${stats.id}`).then((res) => res.data).catch(() => []) : []
       const team = player.teams.find((t) => t.id === game.teamId)
 
       setActive({
         gameId,
-        gameStatsId: stats.id,
+        gameStatsId: stats?.id ?? 0,
         playerId: player.id,
         playerName: `${player.firstName} ${player.lastName}`,
         jerseyNumber: team?.jerseyNumber ?? 0,
         teamName: game.teamName,
         gameType: game.gameType,
         opponent: game.opponentName,
+        opponentLogoUrl: game.opponentLogoUrl,
         gameDate: game.gameDate.split('T')[0],
         currentQuarter: 1,
-        events: seedEventsFromStats(stats),
+        events: stats ? seedEventsFromStats(stats) : [],
         shots,
         actionLog: [],
-        minutesPlayed: stats.minutesPlayed,
+        minutesPlayed: stats?.minutesPlayed ?? 0,
+        canRecord,
       })
     } catch {
       setError('Could not go live on that game. Please try again.')
@@ -184,7 +200,7 @@ export default function LiveGameWidget() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active, storageKey])
 
-  const loadSetupData = async (hasLocalActive = false) => {
+  const loadSetupData = async (restoredGameId: number | null = null) => {
     try {
       setLoading(true)
       const { data } = await api.get<PlayerDto[]>('/players')
@@ -239,17 +255,27 @@ export default function LiveGameWidget() {
         }))
       )
 
-      // Nothing was restored from this browser's own local storage (a
-      // different device/browser, cleared storage, or a corrupted entry) -
-      // fall back to the server's own record of truth. If any player already
-      // has a game "In Progress", resume tracking it the same way a
-      // scheduled game gets promoted to live, so a lost/cleared local cache
-      // never actually strands an in-progress game.
-      if (!hasLocalActive) {
-        const inProgress = gamesPerPlayer.flatMap(({ player, games }) =>
-          games.filter((g) => g.status === 'In Progress').map((game) => ({ game, player }))
-        )[0]
-        if (inProgress) promoteToLive(inProgress.game.id, inProgress.player.id)
+      // The server is always the real source of truth for "is a game live
+      // right now" - local storage is just a cache of it. Covers a refresh
+      // where the local cache failed to restore for any reason, a brand-new
+      // device/browser, and another parent with access to the same player
+      // picking up a game someone else just started (their own local
+      // storage never had it to begin with).
+      const inProgress = gamesPerPlayer.flatMap(({ player, games }) =>
+        games.filter((g) => g.status === 'In Progress').map((game) => ({ game, player }))
+      )[0]
+
+      if (inProgress) {
+        if (restoredGameId !== inProgress.game.id) {
+          // Nothing locally restored, or it pointed at a different game than
+          // whatever the server now considers live - promoteToLive re-derives
+          // everything from the server, so this is correct either way.
+          await promoteToLive(inProgress.game.id, inProgress.player.id)
+        }
+      } else if (restoredGameId) {
+        // Local storage pointed at a game the server no longer considers
+        // live (ended elsewhere, or just stale) - drop it.
+        setActive(null)
       }
 
       setError(null)
@@ -259,6 +285,76 @@ export default function LiveGameWidget() {
       setLoading(false)
     }
   }
+
+  // Picks up a game someone else just started - a co-parent with access to
+  // the same player, or this same account on another tab/device - without
+  // requiring a manual refresh. Only runs while nothing is already live here
+  // (once promoted, this account's own view of "is a game live" is current).
+  useEffect(() => {
+    if (!storageKey || active || players.length === 0) return
+
+    const checkForLiveGame = async () => {
+      try {
+        const results = await Promise.all(
+          players.map((player) =>
+            api
+              .get<GameDto[]>(`/games/player/${player.id}`)
+              .then((res) => ({ player, games: res.data }))
+              .catch(() => ({ player, games: [] as GameDto[] }))
+          )
+        )
+        const inProgress = results.flatMap(({ player, games }) =>
+          games.filter((g) => g.status === 'In Progress').map((game) => ({ game, player }))
+        )[0]
+        if (inProgress) await promoteToLive(inProgress.game.id, inProgress.player.id)
+      } catch {
+        // Quiet - this is a background poll, not a user-initiated action.
+      }
+    }
+
+    const interval = window.setInterval(checkForLiveGame, 30000)
+    return () => window.clearInterval(interval)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storageKey, active, players])
+
+  // A watcher has no writes of their own to trigger a refresh from, so
+  // periodically re-pull the game and shots the actual tracker is recording -
+  // this is what makes "the others parents will see the page" actually live
+  // instead of a one-time snapshot. Also detects when the tracker finishes
+  // the game, since a watcher never gets an "End Game" button of their own.
+  useEffect(() => {
+    if (!active || active.canRecord) return
+
+    const refresh = async () => {
+      try {
+        const { data: game } = await api.get<GameDto>(`/games/${active.gameId}`)
+        if (game.status !== 'In Progress') {
+          setActive(null)
+          return
+        }
+        const stats = game.playerStats.find((s) => s.playerId === active.playerId)
+        const shots = stats ? await api.get<ShotDto[]>(`/shots/gamestats/${stats.id}`).then((res) => res.data).catch(() => []) : []
+        setActive((prev) =>
+          prev
+            ? {
+                ...prev,
+                gameStatsId: stats?.id ?? prev.gameStatsId,
+                events: stats ? seedEventsFromStats(stats) : [],
+                shots,
+                minutesPlayed: stats?.minutesPlayed ?? prev.minutesPlayed,
+              }
+            : prev
+        )
+      } catch {
+        // Quiet - this is a background poll.
+      }
+    }
+
+    refresh()
+    const interval = window.setInterval(refresh, 8000)
+    return () => window.clearInterval(interval)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active?.gameId, active?.canRecord])
 
   const selectedPlayer = players.find((p) => p.id === selectedPlayerId)
   const playerTeams = selectedPlayer?.teams ?? []
@@ -274,9 +370,14 @@ export default function LiveGameWidget() {
   // pre-flight check (fast feedback, no half-created game); the backend
   // enforces the same rule in GameStatsService as a backstop for races
   // (a second tab/device, or a session that never got cleaned up).
-  const playerHasActiveGame = async (playerId: number) => {
+  // excludeGameId matters when *resuming* a game that's already in progress
+  // (a refresh, another device, or another parent picking it up) - without
+  // it, this always finds the very game being resumed and refuses to
+  // continue, which silently defeated every "get back to live" attempt that
+  // didn't go through the local-storage-restore path.
+  const playerHasActiveGame = async (playerId: number, excludeGameId?: number) => {
     const { data } = await api.get<GameDto[]>(`/games/player/${playerId}`)
-    return data.some((g) => g.status === 'In Progress')
+    return data.some((g) => g.status === 'In Progress' && g.id !== excludeGameId)
   }
 
   const startGame = async () => {
@@ -358,6 +459,7 @@ export default function LiveGameWidget() {
         shots: [],
         actionLog: [],
         minutesPlayed: 0,
+        canRecord: true,
       })
     } catch {
       setError('Could not start the game. Please try again.')
@@ -608,9 +710,11 @@ export default function LiveGameWidget() {
             {active ? (
               <>
                 <span className="live-title-tag">
-                  <span className="fab-live-dot" /> Live
+                  <span className="fab-live-dot" /> {active.canRecord ? 'Live' : 'Watching'}
                 </span>
-                {active.playerName} #{active.jerseyNumber} vs {active.opponent}
+                {active.playerName} #{active.jerseyNumber} vs{' '}
+                {active.opponentLogoUrl && <img className="opponent-logo-md" src={active.opponentLogoUrl} alt="" style={{ verticalAlign: '-6px', marginRight: '0.3rem' }} />}
+                {active.opponent}
               </>
             ) : (
               'Start Live Game'
@@ -649,11 +753,15 @@ export default function LiveGameWidget() {
                         </div>
                         <div className="tgc-body">
                           <div className="tgc-name-row">
-                            <span className="tgc-name">{player.firstName} {player.lastName}</span>
                             <TeamCrest logoUrl={teamLogoUrl} jerseyNumber={jerseyNumber} size="sm" />
+                            <span className="tgc-name">{player.firstName} {player.lastName}</span>
                           </div>
-                          <div className="tgc-matchup">vs {game.opponentName}</div>
-                          <div className="tgc-time">{formatGameDateTime(game.gameDate)}</div>
+                          <div className="tgc-matchup opponent-cell">
+                            <span>vs</span>
+                            {game.opponentLogoUrl && <img className="opponent-logo-sm" src={game.opponentLogoUrl} alt="" />}
+                            <span>{game.opponentName}</span>
+                          </div>
+                          <div className="tgc-time">{formatGameTime(game.gameDate)}</div>
                         </div>
                         <div className="tgc-go">
                           <svg className="icon"><use href="#i-live" /></svg>
@@ -759,6 +867,57 @@ export default function LiveGameWidget() {
                 </div>
               )}
             </div>
+          ) : !active.canRecord ? (
+            <div className="live-watching-view">
+              <p className="watching-banner">
+                <svg className="icon"><use href="#i-live" /></svg> Another parent is tracking this game live - you're watching.
+              </p>
+
+              <div className="live-recent-strip">
+                <div className="live-recent-totals">
+                  <div className="t tabular"><b>{totalPoints}</b><span>Pts</span></div>
+                  <div className="t tabular"><b>{totalRebounds}</b><span>Reb</span></div>
+                  <div className="t tabular"><b>{getTotal(['AST'])}</b><span>Ast</span></div>
+                  <div className="t tabular"><b>{getTotal(['STL'])}</b><span>Stl</span></div>
+                  <div className="t tabular"><b>{getTotal(['BLK'])}</b><span>Blk</span></div>
+                  <div className="t tabular"><b>{getTotal(['TO'])}</b><span>To</span></div>
+                  <div className="t tabular"><b>{getTotal(['FOUL'])}</b><span>Pf</span></div>
+                </div>
+              </div>
+
+              <div className="stats-section court-section">
+                <h3><svg className="icon"><use href="#i-target" /></svg> Shot Chart</h3>
+                <CourtShotChart shots={chartShots} />
+              </div>
+
+              <div className="event-log">
+                <h3><svg className="icon"><use href="#i-chart" /></svg> All Events ({active.events.length + active.shots.length})</h3>
+                <div className="events-list">
+                  {active.events.length === 0 && active.shots.length === 0 ? (
+                    <div className="no-events">No events yet</div>
+                  ) : (
+                    <>
+                      {active.shots.map((shot) => (
+                        <div key={`shot-${shot.id}`} className={`event-item event-${shot.made ? 'make' : 'miss'}`}>
+                          <div className="event-content">
+                            <svg className="icon"><use href={shot.made ? '#i-check' : '#i-x'} /></svg>
+                            <span className="event-display">Q{shot.quarter} · {shot.value}PT {shot.made ? 'Make' : 'Miss'}</span>
+                          </div>
+                        </div>
+                      ))}
+                      {active.events.map((event) => (
+                        <div key={event.id} className={`event-item event-${event.type.toLowerCase()}`}>
+                          <div className="event-content">
+                            <svg className="icon"><use href={`#${EVENT_ICONS[event.type]}`} /></svg>
+                            <span className="event-display">Q{event.quarter} · {event.display}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
           ) : (
             <>
               <div className="live-header-actions">
@@ -785,7 +944,10 @@ export default function LiveGameWidget() {
                       <input type="number" value={finalTeamScore} onChange={(e) => setFinalTeamScore(e.target.value)} />
                     </label>
                     <label>
-                      {active.opponent}
+                      <span className="opponent-cell">
+                        {active.opponentLogoUrl && <img className="opponent-logo-sm" src={active.opponentLogoUrl} alt="" />}
+                        <span>{active.opponent}</span>
+                      </span>
                       <input type="number" value={finalOpponentScore} onChange={(e) => setFinalOpponentScore(e.target.value)} />
                     </label>
                   </div>
@@ -978,7 +1140,7 @@ export default function LiveGameWidget() {
           )}
         </div>
 
-        {active && (
+        {active && active.canRecord && (
           <div className="live-bottom-bar">
             <div className="live-bottom-pts">
               <span className="v">{totalPoints}</span>

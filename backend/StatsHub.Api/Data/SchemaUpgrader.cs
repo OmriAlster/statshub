@@ -118,7 +118,37 @@ namespace StatsHub.Api.Data
                         CONSTRAINT ""FK_IbbaTeamLinks_Teams_LinkedTeamId"" FOREIGN KEY (""LinkedTeamId"") REFERENCES ""Teams"" (""Id"") ON DELETE SET NULL
                     );");
 
-                AddColumnIfMissing(connection, "Games", "OpponentIbbaTeamId", "INTEGER");
+                // Games.TeamId (a separate field for a manually-created game's
+                // owner) and IsHomeGame (a separate bool alongside it) are both
+                // gone - a manual game's own team id now lives in the very same
+                // HomeTeamId/AwayTeamId pair an IBBA game uses (IbbaGameCode says
+                // which table they mean: Teams for a manual game, IbbaTeams for a
+                // synced one), with home/away encoded purely by which of the two
+                // columns it's in. OpponentIbbaTeamId/OwnIbbaTeamId (an earlier,
+                // still perspective-relative attempt) are gone too. All were
+                // added via plain ALTER ADD COLUMN (no inline FK, unlike a CREATE
+                // TABLE-defined one), so - unlike IbbaTeamLinks above - SQLite
+                // has no objection to dropping them outright; wrapped
+                // defensively anyway. No data migration - this is dev-only data
+                // wiped between iterations of this exact redesign.
+                try
+                {
+                    ExecuteNonQuery(connection, "DROP INDEX IF EXISTS \"IX_Games_OwnIbbaTeamId\";");
+                    ExecuteNonQuery(connection, "DROP INDEX IF EXISTS \"IX_Games_TeamId\";");
+                    DropColumnIfExists(connection, "Games", "OpponentIbbaTeamId");
+                    DropColumnIfExists(connection, "Games", "OwnIbbaTeamId");
+                    DropColumnIfExists(connection, "Games", "TeamId");
+                    DropColumnIfExists(connection, "Games", "IsHomeGame");
+                }
+                catch (Exception ex)
+                {
+                    Console.Error.WriteLine($"Could not drop old Games team/home columns (leaving them in place): {ex.Message}");
+                }
+
+                AddColumnIfMissing(connection, "Games", "HomeTeamId", "INTEGER");
+                AddColumnIfMissing(connection, "Games", "AwayTeamId", "INTEGER");
+                ExecuteNonQuery(connection, "CREATE INDEX IF NOT EXISTS \"IX_Games_HomeTeamId\" ON \"Games\" (\"HomeTeamId\");");
+                ExecuteNonQuery(connection, "CREATE INDEX IF NOT EXISTS \"IX_Games_AwayTeamId\" ON \"Games\" (\"AwayTeamId\");");
 
                 CreateTableIfMissing(connection, @"
                     CREATE TABLE IF NOT EXISTS ""IbbaTeams"" (
@@ -145,7 +175,20 @@ namespace StatsHub.Api.Data
                     );");
                 ExecuteNonQuery(connection, "CREATE UNIQUE INDEX IF NOT EXISTS \"IX_IbbaTeams_TeamUrl\" ON \"IbbaTeams\" (\"TeamUrl\");");
                 ExecuteNonQuery(connection, "CREATE INDEX IF NOT EXISTS \"IX_IbbaTeams_LeagueUrl\" ON \"IbbaTeams\" (\"LeagueUrl\");");
-                ExecuteNonQuery(connection, "CREATE UNIQUE INDEX IF NOT EXISTS \"IX_IbbaTeams_LinkedTeamId\" ON \"IbbaTeams\" (\"LinkedTeamId\") WHERE \"LinkedTeamId\" IS NOT NULL;");
+
+                // The link moved from IbbaTeams.LinkedTeamId (one IbbaTeam -> at
+                // most one Team, which was the actual bug: two different players'
+                // app Teams couldn't both link to the same real IBBA team) to
+                // Teams.IbbaTeamId (many Teams -> one IbbaTeam). The old column
+                // stays - same unavoidable SQLite restriction as IbbaTeamLinks
+                // above, a column can't be dropped while it's part of an FK
+                // definition - but the unique index on it is gone since nothing
+                // reads/writes that column anymore, and dropping an index has no
+                // such restriction.
+                ExecuteNonQuery(connection, "DROP INDEX IF EXISTS \"IX_IbbaTeams_LinkedTeamId\";");
+
+                AddColumnIfMissing(connection, "Teams", "IbbaTeamId", "INTEGER");
+                ExecuteNonQuery(connection, "CREATE INDEX IF NOT EXISTS \"IX_Teams_IbbaTeamId\" ON \"Teams\" (\"IbbaTeamId\");");
 
                 CreateTableIfMissing(connection, @"
                     CREATE TABLE IF NOT EXISTS ""PlayerIbbaTeams"" (
@@ -161,6 +204,10 @@ namespace StatsHub.Api.Data
 
                 // Push notifications
                 AddColumnIfMissing(connection, "Games", "ReminderSentAt", "TEXT");
+
+                // Whoever starts a live game claims recording rights until it's
+                // no longer "In Progress" - see Game.cs.
+                AddColumnIfMissing(connection, "Games", "LiveTrackedByUserId", "INTEGER");
 
                 CreateTableIfMissing(connection, @"
                     CREATE TABLE IF NOT EXISTS ""PushSubscriptions"" (

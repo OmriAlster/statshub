@@ -21,6 +21,13 @@ namespace StatsHub.Api.Services
         // replaces it with that instant formatted in the device's own local
         // time before the notification is shown.
         Task NotifyTeamAsync(int teamId, string title, string body, string? url = null, int? excludeUserId = null, DateTime? gameDate = null);
+
+        // Same as NotifyTeamAsync, but for a shared real-world IBBA team - every
+        // app Team currently linked to it (one per family tracking a kid on that
+        // team) gets notified, not just whichever one happens to own the game
+        // row. Use this for anything about an IBBA-synced game; NotifyTeamAsync
+        // stays right for a manually-created game, which is always single-team.
+        Task NotifyIbbaTeamAsync(int ibbaTeamId, string title, string body, string? url = null, int? excludeUserId = null, DateTime? gameDate = null);
         Task NotifyUsersAsync(IEnumerable<int> userIds, string title, string body, string? url = null, DateTime? gameDate = null);
     }
 
@@ -57,6 +64,24 @@ namespace StatsHub.Api.Services
 
             var linkedPlayerUserIds = await _context.PlayerTeams
                 .Where(pt => pt.TeamId == teamId && pt.Player.LinkedUserId != null)
+                .Select(pt => pt.Player.LinkedUserId!.Value)
+                .ToListAsync();
+
+            var recipientUserIds = parentUserIds.Concat(linkedPlayerUserIds).Distinct();
+            if (excludeUserId.HasValue) recipientUserIds = recipientUserIds.Where(id => id != excludeUserId.Value);
+
+            await NotifyUsersAsync(recipientUserIds, title, body, url, gameDate);
+        }
+
+        public async Task NotifyIbbaTeamAsync(int ibbaTeamId, string title, string body, string? url = null, int? excludeUserId = null, DateTime? gameDate = null)
+        {
+            var parentUserIds = await _context.PlayerTeams
+                .Where(pt => pt.Team.IbbaTeamId == ibbaTeamId)
+                .SelectMany(pt => pt.Player.Parents.Select(pp => pp.UserId))
+                .ToListAsync();
+
+            var linkedPlayerUserIds = await _context.PlayerTeams
+                .Where(pt => pt.Team.IbbaTeamId == ibbaTeamId && pt.Player.LinkedUserId != null)
                 .Select(pt => pt.Player.LinkedUserId!.Value)
                 .ToListAsync();
 

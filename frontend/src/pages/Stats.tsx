@@ -21,7 +21,7 @@ import SegmentedControl from '../components/SegmentedControl'
 import StandingsModal from '../components/StandingsModal'
 import TeamCrest from '../components/TeamCrest'
 import { useElementVisible } from '../hooks/useElementVisible'
-import { formatGameDateTime } from '../utils/formatGameDate'
+import { formatGameDateOnly } from '../utils/formatGameDate'
 
 export default function Stats() {
   const { user } = useAuth()
@@ -337,8 +337,8 @@ function StatsPanel({ games, playerId }: { games: GameDto[]; playerId: number })
           <table className="games-table">
             <thead>
               <tr>
-                <th>Date</th>
                 <th>Opponent</th>
+                <th>Date</th>
                 <th>Type</th>
                 <th className="num">Score</th>
                 <th className="num">Pts</th>
@@ -359,25 +359,24 @@ function StatsPanel({ games, playerId }: { games: GameDto[]; playerId: number })
                 return (
                   <tr key={game.id}>
                     <td>
-                      <Link to={`/games/${game.id}?playerId=${playerId}`} className="games-table-date-link">
-                        {formatGameDateTime(game.gameDate)}
+                      <Link to={`/games/${game.id}?playerId=${playerId}`} className="opponent-cell">
+                        {game.opponentLogoUrl && <img className="opponent-logo-sm" src={game.opponentLogoUrl} alt="" />}
+                        <span>{game.opponentName}</span>
                       </Link>
                     </td>
                     <td>
-                      {game.isHomeGame != null && <span title={game.isHomeGame ? 'Home' : 'Away'}>{game.isHomeGame ? '🏠' : '✈️'} </span>}
-                      {game.opponentLogoUrl && <img className="opponent-logo-sm" src={game.opponentLogoUrl} alt="" />}
-                      <Link to={`/games/${game.id}?playerId=${playerId}`}>{game.opponentName}</Link>
-                      {game.isFromIbba && (
-                        <img
-                          src="/icons/ibba-logo.png"
-                          alt=""
-                          title="Synced from IBBA"
-                          style={{ width: 12, height: 12, marginLeft: '0.35rem', verticalAlign: '-1px', borderRadius: 2 }}
-                        />
-                      )}
+                      <Link to={`/games/${game.id}?playerId=${playerId}`} className="games-table-date-link">
+                        {formatGameDateOnly(game.gameDate)}
+                      </Link>
                     </td>
                     <td>
-                      <span className={`game-type-badge ${game.gameType.toLowerCase()}`}>{game.gameType}</span>
+                      <span className="type-cell">
+                        {game.isHomeGame != null && <span className="type-cell-icon" title={game.isHomeGame ? 'Home' : 'Away'}>{game.isHomeGame ? '🏠' : '✈️'}</span>}
+                        <span className={`game-type-badge ${game.gameType.toLowerCase()}`}>
+                          {game.gameType}
+                          {game.isFromIbba && <img className="type-chip-ibba" src="/icons/ibba-logo.png" alt="" title="Synced from IBBA" />}
+                        </span>
+                      </span>
                     </td>
                     <td className={`num ${won ? 'win' : 'loss'}`}>
                       {game.teamScore}&ndash;{game.opponentScore}
@@ -454,7 +453,7 @@ function SchedulePanel({
   const [showAddForm, setShowAddForm] = useState(false)
 
   const sorted = useMemo(
-    () => [...games].sort((a, b) => new Date(a.gameDate).getTime() - new Date(b.gameDate).getTime()),
+    () => [...games].sort((a, b) => new Date(b.gameDate).getTime() - new Date(a.gameDate).getTime()),
     [games]
   )
   const editingGame = sorted.find((g) => g.id === editingId) ?? null
@@ -496,8 +495,8 @@ function SchedulePanel({
       <table className="games-table">
         <thead>
           <tr>
-            <th>Date</th>
             <th>Opponent</th>
+            <th>Date</th>
             <th>Type</th>
             <th className="num">Result</th>
             <th></th>
@@ -509,22 +508,21 @@ function SchedulePanel({
             return (
               <Fragment key={game.id}>
                 <tr className={game.status !== 'Completed' ? 'upcoming-row' : ''}>
-                  <td>{formatGameDateTime(game.gameDate)}</td>
                   <td>
-                    {game.isHomeGame != null && <span title={game.isHomeGame ? 'Home' : 'Away'}>{game.isHomeGame ? '🏠' : '✈️'} </span>}
-                    {game.opponentLogoUrl && <img className="opponent-logo-sm" src={game.opponentLogoUrl} alt="" />}
-                    {game.opponentName}
-                    {game.isFromIbba && (
-                      <img
-                        src="/icons/ibba-logo.png"
-                        alt=""
-                        title="Synced from IBBA"
-                        style={{ width: 12, height: 12, marginLeft: '0.35rem', verticalAlign: '-1px', borderRadius: 2 }}
-                      />
-                    )}
+                    <span className="opponent-cell">
+                      {game.opponentLogoUrl && <img className="opponent-logo-sm" src={game.opponentLogoUrl} alt="" />}
+                      <span>{game.opponentName}</span>
+                    </span>
                   </td>
+                  <td>{formatGameDateOnly(game.gameDate)}</td>
                   <td>
-                    <span className={`game-type-badge ${game.gameType.toLowerCase()}`}>{game.gameType}</span>
+                    <span className="type-cell">
+                      {game.isHomeGame != null && <span className="type-cell-icon" title={game.isHomeGame ? 'Home' : 'Away'}>{game.isHomeGame ? '🏠' : '✈️'}</span>}
+                      <span className={`game-type-badge ${game.gameType.toLowerCase()}`}>
+                        {game.gameType}
+                        {game.isFromIbba && <img className="type-chip-ibba" src="/icons/ibba-logo.png" alt="" title="Synced from IBBA" />}
+                      </span>
+                    </span>
                   </td>
                   {game.status === 'Completed' ? (
                     <td className={`num ${won ? 'win' : 'loss'}`}>
@@ -799,7 +797,10 @@ function ScheduleEditPanel({
         <div className="modal-head">
           <div className="modal-head-title">
             <h3>Edit Game</h3>
-            <p>vs {game.opponentName}</p>
+            <p className="opponent-cell">
+              {game.opponentLogoUrl && <img className="opponent-logo-md" src={game.opponentLogoUrl} alt="" />}
+              <span>vs {game.opponentName}</span>
+            </p>
           </div>
           <button className="modal-close" onClick={onClose} aria-label="Close">
             <svg className="icon"><use href="#i-x" /></svg>
