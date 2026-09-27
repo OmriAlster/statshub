@@ -1,0 +1,38 @@
+name: Tests
+
+# Runs the backend and frontend test suites on every push and pull request,
+# so a change that breaks something shows up as a failed check before it's
+# merged (and deployed).
+on:
+  push:
+    branches: [master, develop]
+  pull_request:
+
+jobs:
+  backend:
+    name: Backend (API integration tests)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - name: Run tests
+        run: dotnet test backend/StatsHub.Api.Tests/StatsHub.Api.Tests.csproj --logger "console;verbosity=normal"
+
+  frontend:
+    name: Frontend (unit + component tests, build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
