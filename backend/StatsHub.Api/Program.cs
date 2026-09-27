@@ -207,8 +207,41 @@ app.MapGet("/api/diag/latency", async (AppDbContext db) =>
     }
     await conn.CloseAsync();
 
+    // Where is this server really running? TCP connect time ~= one network
+    // round trip, so the lowest of these points at the real location.
+    var referenceHosts = new Dictionary<string, string>
+    {
+        ["frankfurt"] = "dynamodb.eu-central-1.amazonaws.com",
+        ["ireland"] = "dynamodb.eu-west-1.amazonaws.com",
+        ["usEast"] = "dynamodb.us-east-1.amazonaws.com",
+        ["usWest"] = "dynamodb.us-west-2.amazonaws.com",
+        ["singapore"] = "dynamodb.ap-southeast-1.amazonaws.com",
+    };
+    var locationProbeMs = new Dictionary<string, double?>();
+    foreach (var (name, host) in referenceHosts)
+    {
+        try
+        {
+            var ip = (await System.Net.Dns.GetHostAddressesAsync(host)).First(a => a.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork);
+            using var tcp = new System.Net.Sockets.TcpClient();
+            var start = sw.Elapsed;
+            await tcp.ConnectAsync(ip, 443).WaitAsync(TimeSpan.FromSeconds(3));
+            locationProbeMs[name] = Math.Round((sw.Elapsed - start).TotalMilliseconds, 1);
+        }
+        catch
+        {
+            locationProbeMs[name] = null;
+        }
+    }
+
     return Results.Ok(new
     {
+        // Private network (*.railway.internal) vs the public TCP proxy -
+        // yes/no plus port only, nothing that identifies the database.
+        usesPrivateNetwork = csb.Host!.EndsWith(".railway.internal", StringComparison.OrdinalIgnoreCase),
+        dbPort = csb.Port,
+        sslMode = csb.SslMode.ToString(),
+        locationProbeMs,
         dnsMs = Math.Round(dnsMs, 1),
         addressFamilies = addresses.Select(a => a.AddressFamily.ToString()).Distinct(),
         freshConnectionOpenMs = Math.Round(freshOpenMs, 1),
