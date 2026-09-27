@@ -144,11 +144,79 @@ using (var scope = app.Services.CreateScope())
     }
 }
 
+// Reports how long the server itself spent on each request, as a standard
+// Server-Timing response header (visible in the browser's network tab) - so
+// slowness can be split into "the server was slow" vs "the network was slow"
+// without shell access to the host.
+app.Use(async (context, next) =>
+{
+    var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+    context.Response.OnStarting(() =>
+    {
+        context.Response.Headers["Server-Timing"] = $"app;dur={stopwatch.Elapsed.TotalMilliseconds:F1}";
+        return Task.CompletedTask;
+    });
+    await next();
+});
+
 // Configure the HTTP request pipeline
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
 }
+
+// TEMPORARY latency probe - measures the database round trip from inside
+// the server (DNS lookup, opening a brand-new connection, and a trivial
+// query on a pooled one), to find why every query takes ~150ms in
+// production vs ~1ms locally. Returns only timings - no hostnames,
+// credentials, or data. Remove once the cause is found.
+app.MapGet("/api/diag/latency", async (AppDbContext db) =>
+{
+    if (!usingPostgres) return Results.NotFound();
+
+    var csb = new Npgsql.NpgsqlConnectionStringBuilder(ToNpgsqlConnectionString(databaseUrl!));
+    var sw = System.Diagnostics.Stopwatch.StartNew();
+
+    var dnsStart = sw.Elapsed;
+    var addresses = await System.Net.Dns.GetHostAddressesAsync(csb.Host!);
+    var dnsMs = (sw.Elapsed - dnsStart).TotalMilliseconds;
+
+    // A brand-new physical connection (pooling off): TCP + TLS + auth.
+    csb.Pooling = false;
+    var openStart = sw.Elapsed;
+    await using (var fresh = new Npgsql.NpgsqlConnection(csb.ConnectionString))
+    {
+        await fresh.OpenAsync();
+    }
+    var freshOpenMs = (sw.Elapsed - openStart).TotalMilliseconds;
+
+    // The app's own pooled connection, same path every request uses.
+    var conn = db.Database.GetDbConnection();
+    var pooledOpenStart = sw.Elapsed;
+    await conn.OpenAsync();
+    var pooledOpenMs = (sw.Elapsed - pooledOpenStart).TotalMilliseconds;
+
+    var selectMs = new List<double>();
+    for (var i = 0; i < 5; i++)
+    {
+        var start = sw.Elapsed;
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT 1";
+        await cmd.ExecuteScalarAsync();
+        selectMs.Add(Math.Round((sw.Elapsed - start).TotalMilliseconds, 1));
+    }
+    await conn.CloseAsync();
+
+    return Results.Ok(new
+    {
+        dnsMs = Math.Round(dnsMs, 1),
+        addressFamilies = addresses.Select(a => a.AddressFamily.ToString()).Distinct(),
+        freshConnectionOpenMs = Math.Round(freshOpenMs, 1),
+        pooledConnectionOpenMs = Math.Round(pooledOpenMs, 1),
+        selectOneMs = selectMs,
+        totalMs = Math.Round(sw.Elapsed.TotalMilliseconds, 1),
+    });
+});
 
 app.UseCors("AllowFrontend");
 
