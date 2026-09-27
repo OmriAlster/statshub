@@ -155,12 +155,12 @@ function TeamMetaStrip({ team }: { team: SharedTeamDto }) {
     <div className="team-meta-strip">
       <TeamCrest logoUrl={team.logoUrl} jerseyNumber={team.jerseyNumber} showIbbaMark={team.isIbba} />
       <div>
-        <div className="pctr-team-name">{team.teamName}</div>
+        <div className="pctr-team-name team-name-clamp" title={team.teamName}>{team.teamName}</div>
         {team.leagueName && (
           <div className="league-chip" style={{ marginTop: '0.3rem' }}>
             <svg className="icon"><use href="#i-trophy" /></svg>
             <span dir="rtl">{team.leagueName}</span>
-            {team.standingPosition && ` · ${team.standingPosition} of ${team.standingTotalTeams}`}
+            {!!team.standingPosition && team.standingPosition > 0 && ` · ${team.standingPosition} of ${team.standingTotalTeams}`}
           </div>
         )}
       </div>
