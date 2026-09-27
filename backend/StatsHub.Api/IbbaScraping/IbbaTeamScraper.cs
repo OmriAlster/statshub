@@ -92,7 +92,20 @@ public class IbbaTeamScraper
             });
         }
 
-        return games;
+        // The export genuinely lists a large fraction of games twice (verified
+        // against a live export - identical in every column, not a scheduling
+        // quirk). Games.IbbaGameCode has a unique index, so handing every raw
+        // row to UpsertGamesAsync meant the very first duplicate in a batch
+        // threw a DbUpdateException that rolled back and silently dropped
+        // EVERY game in that sync, not just the duplicate - a team could sync
+        // "successfully" (no LastSyncError) while ending up with zero games
+        // saved. Dedup by Code here, once, at the source, so every caller of
+        // this method gets clean rows. Rows with no code at all (if any) are
+        // left alone since they can't collide with anything.
+        return games
+            .GroupBy(g => g.Code)
+            .SelectMany(g => string.IsNullOrEmpty(g.Key) ? g : g.Take(1))
+            .ToList();
     }
 
     // The site's own Excel export bakes literal HTML entities into cell text
