@@ -34,9 +34,11 @@ namespace StatsHub.Api.Controllers
         }
 
         [HttpGet("{id}")]
-        public async Task<ActionResult<GameDto>> GetGameById(int id)
+        // playerId (optional): the player whose page this game is shown on, so
+        // the game is framed as that player's team's game.
+        public async Task<ActionResult<GameDto>> GetGameById(int id, [FromQuery] int? playerId)
         {
-            var game = await _gameService.GetGameByIdAsync(id, _currentUser.UserId);
+            var game = await _gameService.GetGameByIdAsync(id, _currentUser.UserId, playerId);
             if (game == null)
                 return NotFound(new { message = "Game not found" });
             return Ok(game);
@@ -64,9 +66,9 @@ namespace StatsHub.Api.Controllers
         }
 
         [HttpPut("{id}")]
-        public async Task<ActionResult<GameDto>> UpdateGame(int id, [FromBody] UpdateGameDto dto)
+        public async Task<ActionResult<GameDto>> UpdateGame(int id, [FromBody] UpdateGameDto dto, [FromQuery] int? playerId)
         {
-            var game = await _gameService.UpdateGameAsync(id, dto, _currentUser.UserId);
+            var game = await _gameService.UpdateGameAsync(id, dto, _currentUser.UserId, playerId);
             if (game == null)
                 return NotFound(new { message = "Game not found" });
             return Ok(game);

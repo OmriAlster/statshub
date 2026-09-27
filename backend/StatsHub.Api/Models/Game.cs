@@ -4,7 +4,11 @@ namespace StatsHub.Api.Models
     {
         public int Id { get; set; }
 
-        public string GameType { get; set; } = "League"; // League or Cup
+        public string GameType { get; set; } = "League"; // League, Cup or Friendly
+
+        // Friendly games are tracked (schedule, live scoring, box score) but
+        // never count toward season stats - averages, totals, shot charts.
+        public const string FriendlyGameType = "Friendly";
         public DateTime GameDate { get; set; }
         public string Location { get; set; } = string.Empty;
         public string Status { get; set; } = "Upcoming"; // Upcoming, In Progress, Completed

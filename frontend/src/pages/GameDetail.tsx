@@ -37,7 +37,9 @@ export default function GameDetail() {
   const load = async (gameId: number, quiet = false) => {
     try {
       if (!quiet) setLoading(true)
-      const { data } = await api.get<GameDto>(`/games/${gameId}`)
+      // playerId (when opened from a player's page) frames the game as that
+      // player's team's game.
+      const { data } = await api.get<GameDto>(`/games/${gameId}`, { params: playerIdParam ? { playerId: playerIdParam } : undefined })
       setGame(data)
       setError(null)
     } catch {

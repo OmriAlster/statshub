@@ -4,6 +4,8 @@ import { Link, useParams } from 'react-router-dom'
 import { api } from '../api/client'
 import type { GameDto, ShotDto, SharedPlayerDto, SharedTeamDto } from '../api/types'
 import CourtShotChart from '../components/CourtShotChart'
+import { AveragesCard, ScheduleGameCards, StatsGameCards } from '../components/GameCards'
+import { countsTowardStats } from '../utils/countedGames'
 import GameDetailView from '../components/GameDetailView'
 import GameStatusBadge from '../components/GameStatusBadge'
 import SegmentedControl from '../components/SegmentedControl'
@@ -171,13 +173,16 @@ function TeamMetaStrip({ team }: { team: SharedTeamDto }) {
 // Mirrors the authenticated Stats tab: completed games only, with an
 // averages row - same table shape, just read-only.
 function SharedStatsPanel({ games }: { games: GameDto[] }) {
+  const { token } = useParams<{ token: string }>()
   const { completedGames, wins, losses, ppg, averages } = useMemo(() => {
     const completedGames = games
       .filter((g) => g.status === 'Completed')
-      .sort((a, b) => new Date(b.gameDate).getTime() - new Date(a.gameDate).getTime())
-    const wins = completedGames.filter((g) => (g.teamScore ?? 0) > (g.opponentScore ?? 0)).length
-    const losses = completedGames.filter((g) => (g.teamScore ?? 0) < (g.opponentScore ?? 0)).length
-    const gamesWithStats = completedGames.filter((g) => g.playerStats.length > 0)
+      .sort((a, b) => new Date(a.gameDate).getTime() - new Date(b.gameDate).getTime())
+    // Friendly games stay listed but never count toward record or averages.
+    const countedGames = completedGames.filter(countsTowardStats)
+    const wins = countedGames.filter((g) => (g.teamScore ?? 0) > (g.opponentScore ?? 0)).length
+    const losses = countedGames.filter((g) => (g.teamScore ?? 0) < (g.opponentScore ?? 0)).length
+    const gamesWithStats = countedGames.filter((g) => g.playerStats.length > 0)
     const avg = (pick: (g: GameDto) => number) =>
       gamesWithStats.length ? gamesWithStats.reduce((sum, g) => sum + pick(g), 0) / gamesWithStats.length : 0
     const ppg = avg((g) => g.playerStats[0]?.totalPoints ?? 0).toFixed(1)
@@ -225,7 +230,10 @@ function SharedStatsPanel({ games }: { games: GameDto[] }) {
       {completedGames.length === 0 ? (
         <p>No completed games yet.</p>
       ) : (
-        <div className="games-table-wrap" ref={wrapRef}>
+        <>
+        <StatsGameCards games={completedGames} linkFor={(game) => `/share/${token}/games/${game.id}`} />
+        {averages && <AveragesCard averages={averages} />}
+        <div className="games-table-wrap desktop-only" ref={wrapRef}>
           <table className="games-table">
             <thead>
               <tr>
@@ -283,6 +291,7 @@ function SharedStatsPanel({ games }: { games: GameDto[] }) {
             )}
           </table>
         </div>
+        </>
       )}
 
       {showFloatingAvg && averages && (
@@ -305,14 +314,16 @@ function SharedStatsPanel({ games }: { games: GameDto[] }) {
 // completed ones) minus the edit/delete actions column - view only.
 function SharedSchedulePanel({ games, token }: { games: GameDto[]; token: string }) {
   const sorted = useMemo(
-    () => [...games].sort((a, b) => new Date(b.gameDate).getTime() - new Date(a.gameDate).getTime()),
+    () => [...games].sort((a, b) => new Date(a.gameDate).getTime() - new Date(b.gameDate).getTime()),
     [games]
   )
 
   if (sorted.length === 0) return <p>No games scheduled yet.</p>
 
   return (
-    <div className="games-table-wrap">
+    <>
+    <ScheduleGameCards games={sorted} linkFor={(game) => `/share/${token}/games/${game.id}`} />
+    <div className="games-table-wrap desktop-only">
       <table className="games-table">
         <thead>
           <tr>
@@ -338,6 +349,7 @@ function SharedSchedulePanel({ games, token }: { games: GameDto[]; token: string
         </tbody>
       </table>
     </div>
+    </>
   )
 }
 
@@ -345,7 +357,10 @@ function GameRow({ game, token, children }: { game: GameDto; token?: string; chi
   const { token: tokenFromRoute } = useParams<{ token: string }>()
   const shareToken = token ?? tokenFromRoute
   return (
-    <tr className={game.status !== 'Completed' ? 'upcoming-row' : ''}>
+    <tr
+      className={[game.status !== 'Completed' ? 'upcoming-row' : '', game.status === 'Completed' && !countsTowardStats(game) ? 'not-counted-row' : ''].filter(Boolean).join(' ')}
+      title={game.status === 'Completed' && !countsTowardStats(game) ? 'Friendly - not counted in stats' : undefined}
+    >
       <td>
         <Link to={`/share/${shareToken}/games/${game.id}`} className="opponent-cell">
           {game.opponentLogoUrl && <img className="opponent-logo-sm" src={game.opponentLogoUrl} alt="" />}
@@ -360,6 +375,7 @@ function GameRow({ game, token, children }: { game: GameDto; token?: string; chi
             {game.gameType}
             {game.isFromIbba && <img className="type-chip-ibba" src="/icons/ibba-logo.png" alt="" title="Synced from IBBA" />}
           </span>
+          {game.status === 'Completed' && !countsTowardStats(game) && <span className="not-counted-note">not counted</span>}
         </span>
       </td>
       {children}
@@ -375,7 +391,8 @@ function SharedSeasonPanel({ team, games }: { team: SharedTeamDto; games: GameDt
   const [showTotals, setShowTotals] = useState(false)
 
   const shots: ShotDto[] = useMemo(
-    () => games.flatMap((g) => g.playerStats.flatMap((s) => s.shots ?? [])),
+    // Season shot chart - friendly games don't count toward it.
+    () => games.filter(countsTowardStats).flatMap((g) => g.playerStats.flatMap((s) => s.shots ?? [])),
     [games]
   )
 

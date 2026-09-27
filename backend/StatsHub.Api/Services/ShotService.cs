@@ -93,8 +93,9 @@ namespace StatsHub.Api.Services
             // (IbbaGameCode null) but IbbaTeam ids for a synced one - a
             // teammate's shots for a shared game need the IbbaTeamId match,
             // not literal team ids, on either side of the fixture.
+            // A season shot chart - friendly games don't count toward it.
             var shots = await _context.Shots
-                .Where(s => s.GameStats.PlayerId == playerId && (
+                .Where(s => s.GameStats.PlayerId == playerId && s.GameStats.Game.GameType != Game.FriendlyGameType && (
                     (s.GameStats.Game.IbbaGameCode == null && (s.GameStats.Game.HomeTeamId == teamId || s.GameStats.Game.AwayTeamId == teamId)) ||
                     (s.GameStats.Game.IbbaGameCode != null && team != null && team.IbbaTeamId != null && (s.GameStats.Game.HomeTeamId == team.IbbaTeamId || s.GameStats.Game.AwayTeamId == team.IbbaTeamId))))
                 .Include(s => s.GameStats)

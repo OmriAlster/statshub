@@ -8,10 +8,12 @@ namespace StatsHub.Api.Services
     public interface IGameService
     {
         Task<List<GameDto>> GetGamesByTeamAsync(int teamId, int requestingUserId);
-        Task<GameDto?> GetGameByIdAsync(int id, int requestingUserId);
+        // viewingPlayerId: the player whose page the game is shown on - see
+        // FindAccessibleOwnTeamAsync.
+        Task<GameDto?> GetGameByIdAsync(int id, int requestingUserId, int? viewingPlayerId = null);
         Task<List<GameDto>> GetGamesByPlayerAsync(int playerId, int requestingUserId);
         Task<GameDto> CreateGameAsync(CreateGameDto dto, int requestingUserId);
-        Task<GameDto?> UpdateGameAsync(int id, UpdateGameDto dto, int requestingUserId);
+        Task<GameDto?> UpdateGameAsync(int id, UpdateGameDto dto, int requestingUserId, int? viewingPlayerId = null);
         Task<bool> DeleteGameAsync(int id, int requestingUserId);
 
         // Called right before a Team is deleted (player removal, or a direct
@@ -47,7 +49,17 @@ namespace StatsHub.Api.Services
         // one set; for an IBBA game they're IbbaTeam ids on both sides, and any
         // app Team linked to either side (a different player's own team, on
         // either side of the fixture) can access it.
-        private async Task<Team?> FindAccessibleOwnTeamAsync(Game game, int requestingUserId)
+        // Several app Teams can link to the same IbbaTeam (two siblings each
+        // with their own team, a co-parent's team, an old duplicate) - and
+        // they can even be on opposite sides of the fixture. Picking "the
+        // first accessible one" returned an arbitrary team: a game reloaded
+        // on its own came back labelled with a different team than the one
+        // on screen, so a team-filtered Schedule dropped it (it looked
+        // deleted after closing Edit Game), and home/away and the score
+        // could be read from the wrong side. When the caller says which
+        // player's page it's on, that player's own team wins; otherwise the
+        // lowest id, so the pick is at least stable.
+        private async Task<Team?> FindAccessibleOwnTeamAsync(Game game, int requestingUserId, int? viewingPlayerId = null)
         {
             if (game.IbbaGameCode == null)
             {
@@ -65,11 +77,15 @@ namespace StatsHub.Api.Services
                 .Where(id => id.HasValue).Select(id => id!.Value).ToList();
             if (sideIds.Count == 0) return null;
 
-            return await _context.Teams.Include(t => t.IbbaTeam).FirstOrDefaultAsync(t =>
-                t.IbbaTeamId != null && sideIds.Contains(t.IbbaTeamId.Value) && (
-                    t.Season.UserId == requestingUserId ||
-                    t.PlayerTeams.Any(pt => pt.Player.Parents.Any(pp => pp.UserId == requestingUserId))
-                ));
+            return await _context.Teams.Include(t => t.IbbaTeam)
+                .Where(t =>
+                    t.IbbaTeamId != null && sideIds.Contains(t.IbbaTeamId.Value) && (
+                        t.Season.UserId == requestingUserId ||
+                        t.PlayerTeams.Any(pt => pt.Player.Parents.Any(pp => pp.UserId == requestingUserId))
+                    ))
+                .OrderByDescending(t => viewingPlayerId != null && t.PlayerTeams.Any(pt => pt.PlayerId == viewingPlayerId))
+                .ThenBy(t => t.Id)
+                .FirstOrDefaultAsync();
         }
 
         public async Task<List<GameDto>> GetGamesByTeamAsync(int teamId, int requestingUserId)
@@ -93,7 +109,7 @@ namespace StatsHub.Api.Services
             return await MapGamesToDtoAsync(games, _ => team, requestingUserId);
         }
 
-        public async Task<GameDto?> GetGameByIdAsync(int id, int requestingUserId)
+        public async Task<GameDto?> GetGameByIdAsync(int id, int requestingUserId, int? viewingPlayerId = null)
         {
             var game = await _context.Games
                 .Include(g => g.GameStats)
@@ -104,7 +120,7 @@ namespace StatsHub.Api.Services
 
             if (game == null) return null;
 
-            var ownTeam = await FindAccessibleOwnTeamAsync(game, requestingUserId);
+            var ownTeam = await FindAccessibleOwnTeamAsync(game, requestingUserId, viewingPlayerId);
             if (ownTeam == null)
             {
                 // Not a team owner - only reachable via a stats-only fallback
@@ -230,11 +246,11 @@ namespace StatsHub.Api.Services
             return await GetGameByIdAsync(game.Id, requestingUserId) ?? throw new InvalidOperationException("Game was not created");
         }
 
-        public async Task<GameDto?> UpdateGameAsync(int id, UpdateGameDto dto, int requestingUserId)
+        public async Task<GameDto?> UpdateGameAsync(int id, UpdateGameDto dto, int requestingUserId, int? viewingPlayerId = null)
         {
             var game = await _context.Games.FindAsync(id);
             if (game == null) return null;
-            var ownTeam = await FindAccessibleOwnTeamAsync(game, requestingUserId);
+            var ownTeam = await FindAccessibleOwnTeamAsync(game, requestingUserId, viewingPlayerId);
             if (ownTeam == null) return null;
 
             // Whoever is already live-tracking this game is the only one who can
@@ -302,7 +318,7 @@ namespace StatsHub.Api.Services
 
             await NotifyOnStatusChangeAsync(game, ownTeam, previousStatus, requestingUserId);
 
-            return await GetGameByIdAsync(id, requestingUserId);
+            return await GetGameByIdAsync(id, requestingUserId, viewingPlayerId);
         }
 
         // Live-tracking milestones - game start and final score - not every

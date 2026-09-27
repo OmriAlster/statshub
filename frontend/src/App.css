@@ -3786,6 +3786,21 @@ select:focus {
   opacity: 0.85;
 }
 
+/* Friendly games: listed with their box score, but dimmed - they don't
+   count toward the record or averages. */
+.games-table tr.not-counted-row td {
+  opacity: 0.55;
+}
+
+.not-counted-note {
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-faint);
+  white-space: nowrap;
+}
+
 .games-table tfoot td {
   background: var(--color-surface-alt);
   border-top: 2px solid var(--color-border-strong);
@@ -5436,4 +5451,279 @@ button.crest-cluster:hover .crest-main {
   color: var(--color-text-faint);
   text-transform: uppercase;
   letter-spacing: 0.04em;
+}
+
+/* ============================================================
+   Phones: game cards instead of wide tables, less nesting,
+   room for the floating live button
+   ============================================================ */
+.mobile-only { display: none; }
+
+.avatar-initials {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-surface-alt);
+  color: var(--color-text-muted);
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.game-cards {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.game-card {
+  display: block;
+  padding: 0.75rem;
+  background: var(--color-surface-alt);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text);
+  text-decoration: none;
+}
+
+a.game-card:active {
+  background: var(--color-surface);
+}
+
+.game-card.is-upcoming {
+  border-style: dashed;
+}
+
+.game-card.not-counted {
+  opacity: 0.6;
+}
+
+.game-card-head {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.7rem;
+}
+
+.game-card-date {
+  width: 3rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0.3rem 0;
+  border-radius: 10px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  line-height: 1;
+}
+
+.gcd-month {
+  font-size: 0.58rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--color-accent-bright);
+}
+
+.gcd-day {
+  margin: 0.12rem 0;
+  font-family: var(--font-display);
+  font-size: 1.2rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.gcd-sub {
+  font-size: 0.56rem;
+  font-weight: 600;
+  color: var(--color-text-faint);
+  white-space: nowrap;
+}
+
+.game-card-main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.game-card-opponent {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+  font-weight: 700;
+  font-size: 0.93rem;
+}
+
+.game-card-opponent span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.game-card-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.5rem;
+  font-size: 0.72rem;
+  color: var(--color-text-faint);
+}
+
+.game-card-meta .game-type-badge {
+  margin-left: 0;
+  font-size: 0.6rem;
+  padding: 0.1rem 0.45rem;
+}
+
+.game-card-side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.4rem;
+}
+
+.game-card-score {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 0.9rem;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.game-card-score.win { color: var(--color-success); }
+.game-card-score.loss { color: var(--color-danger); }
+
+.game-card-actions {
+  display: flex;
+  gap: 0.4rem;
+}
+
+/* Bigger tap targets than the desktop table's 28px buttons. */
+.game-card-actions .edit-btn {
+  width: 36px;
+  height: 36px;
+}
+
+.game-card-stats {
+  display: grid;
+  grid-template-columns: 1.3fr repeat(5, 1fr);
+  gap: 0.25rem;
+  margin-top: 0.65rem;
+  padding-top: 0.6rem;
+  border-top: 1px dashed var(--color-border);
+  text-align: center;
+}
+
+.game-card-stats div {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.1;
+}
+
+.game-card-stats b {
+  font-family: var(--font-display);
+  font-size: 0.95rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.game-card-stats .gcs-pts b {
+  font-size: 1.2rem;
+  color: var(--color-accent-bright);
+}
+
+.game-card-stats span {
+  font-size: 0.56rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--color-text-faint);
+}
+
+.game-card-shooting {
+  display: flex;
+  justify-content: space-around;
+  margin-top: 0.5rem;
+  font-size: 0.7rem;
+  color: var(--color-text-faint);
+}
+
+.game-card-shooting b {
+  color: var(--color-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.game-card-empty {
+  margin: 0.55rem 0 0;
+  font-size: 0.75rem;
+  color: var(--color-text-faint);
+}
+
+.game-averages-card {
+  margin-top: 0.75rem;
+  padding: 0.75rem;
+  background: var(--color-surface-alt);
+  border: 1px solid var(--color-accent);
+  border-radius: var(--radius-md);
+}
+
+.gac-title {
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.gac-title span {
+  color: var(--color-text-faint);
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.game-averages-card .game-card-stats {
+  border-top: none;
+  margin-top: 0.4rem;
+  padding-top: 0;
+}
+
+@media (max-width: 640px) {
+  .mobile-only { display: block; }
+  ul.mobile-only { display: flex; }
+  .desktop-only { display: none !important; }
+
+  /* Each page used to sit inside one big card that held more cards -
+     that frame costs ~30px of width a side on a phone. */
+  .page-container {
+    background: none;
+    border: none;
+    box-shadow: none;
+    border-radius: 0;
+    padding: 0.25rem 0 0;
+  }
+
+  .page-container h2 {
+    font-size: 1.2rem;
+    padding-bottom: 0.9rem;
+    flex-wrap: nowrap;
+  }
+
+  /* Room below the last content for the floating "Start Live Game"
+     button, which sits just above the bottom nav. */
+  .app-content {
+    padding-bottom: calc(8.5rem + env(safe-area-inset-bottom, 0px));
+  }
+
+  /* Team switcher etc. scroll sideways instead of cutting the last
+     option off - the faded edge hints there's more. */
+  .stats-team-switch .segmented {
+    mask-image: linear-gradient(to right, #000 calc(100% - 1.25rem), transparent);
+    scrollbar-width: none;
+  }
+
+  .stats-team-switch .segmented::-webkit-scrollbar {
+    display: none;
+  }
 }
