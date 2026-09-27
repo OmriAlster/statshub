@@ -33,6 +33,7 @@ namespace StatsHub.Api.Services
         {
             var gameStats = await _context.GameStats.FindAsync(dto.GameStatsId);
             if (gameStats == null || !await CanWritePlayerAsync(gameStats.PlayerId, requestingUserId)) return null;
+            if (await IsLockedByAnotherTrackerAsync(gameStats, requestingUserId)) return null;
 
             var shot = new Shot
             {
@@ -61,6 +62,7 @@ namespace StatsHub.Api.Services
 
             var gameStats = await _context.GameStats.FindAsync(shot.GameStatsId);
             if (gameStats == null || !await CanWritePlayerAsync(gameStats.PlayerId, requestingUserId)) return false;
+            if (await IsLockedByAnotherTrackerAsync(gameStats, requestingUserId)) return false;
 
             ApplyShotToGameStats(gameStats, shot.Value, shot.Made, -1);
             gameStats.UpdatedAt = DateTime.UtcNow;
@@ -103,6 +105,16 @@ namespace StatsHub.Api.Services
                 .ToListAsync();
 
             return shots.Select(s => MapToDto(s, s.GameStats)).ToList();
+        }
+
+        // Same live-recording lock as box-score and game edits: while a game
+        // is live, only the parent tracking it can add or remove shots (each
+        // shot changes the box score) - a watching co-parent can't.
+        private async Task<bool> IsLockedByAnotherTrackerAsync(GameStats gameStats, int requestingUserId)
+        {
+            var game = await _context.Games.FindAsync(gameStats.GameId);
+            return game != null && game.Status == "In Progress"
+                && game.LiveTrackedByUserId.HasValue && game.LiveTrackedByUserId.Value != requestingUserId;
         }
 
         // direction: +1 when adding a shot, -1 when removing one

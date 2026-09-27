@@ -57,7 +57,10 @@ namespace StatsHub.Api.Controllers
             }
             catch (UnauthorizedAccessException ex)
             {
-                return Forbid(ex.Message);
+                // Not Forbid(ex.Message) - that treats the message as the name of an
+                // authentication scheme, which doesn't exist, and turns a
+                // plain "not yours" into a 500.
+                return StatusCode(StatusCodes.Status403Forbidden, new { message = ex.Message });
             }
             catch (InvalidOperationException ex)
             {

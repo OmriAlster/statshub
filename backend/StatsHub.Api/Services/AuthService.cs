@@ -51,13 +51,14 @@ namespace StatsHub.Api.Services
                 throw new UnauthorizedAccessException("Invalid Google ID token");
             }
 
-            var user = await _context.Users.FirstOrDefaultAsync(u => u.GoogleId == payload.Subject || u.Email == payload.Email);
+            var googleEmail = NormalizeEmail(payload.Email);
+            var user = await _context.Users.FirstOrDefaultAsync(u => u.GoogleId == payload.Subject || u.Email.ToLower() == googleEmail);
 
             if (user == null)
             {
                 user = new User
                 {
-                    Email = payload.Email,
+                    Email = googleEmail,
                     FirstName = payload.GivenName ?? payload.Name ?? "Player",
                     LastName = payload.FamilyName ?? string.Empty,
                     GoogleId = payload.Subject,
@@ -83,12 +84,13 @@ namespace StatsHub.Api.Services
 
         public async Task<AuthResponseDto> DevLoginAsync(DevLoginDto dto)
         {
-            var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == dto.Email);
+            var email = NormalizeEmail(dto.Email);
+            var user = await _context.Users.FirstOrDefaultAsync(u => u.Email.ToLower() == email);
             if (user == null)
             {
                 user = new User
                 {
-                    Email = dto.Email,
+                    Email = email,
                     FirstName = string.IsNullOrWhiteSpace(dto.FirstName) ? "Dev" : dto.FirstName,
                     LastName = dto.LastName,
                     Role = "Parent",
@@ -108,31 +110,27 @@ namespace StatsHub.Api.Services
             if (string.IsNullOrWhiteSpace(dto.Password) || dto.Password.Length < 6)
                 throw new InvalidOperationException("Password must be at least 6 characters.");
 
-            var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == dto.Email);
-            if (user != null && !string.IsNullOrEmpty(user.PasswordHash))
+            var email = NormalizeEmail(dto.Email);
+
+            // Any existing account with this email - password or Google -
+            // means "sign in instead". This used to attach the new password
+            // to an existing Google account, which let anyone who knew a
+            // parent's email set a password on their account and sign in as
+            // them. Adding password login to a Google account needs to be
+            // done while signed in to it, not by anonymous registration.
+            if (await _context.Users.AnyAsync(u => u.Email.ToLower() == email))
                 throw new InvalidOperationException("An account with this email already exists. Please sign in instead.");
 
-            if (user == null)
+            var user = new User
             {
-                user = new User
-                {
-                    Email = dto.Email,
-                    FirstName = dto.FirstName,
-                    LastName = dto.LastName,
-                    Role = "Parent",
-                    PasswordHash = PasswordHasher.Hash(dto.Password),
-                    CreatedAt = DateTime.UtcNow
-                };
-                _context.Users.Add(user);
-            }
-            else
-            {
-                // an account created via Google previously - this just adds password login to it
-                user.PasswordHash = PasswordHasher.Hash(dto.Password);
-                if (!string.IsNullOrWhiteSpace(dto.FirstName)) user.FirstName = dto.FirstName;
-                if (!string.IsNullOrWhiteSpace(dto.LastName)) user.LastName = dto.LastName;
-                user.UpdatedAt = DateTime.UtcNow;
-            }
+                Email = email,
+                FirstName = dto.FirstName,
+                LastName = dto.LastName,
+                Role = "Parent",
+                PasswordHash = PasswordHasher.Hash(dto.Password),
+                CreatedAt = DateTime.UtcNow
+            };
+            _context.Users.Add(user);
 
             await _context.SaveChangesAsync();
 
@@ -143,7 +141,8 @@ namespace StatsHub.Api.Services
 
         public async Task<AuthResponseDto> LoginWithPasswordAsync(PasswordLoginDto dto)
         {
-            var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == dto.Email);
+            var email = NormalizeEmail(dto.Email);
+            var user = await _context.Users.FirstOrDefaultAsync(u => u.Email.ToLower() == email);
             if (user == null || !PasswordHasher.Verify(dto.Password, user.PasswordHash))
                 throw new UnauthorizedAccessException("Invalid email or password.");
 
@@ -158,6 +157,12 @@ namespace StatsHub.Api.Services
             if (user == null) return null;
             return await BuildUserDtoAsync(user);
         }
+        // Emails are matched case-insensitively and without stray spaces
+        // everywhere (Pat@x.com and pat@x.com are one person); new accounts
+        // are stored lower-cased. Lookups lower-case the stored value too, so
+        // accounts saved with capitals before this still match.
+        private static string NormalizeEmail(string email) => email.Trim().ToLowerInvariant();
+
 
         public string GenerateJwt(User user)
         {

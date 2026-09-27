@@ -33,6 +33,25 @@ namespace StatsHub.Api.Services
         private Task<bool> CanWritePlayerAsync(int playerId, int userId) =>
             _context.PlayerParents.AnyAsync(pp => pp.PlayerId == playerId && pp.UserId == userId);
 
+        // Same rule as GameService: a manual game via its own team, an IBBA
+        // game via any team linked to either side - owned by this user's
+        // season, or with one of their players on the roster.
+        private async Task<bool> CanAccessGameAsync(Game game, int userId)
+        {
+            if (game.IbbaGameCode == null)
+            {
+                var teamId = game.HomeTeamId ?? game.AwayTeamId;
+                return teamId.HasValue && await _context.Teams.AnyAsync(t =>
+                    t.Id == teamId.Value &&
+                    (t.Season.UserId == userId || t.PlayerTeams.Any(pt => pt.Player.Parents.Any(pp => pp.UserId == userId))));
+            }
+
+            var sideIds = new[] { game.HomeTeamId, game.AwayTeamId }.Where(id => id.HasValue).Select(id => id!.Value).ToList();
+            return sideIds.Count > 0 && await _context.Teams.AnyAsync(t =>
+                t.IbbaTeamId != null && sideIds.Contains(t.IbbaTeamId.Value) &&
+                (t.Season.UserId == userId || t.PlayerTeams.Any(pt => pt.Player.Parents.Any(pp => pp.UserId == userId))));
+        }
+
         public async Task<GameStatsDto?> GetGameStatsByIdAsync(int id, int requestingUserId)
         {
             var stats = await _context.GameStats
@@ -48,6 +67,21 @@ namespace StatsHub.Api.Services
         {
             if (!await CanWritePlayerAsync(dto.PlayerId, requestingUserId))
                 throw new UnauthorizedAccessException("Player not found or not owned by user");
+
+            // The game has to exist and be one this parent can see - without
+            // this, any parent could attach their own kid's box score to
+            // another family's game by guessing its id (and a missing game
+            // crashed on the foreign key instead of saying "not found"). Same
+            // 404 for both, so a guessed id doesn't reveal the game exists.
+            var game = await _context.Games.FindAsync(dto.GameId);
+            if (game == null || !await CanAccessGameAsync(game, requestingUserId))
+                throw new KeyNotFoundException("Game not found");
+
+            // One box score per player per game (the database enforces it too,
+            // but that surfaced as a crash) - a second one would double-count
+            // the game in season stats.
+            if (await _context.GameStats.AnyAsync(gs => gs.GameId == dto.GameId && gs.PlayerId == dto.PlayerId))
+                throw new InvalidOperationException("This player already has a box score for this game.");
 
             // A player can only be tracked in one live game at a time - without
             // this, a second "Start Live Game" (different tab, device, or a

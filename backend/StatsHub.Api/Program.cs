@@ -288,3 +288,8 @@ static string ToNpgsqlConnectionString(string databaseUrl)
     };
     return builder.ConnectionString;
 }
+
+// Lets the integration tests (StatsHub.Api.Tests) start this exact app with
+// WebApplicationFactory<Program> - top-level statements otherwise make the
+// generated Program class internal.
+public partial class Program { }
