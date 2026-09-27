@@ -14,6 +14,9 @@ namespace StatsHub.Api.Services
         Task<IbbaLinkStatusDto?> LinkPlayerAsync(int playerId, string ibbaPlayerUrl, int requestingUserId);
         Task<bool> UnlinkPlayerAsync(int playerId, int requestingUserId);
         Task<IbbaLinkStatusDto?> SyncPlayerAsync(int playerId, int requestingUserId);
+        // For the nightly background sync only - no signed-in user, so no
+        // access check. Never expose this through a controller.
+        Task SyncLinkForScheduledJobAsync(int linkId);
         Task<IbbaLinkStatusDto?> GetLinkStatusAsync(int playerId, int requestingUserId);
         Task<IbbaLinkStatusDto?> LinkTeamAsync(int ibbaTeamId, int teamId, int requestingUserId);
         Task<List<IbbaStandingDto>> GetStandingsAsync(string leagueUrl);
@@ -155,6 +158,16 @@ namespace StatsHub.Api.Services
 
             await RunSyncAsync(link);
             return await GetLinkStatusAsync(playerId, requestingUserId);
+        }
+
+        public async Task SyncLinkForScheduledJobAsync(int linkId)
+        {
+            var link = await _context.PlayerIbbaLinks.FirstOrDefaultAsync(l => l.Id == linkId);
+            if (link == null) return; // unlinked since the job listed it
+
+            // Never throws for a scrape/parse failure - it's recorded on the
+            // link as LastSyncError, same as a manual sync.
+            await RunSyncAsync(link);
         }
 
         public async Task<IbbaLinkStatusDto?> GetLinkStatusAsync(int playerId, int requestingUserId)
