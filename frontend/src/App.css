@@ -4671,7 +4671,7 @@ button.crest-cluster:hover .crest-main {
 }
 
 /* Dashboard: upcoming games list across all players */
-.upcoming-card {
+.dash-upcoming-card {
   margin-bottom: 1.25rem;
   padding: 1rem 1.1rem 0.75rem;
   background: var(--color-surface-alt);
@@ -4680,7 +4680,7 @@ button.crest-cluster:hover .crest-main {
   box-shadow: var(--shadow-sm);
 }
 
-.upcoming-title {
+.dash-upcoming-title {
   display: flex;
   align-items: center;
   gap: 0.45rem;
@@ -4688,7 +4688,7 @@ button.crest-cluster:hover .crest-main {
   font-size: 1rem;
 }
 
-.upcoming-count {
+.dash-upcoming-count {
   margin-left: auto;
   min-width: 1.5rem;
   padding: 0.1rem 0.5rem;
@@ -4702,13 +4702,13 @@ button.crest-cluster:hover .crest-main {
   font-variant-numeric: tabular-nums;
 }
 
-.upcoming-empty {
+.dash-upcoming-empty {
   margin: 0 0 0.25rem;
   color: var(--color-text-faint);
   font-size: 0.85rem;
 }
 
-.upcoming-list {
+.dash-upcoming-list {
   list-style: none;
   margin: 0;
   padding: 0;
@@ -4718,7 +4718,7 @@ button.crest-cluster:hover .crest-main {
 
 /* "See more" opens the full list inside the card - scrolled, not
    stretching the page - with a fade hinting there's more below. */
-.upcoming-list.expanded {
+.dash-upcoming-list.expanded {
   max-height: 26rem;
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -4728,24 +4728,24 @@ button.crest-cluster:hover .crest-main {
   mask-image: linear-gradient(to bottom, #000 calc(100% - 1.5rem), transparent);
 }
 
-.upcoming-list.expanded li:last-child {
+.dash-upcoming-list.expanded li:last-child {
   margin-bottom: 1.5rem;
 }
 
-.upcoming-list.expanded::-webkit-scrollbar {
+.dash-upcoming-list.expanded::-webkit-scrollbar {
   width: 6px;
 }
 
-.upcoming-list.expanded::-webkit-scrollbar-thumb {
+.dash-upcoming-list.expanded::-webkit-scrollbar-thumb {
   background: var(--color-border);
   border-radius: 3px;
 }
 
-.upcoming-list li + li {
+.dash-upcoming-list li + li {
   border-top: 1px solid var(--color-border);
 }
 
-.upcoming-row {
+.dash-upcoming-row {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
@@ -4758,17 +4758,17 @@ button.crest-cluster:hover .crest-main {
   transition: background var(--transition);
 }
 
-.upcoming-row:hover {
+.dash-upcoming-row:hover {
   background: var(--color-surface);
 }
 
-.upcoming-row:focus-visible {
+.dash-upcoming-row:focus-visible {
   outline: 2px solid var(--color-accent);
   outline-offset: 2px;
 }
 
 /* Small calendar tile - the day is the first thing the eye lands on. */
-.upcoming-date-tile {
+.dash-upcoming-date-tile {
   width: 3rem;
   display: flex;
   flex-direction: column;
@@ -4780,7 +4780,7 @@ button.crest-cluster:hover .crest-main {
   line-height: 1;
 }
 
-.tile-month {
+.dash-upcoming-tile-month {
   font-size: 0.6rem;
   font-weight: 800;
   text-transform: uppercase;
@@ -4788,7 +4788,7 @@ button.crest-cluster:hover .crest-main {
   color: var(--color-accent-bright);
 }
 
-.tile-day {
+.dash-upcoming-tile-day {
   margin: 0.15rem 0 0.12rem;
   font-family: var(--font-display);
   font-size: 1.25rem;
@@ -4796,31 +4796,31 @@ button.crest-cluster:hover .crest-main {
   font-variant-numeric: tabular-nums;
 }
 
-.tile-weekday {
+.dash-upcoming-tile-weekday {
   font-size: 0.6rem;
   font-weight: 600;
   color: var(--color-text-faint);
 }
 
-.upcoming-row.live .upcoming-date-tile {
+.dash-upcoming-row.live .dash-upcoming-date-tile {
   border-color: var(--color-accent);
 }
 
-.upcoming-matchup {
+.dash-upcoming-matchup {
   min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 0.3rem;
 }
 
-.upcoming-opponent-line {
+.dash-upcoming-opponent-line {
   display: flex;
   align-items: center;
   gap: 0.4rem;
   min-width: 0;
 }
 
-.upcoming-opponent {
+.dash-upcoming-opponent {
   font-weight: 700;
   font-size: 0.95rem;
   overflow: hidden;
@@ -4828,7 +4828,7 @@ button.crest-cluster:hover .crest-main {
   white-space: nowrap;
 }
 
-.upcoming-meta {
+.dash-upcoming-meta {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
@@ -4838,23 +4838,23 @@ button.crest-cluster:hover .crest-main {
   min-width: 0;
 }
 
-.upcoming-meta .game-type-badge {
+.dash-upcoming-meta .game-type-badge {
   font-size: 0.62rem;
   padding: 0.1rem 0.45rem;
 }
 
-.upcoming-team {
+.dash-upcoming-team {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   max-width: 100%;
 }
 
-.upcoming-when {
+.dash-upcoming-when {
   text-align: right;
 }
 
-.upcoming-time {
+.dash-upcoming-time {
   font-family: var(--font-display);
   font-weight: 800;
   font-size: 0.85rem;
@@ -4863,7 +4863,7 @@ button.crest-cluster:hover .crest-main {
   white-space: nowrap;
 }
 
-.upcoming-live {
+.dash-upcoming-live {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
@@ -4874,7 +4874,7 @@ button.crest-cluster:hover .crest-main {
   color: var(--color-accent-bright);
 }
 
-.upcoming-more {
+.dash-upcoming-more {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -4892,27 +4892,27 @@ button.crest-cluster:hover .crest-main {
   cursor: pointer;
 }
 
-.upcoming-more .icon {
+.dash-upcoming-more .icon {
   width: 14px;
   height: 14px;
   transform: rotate(90deg);
   transition: transform var(--transition);
 }
 
-.upcoming-more .icon.flip {
+.dash-upcoming-more .icon.flip {
   transform: rotate(-90deg);
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .upcoming-more .icon { transition: none; }
+  .dash-upcoming-more .icon { transition: none; }
 }
 
 @media (max-width: 480px) {
-  .upcoming-card {
+  .dash-upcoming-card {
     padding: 0.85rem 0.75rem 0.5rem;
   }
 
-  .upcoming-row {
+  .dash-upcoming-row {
     gap: 0.65rem;
     padding: 0.65rem 0.2rem;
   }
