@@ -208,6 +208,20 @@ export default function PlayerProfile() {
     }
   }
 
+  // Re-reads just this one player (teams, photo) and their IBBA link status
+  // after an action whose server-side effects reach beyond what the
+  // action's own response returns - an IBBA link/sync sets the player's
+  // photo, linking an IBBA team creates/attaches a team, and adding or
+  // removing a team changes which IBBA team shows as "Synced to".
+  const refreshPlayer = async (playerId: number) => {
+    const [player, ibba] = await Promise.all([
+      api.get<PlayerDto>(`/players/${playerId}`).then((res) => res.data).catch(() => null),
+      api.get<IbbaLinkStatusDto>(`/players/${playerId}/ibba`).then((res) => res.data).catch(() => undefined),
+    ])
+    if (player) setPlayers((prev) => prev.map((p) => (p.id === playerId ? player : p)))
+    if (ibba !== undefined) setIbbaLinks((prev) => ({ ...prev, [playerId]: ibba }))
+  }
+
   const attachTeamToPlayer = (playerId: number, team: TeamDto, jerseyNumber?: number) => {
     setPlayers((prev) =>
       prev.map((p) =>
@@ -226,6 +240,7 @@ export default function PlayerProfile() {
     try {
       await api.post(`/teams/${teamId}/players/${playerId}`, { jerseyNumber })
       attachTeamToPlayer(playerId, team, jerseyNumber)
+      refreshPlayer(playerId)
       setTeamPickerOpenFor(null)
       setPickerJerseyNumber('')
     } catch {
@@ -244,6 +259,7 @@ export default function PlayerProfile() {
       await api.post(`/teams/${team.id}/players/${playerId}`, { jerseyNumber })
       setAllTeams((prev) => [...prev, team])
       attachTeamToPlayer(playerId, team, jerseyNumber)
+      refreshPlayer(playerId)
       setNewTeamName('')
       setPickerJerseyNumber('')
       setTeamPickerOpenFor(null)
@@ -258,6 +274,7 @@ export default function PlayerProfile() {
     try {
       await api.delete(`/teams/${teamId}/players/${playerId}`)
       setPlayers((prev) => prev.map((p) => (p.id === playerId ? { ...p, teams: (p.teams ?? []).filter((t) => t.id !== teamId) } : p)))
+      refreshPlayer(playerId)
     } catch {
       setError('Could not remove player from that team.')
     }
@@ -311,6 +328,7 @@ export default function PlayerProfile() {
     try {
       const { data } = await api.post<IbbaLinkStatusDto>(`/players/${playerId}/ibba/link`, { ibbaPlayerUrl: url })
       setIbbaLinks((prev) => ({ ...prev, [playerId]: data }))
+      refreshPlayer(playerId) // the link's first sync sets the IBBA profile photo
       setIbbaPreview((prev) => ({ ...prev, [playerId]: null }))
       setIbbaUrlInput((prev) => ({ ...prev, [playerId]: '' }))
       setIbbaError((prev) => ({ ...prev, [playerId]: null }))
@@ -326,6 +344,7 @@ export default function PlayerProfile() {
     try {
       const { data } = await api.post<IbbaLinkStatusDto>(`/players/${playerId}/ibba/sync`)
       setIbbaLinks((prev) => ({ ...prev, [playerId]: data }))
+      refreshPlayer(playerId) // a sync can update the IBBA profile photo
     } catch {
       setIbbaError((prev) => ({ ...prev, [playerId]: 'Sync failed - try again shortly.' }))
     } finally {
@@ -351,6 +370,7 @@ export default function PlayerProfile() {
     try {
       const { data } = await api.put<IbbaLinkStatusDto>(`/ibba/team-links/${ibbaTeamLinkId}`, { teamId })
       setIbbaLinks((prev) => ({ ...prev, [playerId]: data }))
+      refreshPlayer(playerId)
     } catch {
       setIbbaError((prev) => ({ ...prev, [playerId]: 'Could not link that team.' }))
     } finally {
@@ -370,6 +390,9 @@ export default function PlayerProfile() {
     } catch {
       setIbbaError((prev) => ({ ...prev, [playerId]: 'Could not create that team.' }))
     } finally {
+      // The new team is created and joined before the IBBA link step - show
+      // it on the player right away, even if the link step itself failed.
+      await refreshPlayer(playerId)
       setIbbaBusy((prev) => ({ ...prev, [playerId]: false }))
     }
   }

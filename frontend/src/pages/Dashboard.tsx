@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../api/client'
+import { useLiveGameOverlay } from '../live/LiveGameContext'
 import type { GameDto, IbbaLinkStatusDto, PlayerDto, PlayerTeamStatsDto, SeasonDto } from '../api/types'
 import { useAuth } from '../auth/AuthContext'
 import IbbaBadge from '../components/IbbaBadge'
@@ -35,9 +36,21 @@ export default function Dashboard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isPlayerRole])
 
-  const load = async () => {
+  // A live game started or finished from the live widget on top of this
+  // page - the last/next game and averages here should reflect it.
+  const { liveGameVersion } = useLiveGameOverlay()
+  const seenLiveGameVersion = useRef(liveGameVersion)
+  useEffect(() => {
+    if (liveGameVersion === seenLiveGameVersion.current) return
+    seenLiveGameVersion.current = liveGameVersion
+    load(true)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [liveGameVersion])
+
+  // quiet: no "Loading..." flash over what's already shown.
+  const load = async (quiet = false) => {
     try {
-      setLoading(true)
+      if (!quiet) setLoading(true)
 
       const playersPromise: Promise<PlayerDto[]> =
         isPlayerRole && user?.linkedPlayer
@@ -73,9 +86,9 @@ export default function Dashboard() {
 
       setError(null)
     } catch {
-      setError('Could not load your dashboard. Is the backend running?')
+      if (!quiet) setError('Could not load your dashboard. Is the backend running?')
     } finally {
-      setLoading(false)
+      if (!quiet) setLoading(false)
     }
   }
 

@@ -55,7 +55,7 @@ const STORAGE_KEY_PREFIX = 'statshub_active_live_game'
 
 export default function LiveGameWidget() {
   const { user } = useAuth()
-  const { overlayOpen, openOverlay, closeOverlay } = useLiveGameOverlay()
+  const { overlayOpen, openOverlay, closeOverlay, markLiveGameChanged } = useLiveGameOverlay()
   const [promoting, setPromoting] = useState(false)
   const [players, setPlayers] = useState<PlayerDto[]>([])
   const [todaysGames, setTodaysGames] = useState<TodaysGame[]>([])
@@ -157,6 +157,7 @@ export default function LiveGameWidget() {
 
       if (canRecord && game.status !== 'In Progress') {
         await api.put(`/games/${gameId}`, { status: 'In Progress' })
+        markLiveGameChanged()
       }
 
       // A watcher whose player has no stats row yet (rare - e.g. a co-parent
@@ -200,12 +201,15 @@ export default function LiveGameWidget() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active, storageKey])
 
-  const loadSetupData = async (restoredGameId: number | null = null) => {
+  // quiet: reloading while the widget is already on screen (opening the live
+  // screen) - doesn't hide the widget behind a loading state, and doesn't
+  // override a player/team already picked in the setup form.
+  const loadSetupData = async (restoredGameId: number | null = null, quiet = false) => {
     try {
-      setLoading(true)
+      if (!quiet) setLoading(true)
       const { data } = await api.get<PlayerDto[]>('/players')
       setPlayers(data)
-      if (data.length === 1) {
+      if (data.length === 1 && (!quiet || selectedPlayerId === '')) {
         setSelectedPlayerId(data[0].id)
         if (data[0].teams.length > 0) setSelectedTeamId(data[0].teams[0].id)
       }
@@ -278,13 +282,23 @@ export default function LiveGameWidget() {
         setActive(null)
       }
 
-      setError(null)
+      if (!quiet) setError(null)
     } catch {
-      setError('Could not load players. Is the backend running?')
+      if (!quiet) setError('Could not load players. Is the backend running?')
     } finally {
-      setLoading(false)
+      if (!quiet) setLoading(false)
     }
   }
+
+  // Today's Games and the player/team pickers only show inside the live
+  // screen, so opening it is exactly when they need to be current - a game
+  // scheduled on the Stats page, or a team/player added on Profiles since
+  // this widget first loaded, shows up here.
+  useEffect(() => {
+    if (!overlayOpen || active || !storageKey) return
+    loadSetupData(null, true)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [overlayOpen])
 
   // Picks up a game someone else just started - a co-parent with access to
   // the same player, or this same account on another tab/device - without
@@ -330,6 +344,9 @@ export default function LiveGameWidget() {
         const { data: game } = await api.get<GameDto>(`/games/${active.gameId}`)
         if (game.status !== 'In Progress') {
           setActive(null)
+          // The tracker just finished it - the page behind this should
+          // show the final score, not the game as still live.
+          markLiveGameChanged()
           return
         }
         const stats = game.playerStats.find((s) => s.playerId === active.playerId)
@@ -461,6 +478,9 @@ export default function LiveGameWidget() {
         minutesPlayed: 0,
         canRecord: true,
       })
+      // A brand-new game now exists (and is live) - the Schedule/Stats page
+      // behind the widget should list it.
+      markLiveGameChanged()
     } catch {
       setError('Could not start the game. Please try again.')
     } finally {
@@ -468,10 +488,42 @@ export default function LiveGameWidget() {
     }
   }
 
+  // The last tap saves on a short delay - kept here so it can be saved right
+  // away when the game ends or the live screen closes, instead of the page
+  // behind reloading a box score from just before it.
+  const pendingSave = useRef<{ gameStatsId: number; payload: ReturnType<typeof computeStatsFromEvents> } | null>(null)
+  const liveStatsChanged = useRef(false)
+
+  const flushPendingSave = async () => {
+    if (!saveTimer.current || !pendingSave.current) return
+    window.clearTimeout(saveTimer.current)
+    saveTimer.current = null
+    const { gameStatsId, payload } = pendingSave.current
+    pendingSave.current = null
+    await api.put(`/gamestats/${gameStatsId}`, payload).catch(() => {
+      setError('Could not save the last stat - check your connection.')
+    })
+  }
+
+  // Closing the live screen mid-game after recording stats: the game page
+  // behind it (if that's where you are) should show the box score so far.
+  useEffect(() => {
+    if (overlayOpen || !liveStatsChanged.current) return
+    liveStatsChanged.current = false
+    flushPendingSave().finally(markLiveGameChanged)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [overlayOpen])
+
   const persistStats = (events: GameEvent[], minutesPlayed: number, gameStatsId: number) => {
+    liveStatsChanged.current = true
     if (saveTimer.current) window.clearTimeout(saveTimer.current)
+    pendingSave.current = { gameStatsId, payload: computeStatsFromEvents(events, minutesPlayed) }
     saveTimer.current = window.setTimeout(() => {
-      api.put(`/gamestats/${gameStatsId}`, computeStatsFromEvents(events, minutesPlayed)).catch(() => {
+      saveTimer.current = null
+      const pending = pendingSave.current
+      pendingSave.current = null
+      if (!pending) return
+      api.put(`/gamestats/${pending.gameStatsId}`, pending.payload).catch(() => {
         setError('Could not save the last stat - check your connection.')
       })
     }, 500)
@@ -590,6 +642,7 @@ export default function LiveGameWidget() {
         made,
         value: pendingShot.value,
       })
+      liveStatsChanged.current = true
       setActive((prev) =>
         prev
           ? { ...prev, shots: [...prev.shots, data], actionLog: [...prev.actionLog, { kind: 'shot', id: data.id, at: Date.now() }] }
@@ -607,6 +660,7 @@ export default function LiveGameWidget() {
     if (!active) return
     try {
       await api.delete(`/shots/${id}`)
+      liveStatsChanged.current = true
       setActive((prev) =>
         prev
           ? { ...prev, shots: prev.shots.filter((s) => s.id !== id), actionLog: prev.actionLog.filter((a) => !(a.kind === 'shot' && a.id === id)) }
@@ -664,6 +718,8 @@ export default function LiveGameWidget() {
       return
     }
     try {
+      await flushPendingSave()
+      liveStatsChanged.current = false
       await api.put(`/games/${active.gameId}`, {
         status: 'Completed',
         teamScore: Number(finalTeamScore),
@@ -675,6 +731,7 @@ export default function LiveGameWidget() {
       setFinalOpponentScore('')
       setOpponent('')
       closeOverlay()
+      markLiveGameChanged()
     } catch {
       setError('Could not finalize the game. Please try again.')
     }

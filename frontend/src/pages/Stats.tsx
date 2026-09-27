@@ -1,6 +1,7 @@
-import { Fragment, useEffect, useMemo, useState } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { api } from '../api/client'
+import { useLiveGameOverlay } from '../live/LiveGameContext'
 import type {
   CreateGameStatsDto,
   GameDto,
@@ -120,9 +121,23 @@ function PlayerProfilePanel({ player }: { player: PlayerDto }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [player.id])
 
-  const load = async () => {
+  // A live game started or finished from the live widget, which sits on top
+  // of this page - reload so the schedule/stats show its new status, score
+  // and box score.
+  const { liveGameVersion } = useLiveGameOverlay()
+  const seenLiveGameVersion = useRef(liveGameVersion)
+  useEffect(() => {
+    if (liveGameVersion === seenLiveGameVersion.current) return
+    seenLiveGameVersion.current = liveGameVersion
+    load(true)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [liveGameVersion])
+
+  // quiet: reloading after an action on data already on screen - no
+  // "Loading..." flash, and a failure keeps showing what's there.
+  const load = async (quiet = false) => {
     try {
-      setLoading(true)
+      if (!quiet) setLoading(true)
       const [{ data: gamesData }, ibbaData, statsData] = await Promise.all([
         api.get<GameDto[]>(`/games/player/${player.id}`),
         api.get<IbbaLinkStatusDto>(`/players/${player.id}/ibba`).then((res) => res.data).catch(() => null),
@@ -133,11 +148,20 @@ function PlayerProfilePanel({ player }: { player: PlayerDto }) {
       setSeasonStats(statsData)
       setError(null)
     } catch {
-      setError('Could not load this player.')
+      if (!quiet) setError('Could not load this player.')
     } finally {
-      setLoading(false)
+      if (!quiet) setLoading(false)
     }
   }
+
+  // Season averages are computed server-side from the box scores, so any
+  // change to a game's stats (or deleting a game that had stats) needs them
+  // re-read - the games list alone doesn't carry them.
+  const reloadSeasonStats = () =>
+    api
+      .get<PlayerTeamStatsDto[]>(`/gamestats/player/${player.id}`)
+      .then((res) => setSeasonStats(res.data))
+      .catch(() => {})
 
   const teamMeta = useMemo(() => {
     const meta: Record<number, TeamMeta> = {}
@@ -174,9 +198,27 @@ function PlayerProfilePanel({ player }: { player: PlayerDto }) {
     else setSelectedTeamId('all')
   }, [teamList, teamMeta, selectedTeamId])
 
-  const updateGame = (updated: GameDto) => setGames((prev) => prev.map((g) => (g.id === updated.id ? updated : g)))
-  const removeGame = (id: number) => setGames((prev) => prev.filter((g) => g.id !== id))
+  const updateGame = (updated: GameDto) => {
+    setGames((prev) => prev.map((g) => (g.id === updated.id ? updated : g)))
+    reloadSeasonStats()
+  }
+  const removeGame = (id: number) => {
+    setGames((prev) => prev.filter((g) => g.id !== id))
+    reloadSeasonStats()
+  }
   const addGame = (created: GameDto) => setGames((prev) => [...prev, created])
+
+  // The Edit Game box score saves each tap on its own and doesn't report
+  // back per tap - re-read that one game (and season averages) when the
+  // editor closes, so the Stats table shows what was just recorded.
+  const refreshGame = async (gameId: number) => {
+    try {
+      const { data } = await api.get<GameDto>(`/games/${gameId}`)
+      updateGame(data)
+    } catch {
+      // keep showing what's there
+    }
+  }
 
   if (loading) return <p>Loading...</p>
 
@@ -255,6 +297,7 @@ function PlayerProfilePanel({ player }: { player: PlayerDto }) {
           onGameUpdated={updateGame}
           onGameDeleted={removeGame}
           onGameCreated={addGame}
+          onEditorClosed={refreshGame}
         />
       )}
       {tab === 'season' && <SeasonPanel player={player} stats={seasonStats} selectedTeamId={selectedTeamId} />}
@@ -439,6 +482,7 @@ function SchedulePanel({
   onGameUpdated,
   onGameDeleted,
   onGameCreated,
+  onEditorClosed,
 }: {
   player: PlayerDto
   games: GameDto[]
@@ -447,6 +491,7 @@ function SchedulePanel({
   onGameUpdated: (g: GameDto) => void
   onGameDeleted: (id: number) => void
   onGameCreated: (g: GameDto) => void
+  onEditorClosed: (gameId: number) => void
 }) {
   const [editingId, setEditingId] = useState<number | null>(null)
   const [deletingId, setDeletingId] = useState<number | null>(null)
@@ -561,7 +606,10 @@ function SchedulePanel({
           player={player}
           game={editingGame}
           onGameUpdated={onGameUpdated}
-          onClose={() => setEditingId(null)}
+          onClose={() => {
+            onEditorClosed(editingGame.id)
+            setEditingId(null)
+          }}
         />
       )}
     </div>
