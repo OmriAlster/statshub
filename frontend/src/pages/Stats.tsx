@@ -1,6 +1,7 @@
-import { Fragment, useEffect, useMemo, useState } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { api } from '../api/client'
+import { useDataRefresh } from '../api/dataSync'
 import type {
   CreateGameStatsDto,
   GameDto,
@@ -38,7 +39,11 @@ export default function Stats() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const loadPlayers = async () => {
+  // Player list carries each player's teams (the team switcher reads them),
+  // so roster/IBBA-team changes need this too, not just add/remove player.
+  useDataRefresh(['players', 'teams', 'ibba'], () => loadPlayers(true))
+
+  const loadPlayers = async (silent = false) => {
     try {
       const list = isPlayerRole && user?.linkedPlayer ? [user.linkedPlayer] : (await api.get<PlayerDto[]>('/players')).data
       setPlayers(list)
@@ -46,7 +51,7 @@ export default function Stats() {
       // requested, so switching players is real navigation, not just local state.
       if (!playerIdParam && list.length > 0) navigate(`/stats/${list[0].id}`, { replace: true })
     } catch {
-      setError('Could not load players.')
+      if (!silent) setError('Could not load players.')
     } finally {
       setPlayersLoading(false)
     }
@@ -120,22 +125,32 @@ function PlayerProfilePanel({ player }: { player: PlayerDto }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [player.id])
 
-  const load = async () => {
+  // Games list, IBBA team info, and season totals all derive from each
+  // other's data - a stat edit changes season averages, a sync adds games,
+  // a roster change changes which games belong here - so any of them
+  // refetches all three.
+  useDataRefresh(['games', 'stats', 'shots', 'ibba', 'teams', 'players'], () => load(true))
+
+  const loadSeq = useRef(0)
+
+  const load = async (silent = false) => {
+    const seq = ++loadSeq.current
     try {
-      setLoading(true)
+      if (!silent) setLoading(true)
       const [{ data: gamesData }, ibbaData, statsData] = await Promise.all([
         api.get<GameDto[]>(`/games/player/${player.id}`),
         api.get<IbbaLinkStatusDto>(`/players/${player.id}/ibba`).then((res) => res.data).catch(() => null),
         api.get<PlayerTeamStatsDto[]>(`/gamestats/player/${player.id}`).then((res) => res.data).catch(() => []),
       ])
+      if (seq !== loadSeq.current) return
       setGames(gamesData)
       setIbba(ibbaData)
       setSeasonStats(statsData)
       setError(null)
     } catch {
-      setError('Could not load this player.')
+      if (!silent) setError('Could not load this player.')
     } finally {
-      setLoading(false)
+      if (!silent) setLoading(false)
     }
   }
 

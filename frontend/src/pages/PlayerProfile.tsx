@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { api } from '../api/client'
+import { useDataRefresh } from '../api/dataSync'
 import type { CreatePlayerFromIbbaResultDto, IbbaLinkStatusDto, IbbaPreviewDto, InviteDto, PlayerDto, TeamDto } from '../api/types'
 import { useAuth } from '../auth/AuthContext'
 import ConfirmModal from '../components/ConfirmModal'
@@ -61,9 +62,17 @@ export default function PlayerProfile() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const load = async () => {
+  // Any change to players/teams/IBBA links - from this page or anywhere else
+  // (the live widget, a co-parent's action picked up on resume, an IBBA
+  // sync's background logo fetch finishing) - refetches silently.
+  useDataRefresh(['players', 'teams', 'ibba'], () => load(true))
+
+  const loadSeq = useRef(0)
+
+  const load = async (silent = false) => {
+    const seq = ++loadSeq.current
     try {
-      setLoading(true)
+      if (!silent) setLoading(true)
       if (isPlayerRole && user?.linkedPlayer) {
         setPlayers([user.linkedPlayer])
       } else {
@@ -71,8 +80,6 @@ export default function PlayerProfile() {
           api.get<PlayerDto[]>('/players'),
           api.get<TeamDto[]>('/teams'),
         ])
-        setPlayers(playerList)
-        setAllTeams(teamList)
 
         const linkEntries = await Promise.all(
           playerList.map(async (p): Promise<[number, IbbaLinkStatusDto | null]> => {
@@ -84,13 +91,18 @@ export default function PlayerProfile() {
             }
           })
         )
+        // A newer refresh already started - don't let this older response
+        // overwrite whatever it returns.
+        if (seq !== loadSeq.current) return
+        setPlayers(playerList)
+        setAllTeams(teamList)
         setIbbaLinks(Object.fromEntries(linkEntries))
       }
       setError(null)
     } catch {
-      setError('Could not load players.')
+      if (!silent) setError('Could not load players.')
     } finally {
-      setLoading(false)
+      if (!silent) setLoading(false)
     }
   }
 

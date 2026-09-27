@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '../api/client'
+import { notifyDataChanged } from '../api/dataSync'
 import type { GameStatsDto, ShotDto } from '../api/types'
 import {
   computeStatsFromEvents,
@@ -37,16 +38,41 @@ export default function GameStatsEditor({ gameStatsId, initialStats }: GameStats
   const [error, setError] = useState<string | null>(null)
 
   const saveTimer = useRef<number | null>(null)
+  const pendingSave = useRef<ReturnType<typeof computeStatsFromEvents> | null>(null)
+  const changed = useRef(false)
 
   useEffect(() => {
     api.get<ShotDto[]>(`/shots/gamestats/${gameStatsId}`).then(({ data }) => setShots(data)).catch(() => {})
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gameStatsId])
 
+  // Every tap saves on its own, so these writes skip the app-wide refresh
+  // signal (refetching every screen per tap is wasted work - this editor
+  // already shows the result). Instead, once the editor closes, announce the
+  // change a single time so the games table, season stats, and dashboard
+  // behind it catch up - flushing a still-debounced last tap first, so that
+  // refresh doesn't read the box score from just before it.
+  useEffect(() => {
+    return () => {
+      const notify = () => notifyDataChanged(['stats', 'games', 'shots'])
+      if (saveTimer.current && pendingSave.current) {
+        window.clearTimeout(saveTimer.current)
+        api.put(`/gamestats/${gameStatsId}`, pendingSave.current, { skipDataSync: true }).catch(() => {}).finally(notify)
+      } else if (changed.current) {
+        notify()
+      }
+    }
+  }, [gameStatsId])
+
   const persistStats = (nextEvents: GameEvent[], nextMinutes: number) => {
+    changed.current = true
     if (saveTimer.current) window.clearTimeout(saveTimer.current)
+    pendingSave.current = computeStatsFromEvents(nextEvents, nextMinutes)
     saveTimer.current = window.setTimeout(() => {
-      api.put(`/gamestats/${gameStatsId}`, computeStatsFromEvents(nextEvents, nextMinutes)).catch(() => {
+      saveTimer.current = null
+      const payload = pendingSave.current
+      pendingSave.current = null
+      api.put(`/gamestats/${gameStatsId}`, payload, { skipDataSync: true }).catch(() => {
         setError('Could not save the last stat - check your connection.')
       })
     }, 500)
@@ -114,7 +140,8 @@ export default function GameStatsEditor({ gameStatsId, initialStats }: GameStats
         y: pendingShot.y,
         made,
         value: pendingShot.value,
-      })
+      }, { skipDataSync: true })
+      changed.current = true
       setShots((prev) => [...prev, data])
       setActionLog((prev) => [...prev, { kind: 'shot', id: data.id, at: Date.now() }])
       setPendingShot(null)
@@ -127,7 +154,8 @@ export default function GameStatsEditor({ gameStatsId, initialStats }: GameStats
 
   const removeShot = async (id: number) => {
     try {
-      await api.delete(`/shots/${id}`)
+      await api.delete(`/shots/${id}`, { skipDataSync: true })
+      changed.current = true
       setShots((prev) => prev.filter((s) => s.id !== id))
       setActionLog((prev) => prev.filter((a) => !(a.kind === 'shot' && a.id === id)))
     } catch {

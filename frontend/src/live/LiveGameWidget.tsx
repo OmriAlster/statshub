@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '../api/client'
+import { notifyDataChanged, useDataRefresh } from '../api/dataSync'
 import type { GameDto, GameType, IbbaLinkStatusDto, PlayerDto, ShotDto } from '../api/types'
 import { useAuth } from '../auth/AuthContext'
 import CourtShotChart, { type ChartShot } from '../components/CourtShotChart'
@@ -200,12 +201,16 @@ export default function LiveGameWidget() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active, storageKey])
 
-  const loadSetupData = async (restoredGameId: number | null = null) => {
+  // silent: a background refresh (see useDataRefresh below) - never hides
+  // the floating button behind a loading state, never overwrites whatever
+  // the user has already picked in the setup form, and never clears an
+  // error message they still need to read.
+  const loadSetupData = async (restoredGameId: number | null = null, silent = false) => {
     try {
-      setLoading(true)
+      if (!silent) setLoading(true)
       const { data } = await api.get<PlayerDto[]>('/players')
       setPlayers(data)
-      if (data.length === 1) {
+      if (data.length === 1 && (!silent || selectedPlayerId === '')) {
         setSelectedPlayerId(data[0].id)
         if (data[0].teams.length > 0) setSelectedTeamId(data[0].teams[0].id)
       }
@@ -278,13 +283,24 @@ export default function LiveGameWidget() {
         setActive(null)
       }
 
-      setError(null)
+      if (!silent) setError(null)
     } catch {
-      setError('Could not load players. Is the backend running?')
+      if (!silent) setError('Could not load players. Is the backend running?')
     } finally {
-      setLoading(false)
+      if (!silent) setLoading(false)
     }
   }
+
+  // Keeps "Today's Games" and the player/team pickers current with changes
+  // made anywhere in the app - a game scheduled or rescheduled on the Stats
+  // page, a team added on a profile, an IBBA sync bringing in today's
+  // fixture. Skipped while a game is live here (the setup screen isn't
+  // showing) or while this widget is itself mid-way through starting one,
+  // since its own writes fire this too and it would race its own setup.
+  useDataRefresh(['games', 'players', 'teams', 'ibba'], () => {
+    if (active || starting || promoting) return
+    loadSetupData(null, true)
+  }, !!storageKey)
 
   // Picks up a game someone else just started - a co-parent with access to
   // the same player, or this same account on another tab/device - without
@@ -468,10 +484,43 @@ export default function LiveGameWidget() {
     }
   }
 
+  // Live-scoring writes (every stat tap and shot) skip the app-wide refresh
+  // signal - the overlay covers every other screen while scoring, so
+  // refetching them on each tap is pure wasted work (and on a phone, real
+  // lag). Instead, closing the overlay (or ending the game) announces the
+  // change once, after flushing a still-debounced last tap so the screens
+  // behind it don't refetch a box score from just before it.
+  const pendingSave = useRef<{ gameStatsId: number; payload: ReturnType<typeof computeStatsFromEvents> } | null>(null)
+  const liveChanged = useRef(false)
+
+  const flushPendingSave = async () => {
+    if (!saveTimer.current || !pendingSave.current) return
+    window.clearTimeout(saveTimer.current)
+    saveTimer.current = null
+    const { gameStatsId, payload } = pendingSave.current
+    pendingSave.current = null
+    await api.put(`/gamestats/${gameStatsId}`, payload, { skipDataSync: true }).catch(() => {
+      setError('Could not save the last stat - check your connection.')
+    })
+  }
+
+  useEffect(() => {
+    if (overlayOpen || !liveChanged.current) return
+    liveChanged.current = false
+    flushPendingSave().finally(() => notifyDataChanged(['stats', 'games', 'shots']))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [overlayOpen])
+
   const persistStats = (events: GameEvent[], minutesPlayed: number, gameStatsId: number) => {
+    liveChanged.current = true
     if (saveTimer.current) window.clearTimeout(saveTimer.current)
+    pendingSave.current = { gameStatsId, payload: computeStatsFromEvents(events, minutesPlayed) }
     saveTimer.current = window.setTimeout(() => {
-      api.put(`/gamestats/${gameStatsId}`, computeStatsFromEvents(events, minutesPlayed)).catch(() => {
+      saveTimer.current = null
+      const pending = pendingSave.current
+      pendingSave.current = null
+      if (!pending) return
+      api.put(`/gamestats/${pending.gameStatsId}`, pending.payload, { skipDataSync: true }).catch(() => {
         setError('Could not save the last stat - check your connection.')
       })
     }, 500)
@@ -589,7 +638,8 @@ export default function LiveGameWidget() {
         y: pendingShot.y,
         made,
         value: pendingShot.value,
-      })
+      }, { skipDataSync: true })
+      liveChanged.current = true
       setActive((prev) =>
         prev
           ? { ...prev, shots: [...prev.shots, data], actionLog: [...prev.actionLog, { kind: 'shot', id: data.id, at: Date.now() }] }
@@ -606,7 +656,8 @@ export default function LiveGameWidget() {
   const removeShot = async (id: number) => {
     if (!active) return
     try {
-      await api.delete(`/shots/${id}`)
+      await api.delete(`/shots/${id}`, { skipDataSync: true })
+      liveChanged.current = true
       setActive((prev) =>
         prev
           ? { ...prev, shots: prev.shots.filter((s) => s.id !== id), actionLog: prev.actionLog.filter((a) => !(a.kind === 'shot' && a.id === id)) }
@@ -664,6 +715,10 @@ export default function LiveGameWidget() {
       return
     }
     try {
+      // The last tap's save may still be debounced - get it in before the
+      // game is marked completed (which refreshes every screen).
+      await flushPendingSave()
+      liveChanged.current = false
       await api.put(`/games/${active.gameId}`, {
         status: 'Completed',
         teamScore: Number(finalTeamScore),

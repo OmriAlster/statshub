@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { api, TOKEN_STORAGE_KEY } from '../api/client'
+import { useDataRefresh } from '../api/dataSync'
 import type { UserDto } from '../api/types'
 
 interface AuthContextValue {
@@ -41,6 +42,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     refreshUser()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // A player account's own profile (name, photo, teams) comes from
+  // user.linkedPlayer, not the players list - keep it current when a parent
+  // changes it. Unlike refreshUser, a failure here (e.g. a network blip on a
+  // phone) keeps the current session instead of logging the user out.
+  useDataRefresh(['players', 'teams', 'ibba'], () => {
+    if (!localStorage.getItem(TOKEN_STORAGE_KEY)) return
+    api.get<UserDto>('/auth/me').then(({ data }) => setUser(data)).catch(() => {})
+  }, user?.role === 'Player')
 
   const loginWithGoogle = async (idToken: string) => {
     const { data } = await api.post('/auth/google', { idToken })

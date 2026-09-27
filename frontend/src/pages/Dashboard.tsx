@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../api/client'
+import { ALL_TOPICS, useDataRefresh } from '../api/dataSync'
 import type { GameDto, IbbaLinkStatusDto, PlayerDto, PlayerTeamStatsDto, SeasonDto } from '../api/types'
 import { useAuth } from '../auth/AuthContext'
 import IbbaBadge from '../components/IbbaBadge'
@@ -35,9 +36,16 @@ export default function Dashboard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isPlayerRole])
 
-  const load = async () => {
+  // The dashboard summarizes everything (players, teams, last/next game,
+  // season averages, IBBA standings), so any change anywhere refreshes it.
+  useDataRefresh(ALL_TOPICS, () => load(true))
+
+  const loadSeq = useRef(0)
+
+  const load = async (silent = false) => {
+    const seq = ++loadSeq.current
     try {
-      setLoading(true)
+      if (!silent) setLoading(true)
 
       const playersPromise: Promise<PlayerDto[]> =
         isPlayerRole && user?.linkedPlayer
@@ -49,7 +57,6 @@ export default function Dashboard() {
         : api.get<SeasonDto[]>('/seasons').then((res) => res.data[0] ?? null)
 
       const [basePlayers, season] = await Promise.all([playersPromise, seasonPromise])
-      setCurrentSeason(season)
 
       const cardsPromise = Promise.all(
         basePlayers.map(async (player): Promise<PlayerCard> => {
@@ -69,13 +76,16 @@ export default function Dashboard() {
       )
 
       const cards = await cardsPromise
+      // A newer refresh already started - its result wins.
+      if (seq !== loadSeq.current) return
+      setCurrentSeason(season)
       setPlayers(cards)
 
       setError(null)
     } catch {
-      setError('Could not load your dashboard. Is the backend running?')
+      if (!silent) setError('Could not load your dashboard. Is the backend running?')
     } finally {
-      setLoading(false)
+      if (!silent) setLoading(false)
     }
   }
 

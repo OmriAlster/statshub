@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { api } from '../api/client'
+import { useDataRefresh } from '../api/dataSync'
 import type { GameDto } from '../api/types'
 import GameDetailView from '../components/GameDetailView'
 
@@ -20,16 +21,29 @@ export default function GameDetail() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
 
-  const load = async (gameId: number) => {
+  // Score, status, box score and shot chart can all change from elsewhere
+  // (the live widget finishing the game, an IBBA sync filling in a final
+  // score) while this page is open.
+  useDataRefresh(['games', 'stats', 'shots', 'ibba'], () => {
+    if (id) load(Number(id), true)
+  })
+
+  const loadSeq = useRef(0)
+
+  const load = async (gameId: number, silent = false) => {
+    const seq = ++loadSeq.current
     try {
-      setLoading(true)
+      if (!silent) setLoading(true)
       const { data } = await api.get<GameDto>(`/games/${gameId}`)
+      if (seq !== loadSeq.current) return
       setGame(data)
       setError(null)
     } catch {
-      setError('Could not load this game.')
+      // A silent refresh failing (e.g. the game was just deleted elsewhere)
+      // keeps showing what's already here rather than blanking the page.
+      if (!silent) setError('Could not load this game.')
     } finally {
-      setLoading(false)
+      if (!silent) setLoading(false)
     }
   }
 
