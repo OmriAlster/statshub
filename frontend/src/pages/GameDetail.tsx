@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { api } from '../api/client'
+import { useLiveGameOverlay } from '../live/LiveGameContext'
 import type { GameDto } from '../api/types'
 import GameDetailView from '../components/GameDetailView'
 
@@ -20,16 +21,29 @@ export default function GameDetail() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
 
-  const load = async (gameId: number) => {
+  // This game may be the one being tracked in the live widget on top of
+  // this page - when it starts, finishes, or the live screen closes after
+  // recording stats, show the current score and box score.
+  const { liveGameVersion } = useLiveGameOverlay()
+  const seenLiveGameVersion = useRef(liveGameVersion)
+  useEffect(() => {
+    if (liveGameVersion === seenLiveGameVersion.current) return
+    seenLiveGameVersion.current = liveGameVersion
+    if (id) load(Number(id), true)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [liveGameVersion])
+
+  // quiet: no "Loading..." flash, and a failure keeps showing what's there.
+  const load = async (gameId: number, quiet = false) => {
     try {
-      setLoading(true)
+      if (!quiet) setLoading(true)
       const { data } = await api.get<GameDto>(`/games/${gameId}`)
       setGame(data)
       setError(null)
     } catch {
-      setError('Could not load this game.')
+      if (!quiet) setError('Could not load this game.')
     } finally {
-      setLoading(false)
+      if (!quiet) setLoading(false)
     }
   }
 
