@@ -18,9 +18,10 @@ WORKDIR /app
 # Npgsql (the Postgres driver) dynamically loads libgssapi during connection
 # negotiation even for password auth; the slim aspnet image doesn't ship it,
 # which surfaces as random 500s only on requests that open a fresh pooled
-# connection.
+# connection. tzdata gives the nightly IBBA sync the Israel time zone
+# (Asia/Jerusalem), so it runs at local midnight including across DST.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends libgssapi-krb5-2 \
+    && apt-get install -y --no-install-recommends libgssapi-krb5-2 tzdata \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=build /app .
