@@ -16,12 +16,14 @@ import type {
 } from '../api/types'
 import { useAuth } from '../auth/AuthContext'
 import CourtShotChart from '../components/CourtShotChart'
+import { AveragesCard, ScheduleGameCards, StatsGameCards } from '../components/GameCards'
 import GameStatsEditor from '../components/GameStatsEditor'
 import GameStatusBadge from '../components/GameStatusBadge'
 import SegmentedControl from '../components/SegmentedControl'
 import StandingsModal from '../components/StandingsModal'
 import TeamCrest from '../components/TeamCrest'
 import { useElementVisible } from '../hooks/useElementVisible'
+import { countsTowardStats } from '../utils/countedGames'
 import { formatGameDateOnly } from '../utils/formatGameDate'
 
 export default function Stats() {
@@ -248,7 +250,10 @@ function PlayerProfilePanel({ player, prefetched }: { player: PlayerDto; prefetc
   // editor closes, so the Stats table shows what was just recorded.
   const refreshGame = async (gameId: number) => {
     try {
-      const { data } = await api.get<GameDto>(`/games/${gameId}`)
+      // playerId keeps the game framed as this player's team's game - without
+      // it the server could pick another team linked to the same IBBA team,
+      // and the team-filtered Schedule would drop the game.
+      const { data } = await api.get<GameDto>(`/games/${gameId}`, { params: { playerId: player.id } })
       updateGame(data)
     } catch {
       // keep showing what's there
@@ -354,14 +359,17 @@ function StatsPanel({ games, playerId }: { games: GameDto[]; playerId: number })
   const { completedGames, wins, losses, ppg, averages } = useMemo(() => {
     const completedGames = games
       .filter((g) => g.status === 'Completed')
-      .sort((a, b) => new Date(b.gameDate).getTime() - new Date(a.gameDate).getTime())
-    // Team record reflects every completed game regardless of whether this
+      .sort((a, b) => new Date(a.gameDate).getTime() - new Date(b.gameDate).getTime())
+    // Friendly games stay in the table (their box score is still worth
+    // seeing) but never count toward the record or any average.
+    const countedGames = completedGames.filter(countsTowardStats)
+    // Team record reflects every counted game regardless of whether this
     // player's box score has been tracked yet (e.g. a game just synced from
     // IBBA). Personal averages below must not count those - an untracked
     // game has no points to report, not zero points.
-    const wins = completedGames.filter((g) => (g.teamScore ?? 0) > (g.opponentScore ?? 0)).length
-    const losses = completedGames.filter((g) => (g.teamScore ?? 0) < (g.opponentScore ?? 0)).length
-    const gamesWithStats = completedGames.filter((g) => g.playerStats.length > 0)
+    const wins = countedGames.filter((g) => (g.teamScore ?? 0) > (g.opponentScore ?? 0)).length
+    const losses = countedGames.filter((g) => (g.teamScore ?? 0) < (g.opponentScore ?? 0)).length
+    const gamesWithStats = countedGames.filter((g) => g.playerStats.length > 0)
 
     const avg = (pick: (g: GameDto) => number) =>
       gamesWithStats.length ? gamesWithStats.reduce((sum, g) => sum + pick(g), 0) / gamesWithStats.length : 0
@@ -411,7 +419,10 @@ function StatsPanel({ games, playerId }: { games: GameDto[]; playerId: number })
       {completedGames.length === 0 ? (
         <p>No completed games yet.</p>
       ) : (
-        <div className="games-table-wrap" ref={wrapRef}>
+        <>
+        <StatsGameCards games={completedGames} linkFor={(game) => `/games/${game.id}?playerId=${playerId}`} />
+        {averages && <AveragesCard averages={averages} />}
+        <div className="games-table-wrap desktop-only" ref={wrapRef}>
           <table className="games-table">
             <thead>
               <tr>
@@ -434,8 +445,9 @@ function StatsPanel({ games, playerId }: { games: GameDto[]; playerId: number })
               {completedGames.map((game) => {
                 const stats = game.playerStats[0]
                 const won = (game.teamScore ?? 0) > (game.opponentScore ?? 0)
+                const counted = countsTowardStats(game)
                 return (
-                  <tr key={game.id}>
+                  <tr key={game.id} className={counted ? '' : 'not-counted-row'} title={counted ? undefined : 'Friendly - not counted in stats'}>
                     <td>
                       <Link to={`/games/${game.id}?playerId=${playerId}`} className="opponent-cell">
                         {game.opponentLogoUrl && <img className="opponent-logo-sm" src={game.opponentLogoUrl} alt="" />}
@@ -454,6 +466,7 @@ function StatsPanel({ games, playerId }: { games: GameDto[]; playerId: number })
                           {game.gameType}
                           {game.isFromIbba && <img className="type-chip-ibba" src="/icons/ibba-logo.png" alt="" title="Synced from IBBA" />}
                         </span>
+                        {!counted && <span className="not-counted-note">not counted</span>}
                       </span>
                     </td>
                     <td className={`num ${won ? 'win' : 'loss'}`}>
@@ -491,6 +504,7 @@ function StatsPanel({ games, playerId }: { games: GameDto[]; playerId: number })
             )}
           </table>
         </div>
+        </>
       )}
 
       {showFloatingAvg && averages && (
@@ -533,7 +547,7 @@ function SchedulePanel({
   const [showAddForm, setShowAddForm] = useState(false)
 
   const sorted = useMemo(
-    () => [...games].sort((a, b) => new Date(b.gameDate).getTime() - new Date(a.gameDate).getTime()),
+    () => [...games].sort((a, b) => new Date(a.gameDate).getTime() - new Date(b.gameDate).getTime()),
     [games]
   )
   const editingGame = sorted.find((g) => g.id === editingId) ?? null
@@ -571,7 +585,23 @@ function SchedulePanel({
       {sorted.length === 0 ? (
         <p>No games scheduled yet.</p>
       ) : (
-      <div className="games-table-wrap">
+      <>
+      <ScheduleGameCards
+        games={sorted}
+        actions={(game) => (
+          <>
+            <button className="edit-btn" title="Edit game & stats" aria-label="Edit game" onClick={() => setEditingId(editingId === game.id ? null : game.id)}>
+              <svg className="icon"><use href="#i-edit" /></svg>
+            </button>
+            {!game.isFromIbba && (
+              <button className="edit-btn" title="Delete game" aria-label="Delete game" disabled={deletingId === game.id} onClick={() => deleteGame(game)}>
+                🗑️
+              </button>
+            )}
+          </>
+        )}
+      />
+      <div className="games-table-wrap desktop-only">
       <table className="games-table">
         <thead>
           <tr>
@@ -635,6 +665,7 @@ function SchedulePanel({
         </tbody>
       </table>
       </div>
+      </>
       )}
       {editingGame && (
         <ScheduleEditPanel
@@ -813,7 +844,7 @@ function ScheduleEditPanel({
         status: teamScore != null && opponentScore != null ? 'Completed' : 'Upcoming',
         isHomeGame: form.isHomeGame === 'home',
       }
-      const { data: updatedGame } = await api.put<GameDto>(`/games/${game.id}`, dto)
+      const { data: updatedGame } = await api.put<GameDto>(`/games/${game.id}`, dto, { params: { playerId: player.id } })
       onGameUpdated(updatedGame)
     } catch {
       setError('Could not save those changes.')
@@ -846,7 +877,7 @@ function ScheduleEditPanel({
       }
       const { data } = await api.post('/gamestats', emptyStats)
       setStatsSeed(data)
-      const { data: updatedGame } = await api.get<GameDto>(`/games/${game.id}`)
+      const { data: updatedGame } = await api.get<GameDto>(`/games/${game.id}`, { params: { playerId: player.id } })
       onGameUpdated(updatedGame)
     } catch {
       setError('Could not start tracking stats for this game.')
@@ -865,7 +896,7 @@ function ScheduleEditPanel({
     try {
       await api.delete(`/gamestats/${statsSeed.id}`)
       setStatsSeed(null)
-      const { data: updatedGame } = await api.get<GameDto>(`/games/${game.id}`)
+      const { data: updatedGame } = await api.get<GameDto>(`/games/${game.id}`, { params: { playerId: player.id } })
       onGameUpdated(updatedGame)
     } catch {
       setError('Could not clear stats for this game.')

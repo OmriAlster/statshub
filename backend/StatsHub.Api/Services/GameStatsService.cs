@@ -157,7 +157,7 @@ namespace StatsHub.Api.Services
             // teammate's stats for a shared game need the IbbaTeamId match,
             // not literal team ids, on either side of the fixture.
             var gameStats = await _context.GameStats
-                .Where(gs => gs.PlayerId == playerId && (
+                .Where(gs => gs.PlayerId == playerId && gs.Game.GameType != Game.FriendlyGameType && (
                     (gs.Game.IbbaGameCode == null && (gs.Game.HomeTeamId == teamId || gs.Game.AwayTeamId == teamId)) ||
                     (gs.Game.IbbaGameCode != null && team.IbbaTeamId != null && (gs.Game.HomeTeamId == team.IbbaTeamId || gs.Game.AwayTeamId == team.IbbaTeamId))))
                 .ToListAsync();
@@ -182,8 +182,9 @@ namespace StatsHub.Api.Services
             // split per team in memory - instead of one query per team, since
             // each query is a full network round trip to the database in
             // production.
+            // Friendly games never count toward season stats.
             var allStats = await _context.GameStats
-                .Where(gs => gs.PlayerId == playerId)
+                .Where(gs => gs.PlayerId == playerId && gs.Game.GameType != Game.FriendlyGameType)
                 .Include(gs => gs.Game)
                 .ToListAsync();
 

@@ -115,7 +115,7 @@ export default function LiveGameWidget() {
     setPromoting(true)
     setError(null)
     try {
-      const { data: game } = await api.get<GameDto>(`/games/${gameId}`)
+      const { data: game } = await api.get<GameDto>(`/games/${gameId}`, { params: { playerId } })
       const playerList = players.length > 0 ? players : (await api.get<PlayerDto[]>('/players')).data
       const player = playerList.find((p) => p.id === playerId)
       if (!player) {
@@ -156,7 +156,7 @@ export default function LiveGameWidget() {
       }
 
       if (canRecord && game.status !== 'In Progress') {
-        await api.put(`/games/${gameId}`, { status: 'In Progress' })
+        await api.put(`/games/${gameId}`, { status: 'In Progress' }, { params: { playerId } })
         markLiveGameChanged()
       }
 
@@ -341,7 +341,7 @@ export default function LiveGameWidget() {
 
     const refresh = async () => {
       try {
-        const { data: game } = await api.get<GameDto>(`/games/${active.gameId}`)
+        const { data: game } = await api.get<GameDto>(`/games/${active.gameId}`, { params: { playerId: active.playerId } })
         if (game.status !== 'In Progress') {
           setActive(null)
           // The tracker just finished it - the page behind this should
@@ -447,7 +447,7 @@ export default function LiveGameWidget() {
           fouls: 0,
           minutesPlayed: 0,
         })
-        await api.put(`/games/${gameRes.data.id}`, { status: 'In Progress' })
+        await api.put(`/games/${gameRes.data.id}`, { status: 'In Progress' }, { params: { playerId: selectedPlayerId } })
       } catch (err) {
         await api.delete(`/games/${gameRes.data.id}`).catch(() => {})
         const status = (err as { response?: { status?: number } })?.response?.status
@@ -720,11 +720,13 @@ export default function LiveGameWidget() {
     try {
       await flushPendingSave()
       liveStatsChanged.current = false
+      // playerId: the final score is entered as "us vs. them" - the server
+      // needs this player's team to know which side "us" is.
       await api.put(`/games/${active.gameId}`, {
         status: 'Completed',
         teamScore: Number(finalTeamScore),
         opponentScore: Number(finalOpponentScore),
-      })
+      }, { params: { playerId: active.playerId } })
       setActive(null)
       setEnding(false)
       setFinalTeamScore('')

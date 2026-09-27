@@ -1,4 +1,4 @@
-import { lazy, Suspense, type ReactNode } from 'react'
+import { useState, lazy, Suspense, type ReactNode } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
 import InstallAppBanner from './InstallAppBanner'
@@ -25,7 +25,7 @@ export default function Layout({ children }: { children: ReactNode }) {
         </div>
         {user && (
           <div className="user-info">
-            {user.profilePictureUrl && <img className="avatar" src={user.profilePictureUrl} alt="" />}
+            <UserAvatar url={user.profilePictureUrl} initials={`${user.firstName?.[0] ?? ''}${user.lastName?.[0] ?? ''}`} />
             <span>{user.firstName} {user.lastName}</span> {isPlayerRole && <span className="role-badge">Player</span>}
             <button onClick={handleLogout} className="logout-btn" aria-label="Log out">
               <svg className="icon"><use href="#i-logout" /></svg>
@@ -55,7 +55,7 @@ export default function Layout({ children }: { children: ReactNode }) {
 
         {user && (
           <div className="app-nav-user">
-            {user.profilePictureUrl && <img className="avatar" src={user.profilePictureUrl} alt="" />}
+            <UserAvatar url={user.profilePictureUrl} initials={`${user.firstName?.[0] ?? ''}${user.lastName?.[0] ?? ''}`} />
             <div className="app-nav-user-text">
               <span className="u-name">{user.firstName} {user.lastName}</span>
               {isPlayerRole && <span className="role-badge">Player</span>}
@@ -80,4 +80,12 @@ export default function Layout({ children }: { children: ReactNode }) {
       )}
     </div>
   )
+}
+
+// The account photo (e.g. from Google) can fail to load - a broken-image
+// icon in the header looked like a bug, so fall back to initials instead.
+function UserAvatar({ url, initials }: { url?: string | null; initials: string }) {
+  const [failed, setFailed] = useState(false)
+  if (url && !failed) return <img className="avatar" src={url} alt="" onError={() => setFailed(true)} referrerPolicy="no-referrer" />
+  return <span className="avatar avatar-initials" aria-hidden="true">{initials}</span>
 }
