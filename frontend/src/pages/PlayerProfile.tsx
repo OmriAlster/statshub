@@ -45,6 +45,7 @@ export default function PlayerProfile() {
   const [pickerJerseyNumber, setPickerJerseyNumber] = useState('')
   const [teamBusy, setTeamBusy] = useState(false)
   const [jerseyEdits, setJerseyEdits] = useState<Record<string, string>>({})
+  const [renaming, setRenaming] = useState<{ playerId: number; teamId: number; value: string; busy: boolean } | null>(null)
 
   const [ibbaLinks, setIbbaLinks] = useState<Record<number, IbbaLinkStatusDto | null>>({})
   const [ibbaUrlInput, setIbbaUrlInput] = useState<Record<number, string>>({})
@@ -280,6 +281,40 @@ export default function PlayerProfile() {
     }
   }
 
+  const commitRename = async () => {
+    if (!renaming) return
+    const name = renaming.value.trim()
+    const current = players.find((p) => p.id === renaming.playerId)?.teams?.find((t) => t.id === renaming.teamId)?.name
+    if (!name || name === current) {
+      setRenaming(null)
+      return
+    }
+    setRenaming({ ...renaming, busy: true })
+    try {
+      const { data } = await api.put<TeamDto>(`/teams/${renaming.teamId}`, { name })
+      const teamId = renaming.teamId
+      // The same team can be on more than one player's card (siblings), in
+      // the "add existing team" picker, and in an IBBA "Synced to" label -
+      // rename it everywhere it's shown.
+      setPlayers((prev) =>
+        prev.map((p) => ({ ...p, teams: (p.teams ?? []).map((t) => (t.id === teamId ? { ...t, name: data.name } : t)) }))
+      )
+      setAllTeams((prev) => prev.map((t) => (t.id === teamId ? { ...t, name: data.name } : t)))
+      setIbbaLinks((prev) =>
+        Object.fromEntries(
+          Object.entries(prev).map(([pid, link]) => [
+            pid,
+            link && { ...link, teams: link.teams.map((it) => (it.linkedTeamId === teamId ? { ...it, linkedTeamName: data.name } : it)) },
+          ])
+        )
+      )
+      setRenaming(null)
+    } catch {
+      setError('Could not rename that team.')
+      setRenaming((prev) => (prev ? { ...prev, busy: false } : prev))
+    }
+  }
+
   const editJerseyKey = (playerId: number, teamId: number) => `${playerId}-${teamId}`
 
   const commitJerseyEdit = async (playerId: number, teamId: number) => {
@@ -378,6 +413,20 @@ export default function PlayerProfile() {
     }
   }
 
+  // A player on two IBBA teams that share a name (the same club in two
+  // leagues/age groups, e.g. both "מכבי תל מונד") would otherwise end up with
+  // two identically-named teams everywhere in the app. When the name isn't
+  // unique for this player - among their IBBA teams or teams they're already
+  // on - add the league to tell them apart.
+  const nameForNewIbbaTeam = (player: PlayerDto, ibbaTeam: IbbaLinkStatusDto['teams'][number]) => {
+    const key = (name: string) => name.trim().toLowerCase()
+    const base = ibbaTeam.teamName.trim()
+    const sameNameIbbaTeams = (ibbaLinks[player.id]?.teams ?? []).filter((it) => key(it.teamName) === key(base)).length
+    const sameNameExistingTeams = (player.teams ?? []).filter((pt) => key(pt.name) === key(base)).length
+    const isAmbiguous = sameNameIbbaTeams > 1 || sameNameExistingTeams > 0
+    return isAmbiguous && ibbaTeam.ibbaLeagueName ? `${base} - ${ibbaTeam.ibbaLeagueName.trim()}` : base
+  }
+
   const mapIbbaTeamToNew = async (playerId: number, ibbaTeamLinkId: number, teamName: string) => {
     if (!teamName.trim()) return
     setIbbaBusy((prev) => ({ ...prev, [playerId]: true }))
@@ -447,7 +496,47 @@ export default function PlayerProfile() {
                         title={ibbaTeam?.ibbaLeagueUrl ? 'View standings' : undefined}
                       />
                       <div className="tcv2-info">
-                        <span className="tcv2-name">{t.name}</span>
+                        {renaming?.playerId === player.id && renaming.teamId === t.id ? (
+                          <form
+                            className="tcv2-rename"
+                            onSubmit={(e) => {
+                              e.preventDefault()
+                              commitRename()
+                            }}
+                          >
+                            <input
+                              autoFocus
+                              aria-label="Team name"
+                              value={renaming.value}
+                              maxLength={100}
+                              disabled={renaming.busy}
+                              onChange={(e) => setRenaming({ ...renaming, value: e.target.value })}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Escape') setRenaming(null)
+                              }}
+                            />
+                            <button type="submit" className="tcv2-rename-btn save" disabled={renaming.busy || !renaming.value.trim()} title="Save name">
+                              <svg className="icon"><use href="#i-check" /></svg>
+                            </button>
+                            <button type="button" className="tcv2-rename-btn" onClick={() => setRenaming(null)} disabled={renaming.busy} title="Cancel">
+                              <svg className="icon"><use href="#i-x" /></svg>
+                            </button>
+                          </form>
+                        ) : (
+                          <span className="tcv2-name-row">
+                            <span className="tcv2-name team-name-clamp" title={t.name}>{t.name}</span>
+                            {!isPlayerRole && (
+                              <button
+                                className="tcv2-edit-name"
+                                onClick={() => setRenaming({ playerId: player.id, teamId: t.id, value: t.name, busy: false })}
+                                title="Rename team"
+                                aria-label={`Rename ${t.name}`}
+                              >
+                                <svg className="icon"><use href="#i-edit" /></svg>
+                              </button>
+                            )}
+                          </span>
+                        )}
                         {!isPlayerRole ? (
                           <div className="tcv2-jersey-row">
                             <label htmlFor={`jersey-${player.id}-${t.id}`}>Jersey</label>
@@ -548,7 +637,7 @@ export default function PlayerProfile() {
                         onClick={t.ibbaLeagueUrl ? () => setStandingsFor({ leagueUrl: t.ibbaLeagueUrl!, leagueName: t.ibbaLeagueName ?? '', teamName: t.teamName, teamUrl: t.teamUrl }) : undefined}
                       />
                       <div style={{ flex: 1, minWidth: '10rem' }}>
-                        <div style={{ fontWeight: 700, fontSize: '0.9rem' }} dir="rtl">{t.teamName}</div>
+                        <div className="team-name-clamp" style={{ fontWeight: 700, fontSize: '0.9rem' }} dir="rtl" title={t.teamName}>{t.teamName}</div>
                         {t.ibbaLeagueName && (
                           <button
                             className="league-chip"
@@ -557,18 +646,19 @@ export default function PlayerProfile() {
                           >
                             <svg className="icon" style={{ width: 11, height: 11 }}><use href="#i-trophy" /></svg>
                             <span dir="rtl">{t.ibbaLeagueName}</span>
-                            {t.position && ` · ${t.position} of ${t.totalTeams}`}
+                            {!!t.position && t.position > 0 && ` · ${t.position} of ${t.totalTeams}`}
                           </button>
                         )}
                       </div>
                       {t.linkedTeamId ? (
-                        <span style={{ fontSize: '0.82rem', color: 'var(--color-text-muted)' }}>
-                          Synced to <b style={{ color: 'var(--color-text)' }}>{t.linkedTeamName}</b>
+                        <span className="ibba-synced-to" title={t.linkedTeamName ?? undefined}>
+                          Synced to <b dir="auto">{t.linkedTeamName}</b>
                         </span>
                       ) : (
                         <div className="flex gap-1" style={{ flexWrap: 'wrap' }}>
                           {(player.teams ?? []).length > 0 && (
                             <select
+                              className="ibba-link-select"
                               defaultValue=""
                               disabled={ibbaBusy[player.id]}
                               onChange={(e) => e.target.value && mapIbbaTeamToExisting(player.id, t.id, Number(e.target.value))}
@@ -579,13 +669,20 @@ export default function PlayerProfile() {
                               ))}
                             </select>
                           )}
-                          <button
-                            className="submit-btn"
-                            disabled={ibbaBusy[player.id]}
-                            onClick={() => mapIbbaTeamToNew(player.id, t.id, t.teamName)}
-                          >
-                            Create team "{t.teamName}"
-                          </button>
+                          {(() => {
+                            const newTeamName = nameForNewIbbaTeam(player, t)
+                            return (
+                              <button
+                                className="submit-btn ibba-create-team-btn"
+                                disabled={ibbaBusy[player.id]}
+                                onClick={() => mapIbbaTeamToNew(player.id, t.id, newTeamName)}
+                                title={`Create team "${newTeamName}"`}
+                              >
+                                <span>Create new team</span>
+                                <span className="ibba-create-team-name team-name-clamp" dir="auto">{newTeamName}</span>
+                              </button>
+                            )
+                          })()}
                         </div>
                       )}
                     </div>

@@ -274,7 +274,7 @@ function PlayerProfilePanel({ player, prefetched }: { player: PlayerDto; prefetc
                 label: (
                   <span className="team-switch-option">
                     {t.logoUrl ? <img src={t.logoUrl} alt="" /> : <span className="team-switch-option-fallback" />}
-                    {t.name}
+                    <span className="team-switch-option-name" title={t.name}>{t.name}</span>
                   </span>
                 ),
               })),
@@ -295,7 +295,7 @@ function PlayerProfilePanel({ player, prefetched }: { player: PlayerDto; prefetc
             title={selectedTeam.leagueUrl ? 'View standings' : undefined}
           />
           <div>
-            <div className="pctr-team-name">{selectedTeam.name}</div>
+            <div className="pctr-team-name team-name-clamp" title={selectedTeam.name}>{selectedTeam.name}</div>
             {selectedTeam.leagueName && (
               <button
                 className="league-chip"
@@ -304,7 +304,7 @@ function PlayerProfilePanel({ player, prefetched }: { player: PlayerDto; prefetc
               >
                 <svg className="icon"><use href="#i-trophy" /></svg>
                 <span dir="rtl">{selectedTeam.leagueName}</span>
-                {selectedTeam.position && ` · ${selectedTeam.position} of ${selectedTeam.totalTeams}`}
+                {!!selectedTeam.position && selectedTeam.position > 0 && ` · ${selectedTeam.position} of ${selectedTeam.totalTeams}`}
               </button>
             )}
           </div>

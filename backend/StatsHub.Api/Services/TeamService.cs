@@ -9,6 +9,7 @@ namespace StatsHub.Api.Services
     {
         Task<List<TeamDto>> GetMyTeamsAsync(int userId);
         Task<TeamDto> CreateTeamAsync(int userId, CreateTeamDto dto);
+        Task<TeamDto?> RenameTeamAsync(int teamId, string name, int userId);
         Task<bool> DeleteTeamAsync(int teamId, int userId);
         Task<bool> AddPlayerToTeamAsync(int teamId, int playerId, int userId, int? jerseyNumber);
         Task<bool> RemovePlayerFromTeamAsync(int teamId, int playerId, int userId);
@@ -59,6 +60,22 @@ namespace StatsHub.Api.Services
             _context.Teams.Add(team);
             await _context.SaveChangesAsync();
 
+            return MapToDto(team);
+        }
+
+        // Same access as editing the roster - the season owner, or a parent of
+        // a player on this team (e.g. a co-parent). Only the app Team's own
+        // display name changes; a linked IBBA team keeps its official name.
+        public async Task<TeamDto?> RenameTeamAsync(int teamId, string name, int userId)
+        {
+            if (!await CanManageTeamAsync(teamId, userId)) return null;
+
+            var team = await _context.Teams.FindAsync(teamId);
+            if (team == null) return null;
+
+            team.Name = name.Trim();
+            team.UpdatedAt = DateTime.UtcNow;
+            await _context.SaveChangesAsync();
             return MapToDto(team);
         }
 

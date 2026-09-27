@@ -36,6 +36,20 @@ namespace StatsHub.Api.Controllers
             return Ok(team);
         }
 
+        [HttpPut("{id}")]
+        public async Task<ActionResult<TeamDto>> RenameTeam(int id, [FromBody] CreateTeamDto dto)
+        {
+            if (string.IsNullOrWhiteSpace(dto.Name))
+                return BadRequest(new { message = "Team name is required" });
+            if (dto.Name.Trim().Length > 100)
+                return BadRequest(new { message = "Team name is too long" });
+
+            var team = await _teamService.RenameTeamAsync(id, dto.Name, _currentUser.UserId);
+            if (team == null)
+                return NotFound(new { message = "Team not found" });
+            return Ok(team);
+        }
+
         [HttpDelete("{id}")]
         public async Task<ActionResult> DeleteTeam(int id)
         {
