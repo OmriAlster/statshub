@@ -167,23 +167,36 @@ namespace StatsHub.Api.Services
 
         private async Task<List<PlayerTeamStatsDto>> ComputeStatsByPlayerAsync(int playerId)
         {
-            var player = await _context.Players.FindAsync(playerId);
-            if (player == null) return new List<PlayerTeamStatsDto>();
-
+            // The player comes along with their memberships - no teams means
+            // no per-team stat lines to return anyway.
             var teamMemberships = await _context.PlayerTeams
                 .Where(pt => pt.PlayerId == playerId)
                 .Include(pt => pt.Team)
+                .Include(pt => pt.Player)
                 .OrderBy(pt => pt.Team.Name)
+                .ToListAsync();
+            if (teamMemberships.Count == 0) return new List<PlayerTeamStatsDto>();
+            var player = teamMemberships[0].Player;
+
+            // One query for this player's box scores across every team, then
+            // split per team in memory - instead of one query per team, since
+            // each query is a full network round trip to the database in
+            // production.
+            var allStats = await _context.GameStats
+                .Where(gs => gs.PlayerId == playerId)
+                .Include(gs => gs.Game)
                 .ToListAsync();
 
             var result = new List<PlayerTeamStatsDto>();
             foreach (var membership in teamMemberships)
             {
-                var gameStats = await _context.GameStats
-                    .Where(gs => gs.PlayerId == playerId && (
-                        (gs.Game.IbbaGameCode == null && (gs.Game.HomeTeamId == membership.TeamId || gs.Game.AwayTeamId == membership.TeamId)) ||
-                        (gs.Game.IbbaGameCode != null && membership.Team.IbbaTeamId != null && (gs.Game.HomeTeamId == membership.Team.IbbaTeamId || gs.Game.AwayTeamId == membership.Team.IbbaTeamId))))
-                    .ToListAsync();
+                var teamId = membership.TeamId;
+                var ibbaTeamId = membership.Team.IbbaTeamId;
+                var gameStats = allStats
+                    .Where(gs =>
+                        (gs.Game.IbbaGameCode == null && (gs.Game.HomeTeamId == teamId || gs.Game.AwayTeamId == teamId)) ||
+                        (gs.Game.IbbaGameCode != null && ibbaTeamId != null && (gs.Game.HomeTeamId == ibbaTeamId || gs.Game.AwayTeamId == ibbaTeamId)))
+                    .ToList();
 
                 result.Add(BuildTeamStatsDto(player, membership.Team, membership.JerseyNumber, gameStats));
             }

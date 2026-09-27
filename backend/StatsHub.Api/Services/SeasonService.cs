@@ -126,18 +126,21 @@ namespace StatsHub.Api.Services
         }
 
         // No Games nav on Team to sum (HomeTeamId/AwayTeamId aren't a formal FK
-        // to it - see Game.cs), so this counts explicitly per team instead: a
-        // manual game by literal team id, an IBBA-synced one by the team's
-        // linked IbbaTeamId on either side of the fixture.
+        // to it - see Game.cs), so this matches explicitly: a manual game by
+        // literal team id, an IBBA-synced one by a team's linked IbbaTeamId on
+        // either side of the fixture. One query for all of the season's teams
+        // (not one per team - every query is a full network round trip to the
+        // database in production), and a game shared by two of the season's
+        // teams counts once.
         private async Task<SeasonDto> MapToDtoAsync(Season season)
         {
-            var totalGames = 0;
-            foreach (var team in season.Teams ?? new List<Team>())
-            {
-                totalGames += await _context.Games.CountAsync(g =>
-                    (g.IbbaGameCode == null && (g.HomeTeamId == team.Id || g.AwayTeamId == team.Id)) ||
-                    (g.IbbaGameCode != null && team.IbbaTeamId != null && (g.HomeTeamId == team.IbbaTeamId || g.AwayTeamId == team.IbbaTeamId)));
-            }
+            var teams = season.Teams ?? new List<Team>();
+            var teamIds = teams.Select(t => t.Id).ToList();
+            var ibbaTeamIds = teams.Where(t => t.IbbaTeamId != null).Select(t => t.IbbaTeamId!.Value).ToList();
+
+            var totalGames = teamIds.Count == 0 ? 0 : await _context.Games.CountAsync(g =>
+                (g.IbbaGameCode == null && ((g.HomeTeamId != null && teamIds.Contains(g.HomeTeamId.Value)) || (g.AwayTeamId != null && teamIds.Contains(g.AwayTeamId.Value)))) ||
+                (g.IbbaGameCode != null && ((g.HomeTeamId != null && ibbaTeamIds.Contains(g.HomeTeamId.Value)) || (g.AwayTeamId != null && ibbaTeamIds.Contains(g.AwayTeamId.Value)))));
 
             return new SeasonDto
             {

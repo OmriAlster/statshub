@@ -276,6 +276,14 @@ static string ToNpgsqlConnectionString(string databaseUrl)
         Password = userInfo.Length > 1 ? Uri.UnescapeDataString(userInfo[1]) : "",
         SslMode = Npgsql.SslMode.Require,
         TrustServerCertificate = true,
+        // Opening a brand-new database connection costs ~850ms in production
+        // (several network round trips for TCP + TLS + auth), and idle pooled
+        // connections get closed after 5 minutes - so a family opening the
+        // app after a quiet stretch paid that on every parallel request of
+        // the first page load. Keep a few open at all times instead, with a
+        // periodic keepalive so the network path doesn't silently drop them.
+        MinPoolSize = 5,
+        KeepAlive = 30,
     };
     return builder.ConnectionString;
 }
