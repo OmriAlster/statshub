@@ -34,6 +34,18 @@ export default function Stats() {
   const [playersLoading, setPlayersLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
+  // The player id is already in the URL, so that player's games/stats can
+  // start loading at the same time as the player list, instead of waiting
+  // for it first - every sequential request costs a full network round trip
+  // in production.
+  const [prefetched] = useState<PlayerPanelPrefetch | null>(() => {
+    const id = Number(playerIdParam)
+    if (!id) return null
+    const promise = fetchPlayerPanelData(id)
+    promise.catch(() => {}) // the panel reports its own load failure
+    return { playerId: id, promise, used: false }
+  })
+
   useEffect(() => {
     loadPlayers()
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -86,7 +98,7 @@ export default function Stats() {
             </div>
           )}
 
-          {selectedPlayer && <PlayerProfilePanel key={selectedPlayer.id} player={selectedPlayer} />}
+          {selectedPlayer && <PlayerProfilePanel key={selectedPlayer.id} player={selectedPlayer} prefetched={prefetched} />}
         </>
       )}
     </div>
@@ -106,7 +118,29 @@ interface TeamMeta {
   teamUrl?: string | null
 }
 
-function PlayerProfilePanel({ player }: { player: PlayerDto }) {
+interface PlayerPanelData {
+  games: GameDto[]
+  ibba: IbbaLinkStatusDto | null
+  seasonStats: PlayerTeamStatsDto[]
+}
+
+interface PlayerPanelPrefetch {
+  playerId: number
+  promise: Promise<PlayerPanelData>
+  // Only the very first panel load may use it - switching away to another
+  // player and back must load fresh, not reuse this old response.
+  used: boolean
+}
+
+function fetchPlayerPanelData(playerId: number): Promise<PlayerPanelData> {
+  return Promise.all([
+    api.get<GameDto[]>(`/games/player/${playerId}`).then((res) => res.data),
+    api.get<IbbaLinkStatusDto>(`/players/${playerId}/ibba`).then((res) => res.data).catch(() => null),
+    api.get<PlayerTeamStatsDto[]>(`/gamestats/player/${playerId}`).then((res) => res.data).catch(() => []),
+  ]).then(([games, ibba, seasonStats]) => ({ games, ibba, seasonStats }))
+}
+
+function PlayerProfilePanel({ player, prefetched }: { player: PlayerDto; prefetched?: PlayerPanelPrefetch | null }) {
   const [tab, setTab] = useState<'stats' | 'schedule' | 'season'>('stats')
   const [games, setGames] = useState<GameDto[]>([])
   const [ibba, setIbba] = useState<IbbaLinkStatusDto | null>(null)
@@ -138,14 +172,15 @@ function PlayerProfilePanel({ player }: { player: PlayerDto }) {
   const load = async (quiet = false) => {
     try {
       if (!quiet) setLoading(true)
-      const [{ data: gamesData }, ibbaData, statsData] = await Promise.all([
-        api.get<GameDto[]>(`/games/player/${player.id}`),
-        api.get<IbbaLinkStatusDto>(`/players/${player.id}/ibba`).then((res) => res.data).catch(() => null),
-        api.get<PlayerTeamStatsDto[]>(`/gamestats/player/${player.id}`).then((res) => res.data).catch(() => []),
-      ])
-      setGames(gamesData)
-      setIbba(ibbaData)
-      setSeasonStats(statsData)
+      // The first load for this player uses the fetch the page already
+      // started alongside the player list (see Stats above); later reloads
+      // fetch fresh.
+      const fromPrefetch = !quiet && prefetched?.playerId === player.id && !prefetched.used
+      if (fromPrefetch) prefetched!.used = true
+      const data = await (fromPrefetch ? prefetched!.promise : fetchPlayerPanelData(player.id))
+      setGames(data.games)
+      setIbba(data.ibba)
+      setSeasonStats(data.seasonStats)
       setError(null)
     } catch {
       if (!quiet) setError('Could not load this player.')

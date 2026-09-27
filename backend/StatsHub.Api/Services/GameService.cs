@@ -132,22 +132,30 @@ namespace StatsHub.Api.Services
 
         public async Task<List<GameDto>> GetGamesByPlayerAsync(int playerId, int requestingUserId)
         {
-            var canAccess = await _context.Players.AnyAsync(p =>
-                p.Id == playerId && (p.LinkedUserId == requestingUserId || p.Parents.Any(pp => pp.UserId == requestingUserId)));
-            if (!canAccess) return new List<GameDto>();
-
             // A player's games are every game for a team they're currently rostered
             // on - not just games they already have stats for. That distinction used
             // to be invisible because every Game was created together with its
             // GameStats via live tracking, but a game synced from IBBA has no stats
             // until the user adds them, and would otherwise never show up here.
             // Stats-only games are kept too, in case a player has left the team since.
+            //
+            // The access check rides along on the team lookup (every query is a
+            // full network round trip to the database in production) - only a
+            // player with no teams at all needs it checked separately.
             var myTeams = await _context.PlayerTeams
-                .Where(pt => pt.PlayerId == playerId)
+                .Where(pt => pt.PlayerId == playerId &&
+                    (pt.Player.LinkedUserId == requestingUserId || pt.Player.Parents.Any(pp => pp.UserId == requestingUserId)))
                 .Include(pt => pt.Team)
                 .ThenInclude(t => t.IbbaTeam)
                 .Select(pt => pt.Team)
                 .ToListAsync();
+
+            if (myTeams.Count == 0)
+            {
+                var canAccess = await _context.Players.AnyAsync(p =>
+                    p.Id == playerId && (p.LinkedUserId == requestingUserId || p.Parents.Any(pp => pp.UserId == requestingUserId)));
+                if (!canAccess) return new List<GameDto>();
+            }
             var teamIds = myTeams.Select(t => t.Id).ToList();
             // Maps a shared IbbaTeam back to whichever of THIS player's own teams
             // is linked to it, so a game synced under a different player's app
@@ -155,16 +163,13 @@ namespace StatsHub.Api.Services
             // player's own team.
             var teamByIbbaTeamId = myTeams.Where(t => t.IbbaTeamId.HasValue).ToDictionary(t => t.IbbaTeamId!.Value);
 
-            var statsGameIds = await _context.GameStats
-                .Where(gs => gs.PlayerId == playerId)
-                .Select(gs => gs.GameId)
-                .ToListAsync();
-
+            var ibbaTeamIds = teamByIbbaTeamId.Keys.ToList();
             var games = await _context.Games
                 .Where(g =>
                     (g.IbbaGameCode == null && ((g.HomeTeamId != null && teamIds.Contains(g.HomeTeamId.Value)) || (g.AwayTeamId != null && teamIds.Contains(g.AwayTeamId.Value)))) ||
-                    (g.IbbaGameCode != null && ((g.HomeTeamId != null && teamByIbbaTeamId.Keys.Contains(g.HomeTeamId.Value)) || (g.AwayTeamId != null && teamByIbbaTeamId.Keys.Contains(g.AwayTeamId.Value)))) ||
-                    statsGameIds.Contains(g.Id))
+                    (g.IbbaGameCode != null && ((g.HomeTeamId != null && ibbaTeamIds.Contains(g.HomeTeamId.Value)) || (g.AwayTeamId != null && ibbaTeamIds.Contains(g.AwayTeamId.Value)))) ||
+                    // Stats-only games, as a subquery instead of a separate round trip.
+                    g.GameStats.Any(gs => gs.PlayerId == playerId))
                 .Include(g => g.GameStats.Where(gs => gs.PlayerId == playerId))
                 .ThenInclude(gs => gs.Player)
                 .OrderByDescending(g => g.GameDate)
