@@ -270,49 +270,49 @@ export default function Dashboard() {
         ))}
       </div>
 
-      <section className="upcoming-card">
-        <h3 className="upcoming-title">
+      <section className="dash-upcoming-card">
+        <h3 className="dash-upcoming-title">
           <svg className="icon"><use href="#i-calendar" /></svg> Upcoming Games
-          {upcomingGames.length > 0 && <span className="upcoming-count">{upcomingGames.length}</span>}
+          {upcomingGames.length > 0 && <span className="dash-upcoming-count">{upcomingGames.length}</span>}
         </h3>
         {upcomingGames.length === 0 ? (
-          <p className="upcoming-empty">No upcoming games scheduled.</p>
+          <p className="dash-upcoming-empty">No upcoming games scheduled.</p>
         ) : (
           <>
-            <ul className={`upcoming-list ${showAllUpcoming ? 'expanded' : ''}`}>
+            <ul className={`dash-upcoming-list ${showAllUpcoming ? 'expanded' : ''}`}>
               {(showAllUpcoming ? upcomingGames : upcomingGames.slice(0, UPCOMING_PREVIEW_COUNT)).map(({ game, players: gamePlayers }) => {
                 const isLive = game.status === 'In Progress'
                 const date = new Date(game.gameDate)
                 return (
                   <li key={game.id}>
-                    <Link className={`upcoming-row ${isLive ? 'live' : ''}`} to={`/games/${game.id}?playerId=${gamePlayers[0].id}`}>
-                      <div className="upcoming-date-tile" aria-hidden="true">
-                        <span className="tile-month">{date.toLocaleDateString('en-US', { month: 'short' })}</span>
-                        <span className="tile-day">{date.getDate()}</span>
-                        <span className="tile-weekday">{date.toLocaleDateString('en-US', { weekday: 'short' })}</span>
+                    <Link className={`dash-upcoming-row ${isLive ? 'live' : ''}`} to={`/games/${game.id}?playerId=${gamePlayers[0].id}`}>
+                      <div className="dash-upcoming-date-tile" aria-hidden="true">
+                        <span className="dash-upcoming-tile-month">{date.toLocaleDateString('en-US', { month: 'short' })}</span>
+                        <span className="dash-upcoming-tile-day">{date.getDate()}</span>
+                        <span className="dash-upcoming-tile-weekday">{date.toLocaleDateString('en-US', { weekday: 'short' })}</span>
                       </div>
-                      <div className="upcoming-matchup">
-                        <div className="upcoming-opponent-line">
+                      <div className="dash-upcoming-matchup">
+                        <div className="dash-upcoming-opponent-line">
                           {game.opponentLogoUrl && <img className="opponent-logo-sm" src={game.opponentLogoUrl} alt="" />}
-                          <span className="upcoming-opponent">{game.opponentName}</span>
+                          <span className="dash-upcoming-opponent">{game.opponentName}</span>
                         </div>
-                        <div className="upcoming-meta">
+                        <div className="dash-upcoming-meta">
                           {game.isHomeGame != null && <span>{game.isHomeGame ? '🏠 Home' : '✈️ Away'}</span>}
                           <span className={`game-type-badge ${game.gameType.toLowerCase()}`}>
                             {game.gameType}
                             {game.isFromIbba && <img className="type-chip-ibba" src="/icons/ibba-logo.png" alt="" title="Synced from IBBA" />}
                           </span>
-                          <span className="upcoming-team">
+                          <span className="dash-upcoming-team">
                             {game.teamName}
                             {players.length > 1 && ` · ${gamePlayers.map((p) => p.firstName).join(', ')}`}
                           </span>
                         </div>
                       </div>
-                      <div className="upcoming-when">
+                      <div className="dash-upcoming-when">
                         {isLive ? (
-                          <span className="upcoming-live"><span className="fab-live-dot" /> Live</span>
+                          <span className="dash-upcoming-live"><span className="fab-live-dot" /> Live</span>
                         ) : (
-                          <span className="upcoming-time">{formatGameTime(game.gameDate)}</span>
+                          <span className="dash-upcoming-time">{formatGameTime(game.gameDate)}</span>
                         )}
                       </div>
                     </Link>
@@ -321,7 +321,7 @@ export default function Dashboard() {
               })}
             </ul>
             {upcomingGames.length > UPCOMING_PREVIEW_COUNT && (
-              <button className="upcoming-more" onClick={() => setShowAllUpcoming((v) => !v)} aria-expanded={showAllUpcoming}>
+              <button className="dash-upcoming-more" onClick={() => setShowAllUpcoming((v) => !v)} aria-expanded={showAllUpcoming}>
                 {showAllUpcoming ? 'See less' : `See more (${upcomingGames.length - UPCOMING_PREVIEW_COUNT})`}
                 <svg className={`icon ${showAllUpcoming ? 'flip' : ''}`}><use href="#i-chevron" /></svg>
               </button>
