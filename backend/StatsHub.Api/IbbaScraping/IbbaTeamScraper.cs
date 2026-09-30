@@ -179,7 +179,11 @@ public class IbbaTeamScraper
         using var response = await _http.GetAsync($"https://ibasketball.co.il/team/{teamId}");
         if (!response.IsSuccessStatusCode) return null;
 
-        var canonicalUrl = response.RequestMessage?.RequestUri?.ToString() ?? $"https://ibasketball.co.il/team/{teamId}";
+        // The final (redirected) address, minus any query - requests to IBBA
+        // carry a cache-busting parameter (IbbaNoCacheHandler) that must not
+        // end up in the stored team URL.
+        var finalUri = response.RequestMessage?.RequestUri;
+        var canonicalUrl = finalUri != null ? IbbaNoCacheHandler.WithoutQuery(finalUri) : $"https://ibasketball.co.il/team/{teamId}";
         var html = await response.Content.ReadAsStringAsync();
         var doc = new HtmlDocument();
         doc.LoadHtml(html);

@@ -121,7 +121,9 @@ builder.Services.AddHttpClient("Ibba", client =>
 }).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
 {
     AutomaticDecompression = System.Net.DecompressionMethods.All
-});
+})
+// Always fetch fresh from IBBA, never a cached copy - see IbbaNoCacheHandler.
+.AddHttpMessageHandler(() => new StatsHub.Api.IbbaScraping.IbbaNoCacheHandler());
 
 var app = builder.Build();
 
