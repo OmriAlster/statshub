@@ -3,6 +3,10 @@
 // always come from the network so a parent never sees stale/wrong numbers.
 const CACHE_NAME = 'statshub-shell-v1'
 
+// Registered as /sw.js?mode=dev on the local dev server: notifications only,
+// no offline caching (it would fight Vite's hot reload).
+const DEV_MODE = new URL(self.location.href).searchParams.get('mode') === 'dev'
+
 self.addEventListener('install', () => {
   self.skipWaiting()
 })
@@ -18,11 +22,14 @@ self.addEventListener('activate', (event) => {
 
 self.addEventListener('push', (event) => {
   if (!event.data) return
+  // The server always sends JSON; anything else (e.g. DevTools' "Push" test
+  // button, which sends plain text) is still shown instead of silently
+  // dropped, so a push always produces something visible.
   let payload
   try {
     payload = event.data.json()
   } catch {
-    return
+    payload = { title: 'StatsHub', body: event.data.text() }
   }
 
   const { title, body, url, gameDateIso } = payload
@@ -72,6 +79,7 @@ self.addEventListener('notificationclick', (event) => {
 })
 
 self.addEventListener('fetch', (event) => {
+  if (DEV_MODE) return
   const { request } = event
   if (request.method !== 'GET') return
 

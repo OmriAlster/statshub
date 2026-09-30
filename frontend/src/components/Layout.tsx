@@ -3,6 +3,7 @@ import { NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
 import InstallAppBanner from './InstallAppBanner'
 import NotificationBanner from './NotificationBanner'
+import NotificationBell from './NotificationBell'
 
 const LiveGameWidget = lazy(() => import('../live/LiveGameWidget'))
 
@@ -27,6 +28,7 @@ export default function Layout({ children }: { children: ReactNode }) {
           <div className="user-info">
             <UserAvatar url={user.profilePictureUrl} initials={`${user.firstName?.[0] ?? ''}${user.lastName?.[0] ?? ''}`} />
             <span>{user.firstName} {user.lastName}</span> {isPlayerRole && <span className="role-badge">Player</span>}
+            <NotificationBell />
             <button onClick={handleLogout} className="logout-btn" aria-label="Log out">
               <svg className="icon"><use href="#i-logout" /></svg>
             </button>
@@ -60,6 +62,7 @@ export default function Layout({ children }: { children: ReactNode }) {
               <span className="u-name">{user.firstName} {user.lastName}</span>
               {isPlayerRole && <span className="role-badge">Player</span>}
             </div>
+            <NotificationBell />
             <button onClick={handleLogout} className="logout-btn" aria-label="Log out">
               <svg className="icon"><use href="#i-logout" /></svg>
             </button>
