@@ -1,10 +1,12 @@
 import { useState } from 'react'
+import { useAuth } from '../auth/AuthContext'
 import { usePushNotifications } from '../hooks/usePushNotifications'
 
 const DISMISSED_KEY = 'statshub_notification_banner_dismissed'
 
 export default function NotificationBanner() {
-  const { supported, permission, subscribed, busy, subscribe } = usePushNotifications()
+  const { user } = useAuth()
+  const { supported, permission, subscribed, busy, subscribe } = usePushNotifications(user?.id)
   const [dismissed, setDismissed] = useState(() => localStorage.getItem(DISMISSED_KEY) === '1')
 
   const dismiss = () => {

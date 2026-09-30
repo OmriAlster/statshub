@@ -21,7 +21,9 @@ function isStandalone() {
   )
 }
 
-export function usePushNotifications() {
+// userId: the signed-in account - the subscription is re-registered to it
+// whenever it changes (see the effect below).
+export function usePushNotifications(userId?: number) {
   // iOS only exposes working Notification/PushManager APIs once the site is
   // added to the home screen - in a regular Safari tab they're either
   // missing or silently non-functional, so treat push as unsupported there
@@ -37,10 +39,38 @@ export function usePushNotifications() {
   useEffect(() => {
     if (!supported) return
     navigator.serviceWorker.ready
-      .then((registration) => registration.pushManager.getSubscription())
-      .then((subscription) => setSubscribed(!!subscription))
+      .then(async (registration) => {
+        const existing = await registration.pushManager.getSubscription()
+        // Allowed but never set up (permission granted earlier, or the
+        // browser dropped its subscription): the Enable banner only shows
+        // while permission is undecided, so nothing would ever set it up -
+        // do it now. No prompt: the permission is already granted.
+        if (!existing && userId != null && Notification.permission === 'granted') {
+          const { data: publicKey } = await api.get<string>('/push/vapid-public-key')
+          return registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(publicKey) })
+        }
+        return existing
+      })
+      .then((subscription) => {
+        setSubscribed(!!subscription)
+        // The phone remembering its subscription doesn't mean the server
+        // still has it - the production database was wiped once (deleting
+        // every subscription while every phone still thought it was
+        // subscribed, so nobody got notified again and the Enable banner
+        // never came back), and logging into another account on the same
+        // phone left the subscription pointing at the old account. So every
+        // time the app opens signed in with notifications allowed, send the
+        // subscription again; the server keeps one row per phone and just
+        // points it at the current account.
+        if (subscription && userId != null && Notification.permission === 'granted') {
+          const json = subscription.toJSON()
+          api
+            .post('/push/subscribe', { endpoint: json.endpoint, p256dh: json.keys?.p256dh, auth: json.keys?.auth })
+            .catch(() => {})
+        }
+      })
       .catch(() => {})
-  }, [supported])
+  }, [supported, userId])
 
   const subscribe = useCallback(async () => {
     if (!supported) return false
@@ -87,5 +117,20 @@ export function usePushNotifications() {
     }
   }, [supported])
 
-  return { supported, permission, subscribed, busy, subscribe, unsubscribe }
+  // Asks the server to push a test notification to every device of the
+  // signed-in account - the Settings bell's "Send test notification".
+  const sendTest = useCallback(async () => {
+    try {
+      await api.post('/push/test')
+      return true
+    } catch {
+      return false
+    }
+  }, [])
+
+  // iPhone in a regular Safari tab: web notifications only exist once the
+  // app is opened from its home-screen icon.
+  const needsHomeScreenApp = isIOS() && !isStandalone()
+
+  return { supported, permission, subscribed, busy, subscribe, unsubscribe, sendTest, needsHomeScreenApp }
 }

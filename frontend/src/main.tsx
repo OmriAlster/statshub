@@ -20,10 +20,12 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
   </React.StrictMode>,
 )
 
-// Installable app shell. Skipped in dev so Vite's HMR isn't shadowed by a
-// stale cached response.
-if ('serviceWorker' in navigator && import.meta.env.PROD) {
+// Installable app shell + push notifications. In dev it's registered in
+// "push only" mode (no offline caching, so Vite's hot reload is never
+// shadowed by a stale cached response) - without it, notifications can't be
+// tested locally at all, since they're delivered to the service worker.
+if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js').catch(() => {})
+    navigator.serviceWorker.register(import.meta.env.PROD ? '/sw.js' : '/sw.js?mode=dev').catch(() => {})
   })
 }
