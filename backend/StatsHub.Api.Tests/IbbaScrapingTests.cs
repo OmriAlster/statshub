@@ -86,6 +86,54 @@ public class IbbaScrapingTests
         Assert.Equal("מכבי תל מונד", scraper.GetTeamName(doc));
     }
 
+    // Records what actually went out over the wire, and answers every request
+    // with a team page.
+    private sealed class RecordingSite : HttpMessageHandler
+    {
+        public List<HttpRequestMessage> Requests { get; } = [];
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            Requests.Add(request);
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                RequestMessage = request,
+                Content = new StringContent("<html><h1>מכבי תל מונד</h1></html>"),
+            });
+        }
+    }
+
+    [Fact]
+    public async Task Every_ibba_request_skips_their_caches()
+    {
+        // IBBA sits behind Cloudflare + a page cache; a stale cached schedule
+        // kept an old game time in production. Each request must be unique.
+        var site = new RecordingSite();
+        var http = new HttpClient(new IbbaNoCacheHandler { InnerHandler = site });
+
+        await http.GetAsync("https://ibasketball.co.il/team/13352-x/?feed=xlsx&team_id=746561");
+        await http.GetAsync("https://ibasketball.co.il/team/13352-x/?feed=xlsx&team_id=746561");
+        await http.GetAsync("https://example.com/other");
+
+        var (first, second, other) = (site.Requests[0].RequestUri!, site.Requests[1].RequestUri!, site.Requests[2].RequestUri!);
+        Assert.Contains("feed=xlsx&team_id=746561&_sh=", first.Query);
+        Assert.NotEqual(first, second);
+        Assert.True(site.Requests[0].Headers.CacheControl!.NoCache);
+        Assert.Equal("https://example.com/other", other.ToString()); // other sites untouched
+    }
+
+    [Fact]
+    public async Task A_resolved_team_address_never_keeps_the_cache_buster()
+    {
+        var http = new HttpClient(new IbbaNoCacheHandler { InnerHandler = new RecordingSite() });
+
+        var resolved = await new IbbaTeamScraper(http).ResolveTeamByIdAsync("13352");
+
+        Assert.NotNull(resolved);
+        Assert.Equal("https://ibasketball.co.il/team/13352", resolved!.Value.CanonicalUrl);
+        Assert.Equal("מכבי תל מונד", resolved.Value.Name);
+    }
+
     [Fact]
     public void A_standing_row_matches_a_team_exactly_not_by_prefix()
     {
