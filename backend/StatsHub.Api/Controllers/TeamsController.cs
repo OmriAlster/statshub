@@ -37,7 +37,7 @@ namespace StatsHub.Api.Controllers
         }
 
         [HttpPut("{id}")]
-        public async Task<ActionResult<TeamDto>> RenameTeam(int id, [FromBody] CreateTeamDto dto)
+        public async Task<ActionResult<TeamDto>> RenameTeam(Guid id, [FromBody] CreateTeamDto dto)
         {
             if (string.IsNullOrWhiteSpace(dto.Name))
                 return BadRequest(new { message = "Team name is required" });
@@ -51,7 +51,7 @@ namespace StatsHub.Api.Controllers
         }
 
         [HttpDelete("{id}")]
-        public async Task<ActionResult> DeleteTeam(int id)
+        public async Task<ActionResult> DeleteTeam(Guid id)
         {
             var success = await _teamService.DeleteTeamAsync(id, _currentUser.UserId);
             if (!success)
@@ -60,7 +60,7 @@ namespace StatsHub.Api.Controllers
         }
 
         [HttpPost("{teamId}/players/{playerId}")]
-        public async Task<ActionResult> AddPlayerToTeam(int teamId, int playerId, [FromBody] AddPlayerToTeamDto? dto)
+        public async Task<ActionResult> AddPlayerToTeam(Guid teamId, Guid playerId, [FromBody] AddPlayerToTeamDto? dto)
         {
             var success = await _teamService.AddPlayerToTeamAsync(teamId, playerId, _currentUser.UserId, dto?.JerseyNumber);
             if (!success)
@@ -69,7 +69,7 @@ namespace StatsHub.Api.Controllers
         }
 
         [HttpDelete("{teamId}/players/{playerId}")]
-        public async Task<ActionResult> RemovePlayerFromTeam(int teamId, int playerId)
+        public async Task<ActionResult> RemovePlayerFromTeam(Guid teamId, Guid playerId)
         {
             var success = await _teamService.RemovePlayerFromTeamAsync(teamId, playerId, _currentUser.UserId);
             if (!success)
@@ -78,7 +78,7 @@ namespace StatsHub.Api.Controllers
         }
 
         [HttpPut("{teamId}/players/{playerId}")]
-        public async Task<ActionResult> UpdatePlayerTeamJersey(int teamId, int playerId, [FromBody] UpdatePlayerTeamDto dto)
+        public async Task<ActionResult> UpdatePlayerTeamJersey(Guid teamId, Guid playerId, [FromBody] UpdatePlayerTeamDto dto)
         {
             var success = await _teamService.UpdatePlayerTeamJerseyAsync(teamId, playerId, dto.JerseyNumber, _currentUser.UserId);
             if (!success)

@@ -23,7 +23,7 @@ function isStandalone() {
 
 // userId: the signed-in account - the subscription is re-registered to it
 // whenever it changes (see the effect below).
-export function usePushNotifications(userId?: number) {
+export function usePushNotifications(userId?: string) {
   // iOS only exposes working Notification/PushManager APIs once the site is
   // added to the home screen - in a regular Safari tab they're either
   // missing or silently non-functional, so treat push as unsupported there
@@ -40,14 +40,24 @@ export function usePushNotifications(userId?: number) {
     if (!supported) return
     navigator.serviceWorker.ready
       .then(async (registration) => {
-        const existing = await registration.pushManager.getSubscription()
+        let existing = await registration.pushManager.getSubscription()
+        if (userId == null || Notification.permission !== 'granted') return existing
+
+        // Made with a key the server no longer uses (the push keys were
+        // replaced): it can't receive anything any more - drop it and make
+        // a new one below.
+        const { data: publicKey } = await api.get<string>('/push/vapid-public-key')
+        const serverKey = urlBase64ToUint8Array(publicKey)
+        if (existing && subscribedWithOtherKey(existing, serverKey)) {
+          await existing.unsubscribe().catch(() => false)
+          existing = null
+        }
         // Allowed but never set up (permission granted earlier, or the
         // browser dropped its subscription): the Enable banner only shows
         // while permission is undecided, so nothing would ever set it up -
         // do it now. No prompt: the permission is already granted.
-        if (!existing && userId != null && Notification.permission === 'granted') {
-          const { data: publicKey } = await api.get<string>('/push/vapid-public-key')
-          return registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(publicKey) })
+        if (!existing) {
+          return registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: serverKey })
         }
         return existing
       })
@@ -133,4 +143,14 @@ export function usePushNotifications(userId?: number) {
   const needsHomeScreenApp = isIOS() && !isStandalone()
 
   return { supported, permission, subscribed, busy, subscribe, unsubscribe, sendTest, needsHomeScreenApp }
+}
+
+// Whether a subscription was made with a different push key than the
+// server's current one. An unreadable key counts as the same - better than
+// re-subscribing for nothing.
+function subscribedWithOtherKey(subscription: PushSubscription, serverKey: Uint8Array) {
+  const key = subscription.options?.applicationServerKey
+  if (!key) return false
+  const bytes = new Uint8Array(key)
+  return bytes.length !== serverKey.length || bytes.some((b, i) => b !== serverKey[i])
 }

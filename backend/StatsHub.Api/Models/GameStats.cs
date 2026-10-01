@@ -2,9 +2,9 @@ namespace StatsHub.Api.Models
 {
     public class GameStats
     {
-        public int Id { get; set; }
-        public int GameId { get; set; }
-        public int PlayerId { get; set; }
+        public Guid Id { get; set; } = Guid.CreateVersion7();
+        public Guid GameId { get; set; }
+        public Guid PlayerId { get; set; }
         
         // Scoring
         public int FieldGoalsMade { get; set; }

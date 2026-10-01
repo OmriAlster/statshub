@@ -12,12 +12,30 @@ jobs:
   backend:
     name: Backend (API integration tests)
     runs-on: ubuntu-latest
+    # Production runs Postgres - the database-conversion tests run against a
+    # real one (the rest of the suite uses SQLite files).
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          # A throwaway server inside the CI run, reachable only from it - no
+          # password needed (and none for secret scanners to flag).
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 10.0.x
       - name: Run tests
+        env:
+          STATSHUB_TEST_POSTGRES: Host=localhost;Port=5432;Username=postgres;Database=postgres
         run: dotnet test backend/StatsHub.Api.Tests/StatsHub.Api.Tests.csproj --logger "console;verbosity=normal"
 
   frontend:

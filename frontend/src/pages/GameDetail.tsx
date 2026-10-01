@@ -5,6 +5,7 @@ import { api } from '../api/client'
 import { useLiveGameOverlay } from '../live/LiveGameContext'
 import type { GameDto } from '../api/types'
 import GameDetailView from '../components/GameDetailView'
+import BouncingBall, { Busy } from '../components/BouncingBall'
 
 export default function GameDetail() {
   const { id } = useParams<{ id: string }>()
@@ -18,7 +19,7 @@ export default function GameDetail() {
   const [shareError, setShareError] = useState<string | null>(null)
 
   useEffect(() => {
-    if (id) load(Number(id))
+    if (id) load(id)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
 
@@ -30,15 +31,15 @@ export default function GameDetail() {
   useEffect(() => {
     if (liveGameVersion === seenLiveGameVersion.current) return
     seenLiveGameVersion.current = liveGameVersion
-    if (id) load(Number(id), true)
+    if (id) load(id, true)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [liveGameVersion])
 
   // Tracked live on another phone: keep the score and on court / on bench current.
-  useLiveRefresh(game?.status === 'In Progress', () => { if (id) load(Number(id), true) })
+  useLiveRefresh(game?.status === 'In Progress', () => { if (id) load(id, true) })
 
   // quiet: no "Loading..." flash, and a failure keeps showing what's there.
-  const load = async (gameId: number, quiet = false) => {
+  const load = async (gameId: string, quiet = false) => {
     try {
       if (!quiet) setLoading(true)
       // playerId (when opened from a player's page) frames the game as that
@@ -58,7 +59,7 @@ export default function GameDetail() {
     // A game synced from IBBA may not have a box score yet, so there's no
     // GameStats row to read a playerId off of - fall back to whichever
     // player's Stats page this game was opened from.
-    const playerId = game.playerStats[0]?.playerId ?? (playerIdParam ? Number(playerIdParam) : null)
+    const playerId = game.playerStats[0]?.playerId ?? (playerIdParam || null)
     if (!playerId) {
       setShareError('Could not determine which player to share this game as.')
       return
@@ -84,7 +85,7 @@ export default function GameDetail() {
     return (
       <div className="page-container">
         <h2>📅 Game Detail</h2>
-        <p>Loading...</p>
+        <BouncingBall />
       </div>
     )
   }
@@ -116,7 +117,7 @@ export default function GameDetail() {
         game={game}
         headerActions={
           <button className="submit-btn" onClick={shareGame} disabled={sharing}>
-            {sharing ? 'Creating link...' : '🔗 Share This Game'}
+            {sharing ? <Busy>Creating link…</Busy> : '🔗 Share This Game'}
           </button>
         }
       />

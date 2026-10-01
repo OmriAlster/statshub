@@ -4,9 +4,9 @@ namespace StatsHub.Api.Models
     // access (e.g. mom + dad both tracking the same kid).
     public class PlayerParent
     {
-        public int Id { get; set; }
-        public int PlayerId { get; set; }
-        public int UserId { get; set; }
+        public Guid Id { get; set; } = Guid.CreateVersion7();
+        public Guid PlayerId { get; set; }
+        public Guid UserId { get; set; }
 
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 

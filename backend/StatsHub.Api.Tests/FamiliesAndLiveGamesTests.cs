@@ -164,7 +164,7 @@ public class FamiliesAndLiveGamesTests : IClassFixture<StatsHubFactory>
         var olderTeam = await parent.CreateTeamWithPlayerAsync(older.Id, "Older's team");
         var youngerTeam = await parent.CreateTeamWithPlayerAsync(younger.Id, "Younger's team");
 
-        int gameId = 0;
+        Guid gameId = Guid.Empty;
         await _factory.WithDbAsync(async db =>
         {
             var ours = new IbbaTeam { IbbaTeamId = $"t{Guid.NewGuid():N}", TeamUrl = $"https://example.test/{Guid.NewGuid():N}", Name = "Maccabi", LeagueUrl = "", LeagueName = "" };
@@ -212,7 +212,7 @@ public class FamiliesAndLiveGamesTests : IClassFixture<StatsHubFactory>
         var teamB = await parent.CreateTeamWithPlayerAsync(b.Id, "B team");
         var manual = await parent.CreateGameAsync(teamA.Id);
 
-        int sharedGameId = 0;
+        Guid sharedGameId = Guid.Empty;
         await _factory.WithDbAsync(async db =>
         {
             var ours = new IbbaTeam { IbbaTeamId = $"t{Guid.NewGuid():N}", TeamUrl = $"https://example.test/{Guid.NewGuid():N}", Name = "Shared", LeagueUrl = "", LeagueName = "" };

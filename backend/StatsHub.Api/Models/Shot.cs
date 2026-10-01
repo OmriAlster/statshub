@@ -2,8 +2,8 @@ namespace StatsHub.Api.Models
 {
     public class Shot
     {
-        public int Id { get; set; }
-        public int GameStatsId { get; set; }
+        public Guid Id { get; set; } = Guid.CreateVersion7();
+        public Guid GameStatsId { get; set; }
         public int Quarter { get; set; }
 
         // Court position as a fraction of the half-court (0..1 on both axes),

@@ -2,7 +2,7 @@ namespace StatsHub.Api.DTOs
 {
     public class TeamDto
     {
-        public int Id { get; set; }
+        public Guid Id { get; set; }
         public string Name { get; set; } = string.Empty;
 
         // Only populated when this team appears in the context of a specific

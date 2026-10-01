@@ -27,7 +27,7 @@ namespace StatsHub.Api.Controllers
         }
 
         [HttpGet("{id}")]
-        public async Task<ActionResult<SeasonDto>> GetSeasonById(int id)
+        public async Task<ActionResult<SeasonDto>> GetSeasonById(Guid id)
         {
             var season = await _seasonService.GetSeasonByIdAsync(id, _currentUser.UserId);
             if (season == null)
@@ -46,7 +46,7 @@ namespace StatsHub.Api.Controllers
         }
 
         [HttpPut("{id}")]
-        public async Task<ActionResult<SeasonDto>> UpdateSeason(int id, [FromBody] UpdateSeasonDto dto)
+        public async Task<ActionResult<SeasonDto>> UpdateSeason(Guid id, [FromBody] UpdateSeasonDto dto)
         {
             var season = await _seasonService.UpdateSeasonAsync(id, dto, _currentUser.UserId);
             if (season == null)
@@ -55,7 +55,7 @@ namespace StatsHub.Api.Controllers
         }
 
         [HttpDelete("{id}")]
-        public async Task<ActionResult> DeleteSeason(int id)
+        public async Task<ActionResult> DeleteSeason(Guid id)
         {
             var success = await _seasonService.DeleteSeasonAsync(id, _currentUser.UserId);
             if (!success)

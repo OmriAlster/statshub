@@ -20,7 +20,7 @@ namespace StatsHub.Api.Controllers
         }
 
         [HttpGet("{id}")]
-        public async Task<ActionResult<GameStatsDto>> GetGameStatsById(int id)
+        public async Task<ActionResult<GameStatsDto>> GetGameStatsById(Guid id)
         {
             var stats = await _gameStatsService.GetGameStatsByIdAsync(id, _currentUser.UserId);
             if (stats == null)
@@ -57,7 +57,7 @@ namespace StatsHub.Api.Controllers
         }
 
         [HttpPut("{id}")]
-        public async Task<ActionResult<GameStatsDto>> UpdateGameStats(int id, [FromBody] UpdateGameStatsDto dto)
+        public async Task<ActionResult<GameStatsDto>> UpdateGameStats(Guid id, [FromBody] UpdateGameStatsDto dto)
         {
             var stats = await _gameStatsService.UpdateGameStatsAsync(id, dto, _currentUser.UserId);
             if (stats == null)
@@ -66,7 +66,7 @@ namespace StatsHub.Api.Controllers
         }
 
         [HttpDelete("{id}")]
-        public async Task<ActionResult> DeleteGameStats(int id)
+        public async Task<ActionResult> DeleteGameStats(Guid id)
         {
             var success = await _gameStatsService.DeleteGameStatsAsync(id, _currentUser.UserId);
             if (!success)
@@ -75,7 +75,7 @@ namespace StatsHub.Api.Controllers
         }
 
         [HttpGet("player/{playerId}/team/{teamId}")]
-        public async Task<ActionResult<PlayerTeamStatsDto>> GetTeamStatsForPlayer(int playerId, int teamId)
+        public async Task<ActionResult<PlayerTeamStatsDto>> GetTeamStatsForPlayer(Guid playerId, Guid teamId)
         {
             var stats = await _gameStatsService.GetTeamStatsForPlayerAsync(playerId, teamId, _currentUser.UserId);
             if (stats == null)
@@ -85,7 +85,7 @@ namespace StatsHub.Api.Controllers
 
         // One entry per team the player is rostered on, each with its own stat line.
         [HttpGet("player/{playerId}")]
-        public async Task<ActionResult<List<PlayerTeamStatsDto>>> GetStatsByPlayer(int playerId)
+        public async Task<ActionResult<List<PlayerTeamStatsDto>>> GetStatsByPlayer(Guid playerId)
         {
             var stats = await _gameStatsService.GetStatsByPlayerAsync(playerId, _currentUser.UserId);
             return Ok(stats);

@@ -2,8 +2,8 @@ namespace StatsHub.Api.Models
 {
     public class Season
     {
-        public int Id { get; set; }
-        public int UserId { get; set; }
+        public Guid Id { get; set; } = Guid.CreateVersion7();
+        public Guid UserId { get; set; }
         public string Name { get; set; } = string.Empty; // "2024-2025 Season"
         public string Sport { get; set; } = "Basketball"; // Extensible for other sports
         public int Year { get; set; }

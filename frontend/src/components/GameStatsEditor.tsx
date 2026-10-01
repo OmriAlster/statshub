@@ -18,7 +18,7 @@ interface ActionLogEntry {
 }
 
 interface GameStatsEditorProps {
-  gameStatsId: number
+  gameStatsId: string
   initialStats: GameStatsDto
 }
 
@@ -125,7 +125,7 @@ export default function GameStatsEditor({ gameStatsId, initialStats }: GameStats
     }
   }
 
-  const removeShot = async (id: number) => {
+  const removeShot = async (id: string) => {
     try {
       await api.delete(`/shots/${id}`)
       setShots((prev) => prev.filter((s) => s.id !== id))
@@ -139,7 +139,7 @@ export default function GameStatsEditor({ gameStatsId, initialStats }: GameStats
     if (actionLog.length === 0) return
     const last = actionLog[actionLog.length - 1]
     if (last.kind === 'event') removeEvent(last.id as string)
-    else removeShot(last.id as number)
+    else removeShot(last.id as string)
   }
 
   const totalPoints = shotStats.points + eventStats.counts.FT_MAKE

@@ -26,6 +26,7 @@ import TeamCrest from '../components/TeamCrest'
 import { useElementVisible } from '../hooks/useElementVisible'
 import { countsTowardStats } from '../utils/countedGames'
 import { formatGameDateOnly } from '../utils/formatGameDate'
+import BouncingBall, { Busy } from '../components/BouncingBall'
 
 export default function Stats() {
   const { user } = useAuth()
@@ -42,7 +43,7 @@ export default function Stats() {
   // for it first - every sequential request costs a full network round trip
   // in production.
   const [prefetched] = useState<PlayerPanelPrefetch | null>(() => {
-    const id = Number(playerIdParam)
+    const id = playerIdParam
     if (!id) return null
     const promise = fetchPlayerPanelData(id)
     promise.catch(() => {}) // the panel reports its own load failure
@@ -68,7 +69,7 @@ export default function Stats() {
     }
   }
 
-  const selectedPlayer = players.find((p) => p.id === Number(playerIdParam)) ?? players[0]
+  const selectedPlayer = players.find((p) => p.id === playerIdParam) ?? players[0]
 
   return (
     <div className="page-container">
@@ -77,7 +78,7 @@ export default function Stats() {
       {error && <p className="error">{error}</p>}
 
       {playersLoading ? (
-        <p>Loading...</p>
+        <BouncingBall />
       ) : players.length === 0 ? (
         <p>No players yet.</p>
       ) : (
@@ -109,7 +110,7 @@ export default function Stats() {
 }
 
 interface TeamMeta {
-  id: number
+  id: string
   name: string
   jerseyNumber?: number | null
   logoUrl?: string | null
@@ -128,14 +129,14 @@ interface PlayerPanelData {
 }
 
 interface PlayerPanelPrefetch {
-  playerId: number
+  playerId: string
   promise: Promise<PlayerPanelData>
   // Only the very first panel load may use it - switching away to another
   // player and back must load fresh, not reuse this old response.
   used: boolean
 }
 
-function fetchPlayerPanelData(playerId: number): Promise<PlayerPanelData> {
+function fetchPlayerPanelData(playerId: string): Promise<PlayerPanelData> {
   return Promise.all([
     api.get<GameDto[]>(`/games/player/${playerId}`).then((res) => res.data),
     api.get<IbbaLinkStatusDto>(`/players/${playerId}/ibba`).then((res) => res.data).catch(() => null),
@@ -150,7 +151,7 @@ function PlayerProfilePanel({ player, prefetched }: { player: PlayerDto; prefetc
   const [seasonStats, setSeasonStats] = useState<PlayerTeamStatsDto[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [selectedTeamId, setSelectedTeamId] = useState<number | 'all' | null>(null)
+  const [selectedTeamId, setSelectedTeamId] = useState<string | 'all' | null>(null)
   const [standingsFor, setStandingsFor] = useState<{ leagueUrl: string; leagueName: string; teamName: string; teamUrl: string } | null>(null)
 
   useEffect(() => {
@@ -206,7 +207,7 @@ function PlayerProfilePanel({ player, prefetched }: { player: PlayerDto; prefetc
       .catch(() => {})
 
   const teamMeta = useMemo(() => {
-    const meta: Record<number, TeamMeta> = {}
+    const meta: Record<string, TeamMeta> = {}
     for (const t of player.teams ?? []) {
       meta[t.id] = { id: t.id, name: t.name, jerseyNumber: t.jerseyNumber, isIbba: false }
     }
@@ -244,7 +245,7 @@ function PlayerProfilePanel({ player, prefetched }: { player: PlayerDto; prefetc
     setGames((prev) => prev.map((g) => (g.id === updated.id ? updated : g)))
     reloadSeasonStats()
   }
-  const removeGame = (id: number) => {
+  const removeGame = (id: string) => {
     setGames((prev) => prev.filter((g) => g.id !== id))
     reloadSeasonStats()
   }
@@ -253,7 +254,7 @@ function PlayerProfilePanel({ player, prefetched }: { player: PlayerDto; prefetc
   // The Edit Game box score saves each tap on its own and doesn't report
   // back per tap - re-read that one game (and season averages) when the
   // editor closes, so the Stats table shows what was just recorded.
-  const refreshGame = async (gameId: number) => {
+  const refreshGame = async (gameId: string) => {
     try {
       // playerId keeps the game framed as this player's team's game - without
       // it the server could pick another team linked to the same IBBA team,
@@ -265,7 +266,7 @@ function PlayerProfilePanel({ player, prefetched }: { player: PlayerDto; prefetc
     }
   }
 
-  if (loading) return <p>Loading...</p>
+  if (loading) return <BouncingBall />
 
   const selectedTeam = selectedTeamId !== null && selectedTeamId !== 'all' ? teamMeta[selectedTeamId] : null
   const gamesForTeam = selectedTeamId === 'all' || selectedTeamId === null ? games : games.filter((g) => g.teamId === selectedTeamId)
@@ -360,7 +361,7 @@ function PlayerProfilePanel({ player, prefetched }: { player: PlayerDto; prefetc
   )
 }
 
-function StatsPanel({ games, playerId }: { games: GameDto[]; playerId: number }) {
+function StatsPanel({ games, playerId }: { games: GameDto[]; playerId: string }) {
   const { completedGames, wins, losses, ppg, averages } = useMemo(() => {
     const completedGames = games
       .filter((g) => g.status === 'Completed')
@@ -541,14 +542,14 @@ function SchedulePanel({
   player: PlayerDto
   games: GameDto[]
   teamList: TeamMeta[]
-  selectedTeamId: number | 'all' | null
+  selectedTeamId: string | 'all' | null
   onGameUpdated: (g: GameDto) => void
-  onGameDeleted: (id: number) => void
+  onGameDeleted: (id: string) => void
   onGameCreated: (g: GameDto) => void
-  onEditorClosed: (gameId: number) => void
+  onEditorClosed: (gameId: string) => void
 }) {
-  const [editingId, setEditingId] = useState<number | null>(null)
-  const [deletingId, setDeletingId] = useState<number | null>(null)
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
   const [showAddForm, setShowAddForm] = useState(false)
 
   const sorted = useMemo(
@@ -688,7 +689,7 @@ function SchedulePanel({
 }
 
 interface ScheduleNewGameForm {
-  teamId: number | ''
+  teamId: string | ''
   opponentName: string
   gameDate: string
   location: string
@@ -710,7 +711,7 @@ function ScheduleNewGamePanel({
   onCancel,
 }: {
   teamList: TeamMeta[]
-  selectedTeamId: number | 'all' | null
+  selectedTeamId: string | 'all' | null
   onCreated: (g: GameDto) => void
   onCancel: () => void
 }) {
@@ -754,7 +755,7 @@ function ScheduleNewGamePanel({
         {teamList.length > 1 && (
           <label>
             Team
-            <select value={form.teamId} onChange={(e) => setForm({ ...form, teamId: Number(e.target.value) })}>
+            <select value={form.teamId} onChange={(e) => setForm({ ...form, teamId: e.target.value })}>
               {teamList.map((t) => (
                 <option key={t.id} value={t.id}>{t.name}</option>
               ))}
@@ -784,7 +785,7 @@ function ScheduleNewGamePanel({
       </div>
       {error && <p className="error">{error}</p>}
       <div className="flex gap-1">
-        <button className="submit-btn" onClick={create} disabled={saving}>{saving ? 'Scheduling...' : 'Schedule Game'}</button>
+        <button className="submit-btn" onClick={create} disabled={saving}>{saving ? <Busy>Scheduling…</Busy> : 'Schedule Game'}</button>
         <button className="nav-btn" onClick={onCancel} disabled={saving}>Cancel</button>
       </div>
     </div>
@@ -979,7 +980,7 @@ function ScheduleEditPanel({
 
           {error && <p className="error">{error}</p>}
           <div className="flex gap-1">
-            <button className="submit-btn" onClick={saveGameInfo} disabled={saving}>{saving ? 'Saving...' : 'Save Game Info'}</button>
+            <button className="submit-btn" onClick={saveGameInfo} disabled={saving}>{saving ? <Busy>Saving…</Busy> : 'Save Game Info'}</button>
           </div>
         </>
       )}
@@ -988,7 +989,7 @@ function ScheduleEditPanel({
         <h4 style={{ margin: 0 }}>Box Score</h4>
         {statsSeed && (
           <button className="clear-stats-btn" onClick={clearStats} disabled={clearing}>
-            {clearing ? 'Clearing...' : '🗑️ Clear Stats'}
+            {clearing ? <Busy>Clearing…</Busy> : '🗑️ Clear Stats'}
           </button>
         )}
       </div>
@@ -1012,10 +1013,10 @@ function ScheduleEditPanel({
       ) : (
         <div className="flex gap-1">
           <button className="submit-btn" onClick={() => { setStatsMode('track'); startTrackingStats() }} disabled={startingStats}>
-            {startingStats ? 'Starting...' : '📍 Track Shots'}
+            {startingStats ? <Busy>Starting…</Busy> : '📍 Track Shots'}
           </button>
           <button className="submit-btn" onClick={() => { setStatsMode('quick'); startTrackingStats() }} disabled={startingStats}>
-            {startingStats ? 'Starting...' : '🔢 Enter Numbers'}
+            {startingStats ? <Busy>Starting…</Busy> : '🔢 Enter Numbers'}
           </button>
         </div>
       )}
@@ -1035,7 +1036,7 @@ function QuickStatsForm({
   initialStats,
   onSaved,
 }: {
-  statsId: number
+  statsId: string
   initialStats: GameStatsDto
   onSaved: (stats: GameStatsDto) => void
 }) {
@@ -1118,12 +1119,12 @@ function QuickStatsForm({
         {field('fouls', 'Fouls')}
       </div>
       {error && <p className="error">{error}</p>}
-      <button className="submit-btn" onClick={save} disabled={saving}>{saving ? 'Saving...' : 'Save Stats'}</button>
+      <button className="submit-btn" onClick={save} disabled={saving}>{saving ? <Busy>Saving…</Busy> : 'Save Stats'}</button>
     </div>
   )
 }
 
-function SeasonPanel({ player, stats, selectedTeamId }: { player: PlayerDto; stats: PlayerTeamStatsDto[]; selectedTeamId: number | 'all' | null }) {
+function SeasonPanel({ player, stats, selectedTeamId }: { player: PlayerDto; stats: PlayerTeamStatsDto[]; selectedTeamId: string | 'all' | null }) {
   const [showTotals, setShowTotals] = useState(false)
   const [shots, setShots] = useState<ShotDto[]>([])
 

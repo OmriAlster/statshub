@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../api/client'
 import { useAuth } from '../auth/AuthContext'
+import { Busy } from '../components/BouncingBall'
 
 export default function JoinAsPlayer() {
   const { user, refreshUser } = useAuth()
@@ -66,7 +67,7 @@ export default function JoinAsPlayer() {
       </div>
       {error && <p className="error">{error}</p>}
       <button className="submit-btn" onClick={claim} disabled={busy}>
-        {busy ? 'Joining...' : 'Join'}
+        {busy ? <Busy>Joining…</Busy> : 'Join'}
       </button>
 
       <div className="form-section" style={{ marginTop: '2rem' }}>
@@ -81,7 +82,7 @@ export default function JoinAsPlayer() {
         {parentError && <p className="error">{parentError}</p>}
         {parentSuccess && <p>You now have access to this player's stats and games. Go to the Dashboard to see them.</p>}
         <button className="submit-btn" onClick={claimAsParent} disabled={parentBusy}>
-          {parentBusy ? 'Joining...' : 'Join as Parent'}
+          {parentBusy ? <Busy>Joining…</Busy> : 'Join as Parent'}
         </button>
       </div>
     </div>

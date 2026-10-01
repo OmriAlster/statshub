@@ -9,7 +9,7 @@ const inRouter = (ui: ReactElement) => render(<MemoryRouter>{ui}</MemoryRouter>)
 
 describe('phone game cards', () => {
   it('a finished game shows the result and box score, and opens the game', () => {
-    const game = makeGame({ id: 42, status: 'Completed', teamScore: 70, opponentScore: 64, playerStats: [makeStats({ totalPoints: 17 })] })
+    const game = makeGame({ id: '42', status: 'Completed', teamScore: 70, opponentScore: 64, playerStats: [makeStats({ totalPoints: 17 })] })
     inRouter(<StatsGameCards games={[game]} linkFor={(g) => `/games/${g.id}`} />)
 
     const card = screen.getByRole('link')

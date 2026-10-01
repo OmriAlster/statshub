@@ -17,19 +17,31 @@ namespace StatsHub.Api.Services
         Task<AuthResponseDto> DevLoginAsync(DevLoginDto dto);
         Task<AuthResponseDto> RegisterAsync(RegisterDto dto);
         Task<AuthResponseDto> LoginWithPasswordAsync(PasswordLoginDto dto);
-        Task<UserDto?> GetCurrentUserAsync(int userId);
+        Task<UserDto?> GetCurrentUserAsync(Guid userId);
+        Task<AuthResponseDto?> LogOutEverywhereAsync(Guid userId);
         string GenerateJwt(User user);
+    }
+
+    // The login token carries the account's security stamp; a token whose
+    // stamp no longer matches the account's is refused (see Program.cs).
+    public static class SessionStamp
+    {
+        public const string ClaimType = "sstamp";
+        public static string CacheKey(Guid userId) => $"sstamp:{userId}";
+        public static string New() => Convert.ToHexString(RandomNumberGenerator.GetBytes(16));
     }
 
     public class AuthService : IAuthService
     {
         private readonly AppDbContext _context;
         private readonly IConfiguration _configuration;
+        private readonly Microsoft.Extensions.Caching.Memory.IMemoryCache _cache;
 
-        public AuthService(AppDbContext context, IConfiguration configuration)
+        public AuthService(AppDbContext context, IConfiguration configuration, Microsoft.Extensions.Caching.Memory.IMemoryCache cache)
         {
             _context = context;
             _configuration = configuration;
+            _cache = cache;
         }
 
         public async Task<AuthResponseDto> LoginWithGoogleAsync(string idToken)
@@ -51,35 +63,64 @@ namespace StatsHub.Api.Services
                 throw new UnauthorizedAccessException("Invalid Google ID token");
             }
 
-            var googleEmail = NormalizeEmail(payload.Email);
-            var user = await _context.Users.FirstOrDefaultAsync(u => u.GoogleId == payload.Subject || u.Email.ToLower() == googleEmail);
+            var user = await FindOrCreateGoogleUserAsync(payload.Subject, payload.Email, payload.EmailVerified, payload.GivenName ?? payload.Name, payload.FamilyName, payload.Picture);
+
+            var token = GenerateJwt(user);
+            var userDto = await BuildUserDtoAsync(user);
+            return new AuthResponseDto { Token = token, User = userDto };
+        }
+
+        // The account a Google sign-in lands in: the one already connected to
+        // this Google account, else one with the same email (connected now -
+        // see the comment inside), else a new one.
+        internal async Task<User> FindOrCreateGoogleUserAsync(string subject, string email, bool emailVerified, string? firstName, string? lastName, string? picture)
+        {
+            var googleEmail = NormalizeEmail(email);
+            var user = await _context.Users.FirstOrDefaultAsync(u => u.GoogleId == subject)
+                ?? await _context.Users.FirstOrDefaultAsync(u => u.GoogleId == null && u.Email.ToLower() == googleEmail);
+
+            if (user != null && user.GoogleId == null)
+            {
+                // Signing in with Google to an account first made with a
+                // password. Registering never proved that whoever set that
+                // password owns this email - Google does - so the password is
+                // dropped and every session it opened is ended. Otherwise
+                // someone could register a parent's email first and keep a
+                // way in after the real parent starts using the account.
+                if (!emailVerified)
+                    throw new UnauthorizedAccessException("Your Google account's email isn't verified, so it can't be connected to an existing account.");
+                if (user.PasswordHash != null)
+                {
+                    user.PasswordHash = null;
+                    user.SecurityStamp = SessionStamp.New();
+                    _cache.Remove(SessionStamp.CacheKey(user.Id));
+                }
+            }
 
             if (user == null)
             {
                 user = new User
                 {
                     Email = googleEmail,
-                    FirstName = payload.GivenName ?? payload.Name ?? "Player",
-                    LastName = payload.FamilyName ?? string.Empty,
-                    GoogleId = payload.Subject,
-                    ProfilePictureUrl = payload.Picture,
+                    FirstName = firstName ?? "Player",
+                    LastName = lastName ?? string.Empty,
+                    GoogleId = subject,
+                    ProfilePictureUrl = picture,
                     Role = "Parent",
+                    SecurityStamp = SessionStamp.New(),
                     CreatedAt = DateTime.UtcNow
                 };
                 _context.Users.Add(user);
             }
             else
             {
-                user.GoogleId ??= payload.Subject;
-                user.ProfilePictureUrl = payload.Picture ?? user.ProfilePictureUrl;
+                user.GoogleId ??= subject;
+                user.ProfilePictureUrl = picture ?? user.ProfilePictureUrl;
                 user.UpdatedAt = DateTime.UtcNow;
             }
 
             await _context.SaveChangesAsync();
-
-            var token = GenerateJwt(user);
-            var userDto = await BuildUserDtoAsync(user);
-            return new AuthResponseDto { Token = token, User = userDto };
+            return user;
         }
 
         public async Task<AuthResponseDto> DevLoginAsync(DevLoginDto dto)
@@ -107,10 +148,9 @@ namespace StatsHub.Api.Services
 
         public async Task<AuthResponseDto> RegisterAsync(RegisterDto dto)
         {
-            if (string.IsNullOrWhiteSpace(dto.Password) || dto.Password.Length < 6)
-                throw new InvalidOperationException("Password must be at least 6 characters.");
-
             var email = NormalizeEmail(dto.Email);
+            var problem = PasswordPolicy.Problem(dto.Password, email);
+            if (problem != null) throw new InvalidOperationException(problem);
 
             // Any existing account with this email - password or Google -
             // means "sign in instead". This used to attach the new password
@@ -128,6 +168,7 @@ namespace StatsHub.Api.Services
                 LastName = dto.LastName,
                 Role = "Parent",
                 PasswordHash = PasswordHasher.Hash(dto.Password),
+                SecurityStamp = SessionStamp.New(),
                 CreatedAt = DateTime.UtcNow
             };
             _context.Users.Add(user);
@@ -146,12 +187,32 @@ namespace StatsHub.Api.Services
             if (user == null || !PasswordHasher.Verify(dto.Password, user.PasswordHash))
                 throw new UnauthorizedAccessException("Invalid email or password.");
 
+            // Stored with an older, weaker setting - upgrade it now that the
+            // password is known.
+            if (PasswordHasher.NeedsRehash(user.PasswordHash))
+            {
+                user.PasswordHash = PasswordHasher.Hash(dto.Password);
+                await _context.SaveChangesAsync();
+            }
+
             var token = GenerateJwt(user);
             var userDto = await BuildUserDtoAsync(user);
             return new AuthResponseDto { Token = token, User = userDto };
         }
 
-        public async Task<UserDto?> GetCurrentUserAsync(int userId)
+        // Every token issued so far stops working; this device gets a new one.
+        public async Task<AuthResponseDto?> LogOutEverywhereAsync(Guid userId)
+        {
+            var user = await _context.Users.FindAsync(userId);
+            if (user == null) return null;
+            user.SecurityStamp = SessionStamp.New();
+            user.UpdatedAt = DateTime.UtcNow;
+            await _context.SaveChangesAsync();
+            _cache.Remove(SessionStamp.CacheKey(user.Id));
+            return new AuthResponseDto { Token = GenerateJwt(user), User = await BuildUserDtoAsync(user) };
+        }
+
+        public async Task<UserDto?> GetCurrentUserAsync(Guid userId)
         {
             var user = await _context.Users.FindAsync(userId);
             if (user == null) return null;
@@ -177,6 +238,7 @@ namespace StatsHub.Api.Services
                 new(ClaimTypes.Role, user.Role),
                 new("name", $"{user.FirstName} {user.LastName}".Trim())
             };
+            if (user.SecurityStamp != null) claims.Add(new(SessionStamp.ClaimType, user.SecurityStamp));
 
             var token = new JwtSecurityToken(
                 issuer: _configuration["Jwt:Issuer"] ?? "StatsHub",

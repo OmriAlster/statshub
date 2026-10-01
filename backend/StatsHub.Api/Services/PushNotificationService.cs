@@ -20,15 +20,15 @@ namespace StatsHub.Api.Services
         // contains the token "{time}" or "{datetime}", the service worker
         // replaces it with that instant formatted in the device's own local
         // time before the notification is shown.
-        Task NotifyTeamAsync(int teamId, string title, string body, string? url = null, int? excludeUserId = null, DateTime? gameDate = null);
+        Task NotifyTeamAsync(Guid teamId, string title, string body, string? url = null, Guid? excludeUserId = null, DateTime? gameDate = null);
 
         // Same as NotifyTeamAsync, but for a shared real-world IBBA team - every
         // app Team currently linked to it (one per family tracking a kid on that
         // team) gets notified, not just whichever one happens to own the game
         // row. Use this for anything about an IBBA-synced game; NotifyTeamAsync
         // stays right for a manually-created game, which is always single-team.
-        Task NotifyIbbaTeamAsync(int ibbaTeamId, string title, string body, string? url = null, int? excludeUserId = null, DateTime? gameDate = null);
-        Task NotifyUsersAsync(IEnumerable<int> userIds, string title, string body, string? url = null, DateTime? gameDate = null);
+        Task NotifyIbbaTeamAsync(Guid ibbaTeamId, string title, string body, string? url = null, Guid? excludeUserId = null, DateTime? gameDate = null);
+        Task NotifyUsersAsync(IEnumerable<Guid> userIds, string title, string body, string? url = null, DateTime? gameDate = null);
     }
 
     public class PushNotificationService : IPushNotificationService
@@ -55,7 +55,7 @@ namespace StatsHub.Api.Services
             }
         }
 
-        public async Task NotifyTeamAsync(int teamId, string title, string body, string? url = null, int? excludeUserId = null, DateTime? gameDate = null)
+        public async Task NotifyTeamAsync(Guid teamId, string title, string body, string? url = null, Guid? excludeUserId = null, DateTime? gameDate = null)
         {
             var parentUserIds = await _context.PlayerTeams
                 .Where(pt => pt.TeamId == teamId)
@@ -73,7 +73,7 @@ namespace StatsHub.Api.Services
             await NotifyUsersAsync(recipientUserIds, title, body, url, gameDate);
         }
 
-        public async Task NotifyIbbaTeamAsync(int ibbaTeamId, string title, string body, string? url = null, int? excludeUserId = null, DateTime? gameDate = null)
+        public async Task NotifyIbbaTeamAsync(Guid ibbaTeamId, string title, string body, string? url = null, Guid? excludeUserId = null, DateTime? gameDate = null)
         {
             var parentUserIds = await _context.PlayerTeams
                 .Where(pt => pt.Team.IbbaTeamId == ibbaTeamId)
@@ -91,7 +91,7 @@ namespace StatsHub.Api.Services
             await NotifyUsersAsync(recipientUserIds, title, body, url, gameDate);
         }
 
-        public async Task NotifyUsersAsync(IEnumerable<int> userIds, string title, string body, string? url = null, DateTime? gameDate = null)
+        public async Task NotifyUsersAsync(IEnumerable<Guid> userIds, string title, string body, string? url = null, DateTime? gameDate = null)
         {
             var ids = userIds.Distinct().ToList();
             if (ids.Count == 0) return;

@@ -5,11 +5,11 @@ namespace StatsHub.Api.DTOs
     // and stats need to stay split per team.
     public class PlayerTeamStatsDto
     {
-        public int PlayerId { get; set; }
+        public Guid PlayerId { get; set; }
         public string PlayerName { get; set; } = string.Empty;
         public int JerseyNumber { get; set; }
         public string Position { get; set; } = string.Empty;
-        public int TeamId { get; set; }
+        public Guid TeamId { get; set; }
         public string TeamName { get; set; } = string.Empty;
 
         public int GamesPlayed { get; set; }

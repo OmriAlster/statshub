@@ -6,6 +6,7 @@ import IconSprite from './components/IconSprite'
 import Layout from './components/Layout'
 import { LiveGameProvider } from './live/LiveGameContext'
 import { Analytics } from '@vercel/analytics/react'
+import BouncingBall from './components/BouncingBall'
 
 const Dashboard = lazy(() => import('./pages/Dashboard'))
 const Stats = lazy(() => import('./pages/Stats'))
@@ -17,7 +18,7 @@ const SharedPlayerView = lazy(() => import('./pages/SharedPlayerView'))
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth()
-  if (loading) return <div className="app-loading">Loading...</div>
+  if (loading) return <div className="app-loading"><BouncingBall size="lg" /></div>
   if (!user) return <Navigate to="/login" replace />
   return <>{children}</>
 }
@@ -28,7 +29,7 @@ function App() {
   if (loading) {
     return (
       <div className="app-container">
-        <div className="app-loading">Loading...</div>
+        <div className="app-loading"><BouncingBall size="lg" /></div>
       </div>
     )
   }
@@ -37,7 +38,7 @@ function App() {
     <LiveGameProvider>
     <IconSprite />
     <Analytics />
-    <Suspense fallback={<div className="app-loading">Loading...</div>}>
+    <Suspense fallback={<div className="app-loading"><BouncingBall size="lg" /></div>}>
     <Routes>
       <Route path="/login" element={<Login />} />
       <Route path="/share/:token" element={<SharedPlayerView />} />

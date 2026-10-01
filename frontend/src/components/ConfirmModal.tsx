@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { Busy } from './BouncingBall'
 
 interface ConfirmModalProps {
   title: string
@@ -25,7 +26,7 @@ export default function ConfirmModal({ title, message, confirmLabel = 'Delete', 
           <p style={{ margin: '0.75rem 0 1.25rem' }}>{message}</p>
           <div className="flex gap-1">
             <button className="end-game-btn" onClick={onConfirm} disabled={busy}>
-              {busy ? 'Deleting...' : confirmLabel}
+              {busy ? <Busy>Deleting…</Busy> : confirmLabel}
             </button>
             <button className="nav-btn" onClick={onCancel} disabled={busy}>
               Cancel

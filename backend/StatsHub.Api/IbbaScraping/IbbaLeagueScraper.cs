@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Net;
 using HtmlAgilityPack;
+using StatsHub.Api.Services;
 
 namespace StatsHub.Api.IbbaScraping;
 
@@ -17,6 +18,7 @@ public class IbbaLeagueScraper
     public async Task<List<IbbaStandingRow>> GetStandingsAsync(string leagueUrl)
     {
         var html = await _http.GetStringAsync(leagueUrl);
+        using var parsing = RequestTimings.Time("parse-standings");
         var doc = new HtmlDocument();
         doc.LoadHtml(html);
 

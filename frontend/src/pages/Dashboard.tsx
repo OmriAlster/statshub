@@ -11,12 +11,13 @@ import StandingsModal from '../components/StandingsModal'
 import TeamCrest from '../components/TeamCrest'
 import { formatGameDateOnly, formatGameTime } from '../utils/formatGameDate'
 import { collectUpcomingGames, UPCOMING_PREVIEW_COUNT } from '../utils/upcomingGames'
+import BouncingBall from '../components/BouncingBall'
 
 interface PlayerCard {
   player: PlayerDto
   teamStats: PlayerTeamStatsDto[]
   ibba: IbbaLinkStatusDto | null
-  gamesByTeam: Record<number, GameDto[]>
+  gamesByTeam: Record<string, GameDto[]>
 }
 
 function lastAndNextGame(games: GameDto[]) {
@@ -80,7 +81,7 @@ export default function Dashboard() {
             api.get<IbbaLinkStatusDto>(`/players/${player.id}/ibba`).then((res) => res.data).catch(() => null),
           ])
 
-          const gamesByTeam: Record<number, GameDto[]> = {}
+          const gamesByTeam: Record<string, GameDto[]> = {}
           for (const g of games) {
             ;(gamesByTeam[g.teamId] ??= []).push(g)
           }
@@ -104,7 +105,7 @@ export default function Dashboard() {
     return (
       <div className="page-container">
         <h2><svg className="icon"><use href="#i-home" /></svg> Dashboard</h2>
-        <p>Loading...</p>
+        <BouncingBall />
       </div>
     )
   }

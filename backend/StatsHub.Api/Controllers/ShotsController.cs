@@ -40,7 +40,7 @@ namespace StatsHub.Api.Controllers
         }
 
         [HttpDelete("{id}")]
-        public async Task<ActionResult> DeleteShot(int id)
+        public async Task<ActionResult> DeleteShot(Guid id)
         {
             var success = await _shotService.DeleteShotAsync(id, _currentUser.UserId);
             if (!success)
@@ -49,14 +49,14 @@ namespace StatsHub.Api.Controllers
         }
 
         [HttpGet("gamestats/{gameStatsId}")]
-        public async Task<ActionResult<List<ShotDto>>> GetShotsByGameStats(int gameStatsId)
+        public async Task<ActionResult<List<ShotDto>>> GetShotsByGameStats(Guid gameStatsId)
         {
             var shots = await _shotService.GetShotsByGameStatsAsync(gameStatsId, _currentUser.UserId);
             return Ok(shots);
         }
 
         [HttpGet("player/{playerId}/team/{teamId}")]
-        public async Task<ActionResult<List<ShotDto>>> GetShotsByPlayerAndTeam(int playerId, int teamId)
+        public async Task<ActionResult<List<ShotDto>>> GetShotsByPlayerAndTeam(Guid playerId, Guid teamId)
         {
             var shots = await _shotService.GetShotsByPlayerAndTeamAsync(playerId, teamId, _currentUser.UserId);
             return Ok(shots);

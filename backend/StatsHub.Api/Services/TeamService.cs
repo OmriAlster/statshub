@@ -7,13 +7,13 @@ namespace StatsHub.Api.Services
 {
     public interface ITeamService
     {
-        Task<List<TeamDto>> GetMyTeamsAsync(int userId);
-        Task<TeamDto> CreateTeamAsync(int userId, CreateTeamDto dto);
-        Task<TeamDto?> RenameTeamAsync(int teamId, string name, int userId);
-        Task<bool> DeleteTeamAsync(int teamId, int userId);
-        Task<bool> AddPlayerToTeamAsync(int teamId, int playerId, int userId, int? jerseyNumber);
-        Task<bool> RemovePlayerFromTeamAsync(int teamId, int playerId, int userId);
-        Task<bool> UpdatePlayerTeamJerseyAsync(int teamId, int playerId, int jerseyNumber, int userId);
+        Task<List<TeamDto>> GetMyTeamsAsync(Guid userId);
+        Task<TeamDto> CreateTeamAsync(Guid userId, CreateTeamDto dto);
+        Task<TeamDto?> RenameTeamAsync(Guid teamId, string name, Guid userId);
+        Task<bool> DeleteTeamAsync(Guid teamId, Guid userId);
+        Task<bool> AddPlayerToTeamAsync(Guid teamId, Guid playerId, Guid userId, int? jerseyNumber);
+        Task<bool> RemovePlayerFromTeamAsync(Guid teamId, Guid playerId, Guid userId);
+        Task<bool> UpdatePlayerTeamJerseyAsync(Guid teamId, Guid playerId, int jerseyNumber, Guid userId);
     }
 
     public class TeamService : ITeamService
@@ -29,7 +29,7 @@ namespace StatsHub.Api.Services
             _gameService = gameService;
         }
 
-        public async Task<List<TeamDto>> GetMyTeamsAsync(int userId)
+        public async Task<List<TeamDto>> GetMyTeamsAsync(Guid userId)
         {
             var season = await _seasonService.GetOrCreateCurrentSeasonAsync(userId);
 
@@ -47,7 +47,7 @@ namespace StatsHub.Api.Services
             return teams.Select(MapToDto).ToList();
         }
 
-        public async Task<TeamDto> CreateTeamAsync(int userId, CreateTeamDto dto)
+        public async Task<TeamDto> CreateTeamAsync(Guid userId, CreateTeamDto dto)
         {
             var season = await _seasonService.GetOrCreateCurrentSeasonAsync(userId);
             var team = new Team
@@ -66,7 +66,7 @@ namespace StatsHub.Api.Services
         // Same access as editing the roster - the season owner, or a parent of
         // a player on this team (e.g. a co-parent). Only the app Team's own
         // display name changes; a linked IBBA team keeps its official name.
-        public async Task<TeamDto?> RenameTeamAsync(int teamId, string name, int userId)
+        public async Task<TeamDto?> RenameTeamAsync(Guid teamId, string name, Guid userId)
         {
             if (!await CanManageTeamAsync(teamId, userId)) return null;
 
@@ -79,7 +79,7 @@ namespace StatsHub.Api.Services
             return MapToDto(team);
         }
 
-        public async Task<bool> DeleteTeamAsync(int teamId, int userId)
+        public async Task<bool> DeleteTeamAsync(Guid teamId, Guid userId)
         {
             var team = await _context.Teams.Include(t => t.Season).FirstOrDefaultAsync(t => t.Id == teamId);
             if (team == null || team.Season.UserId != userId) return false;
@@ -94,7 +94,7 @@ namespace StatsHub.Api.Services
         // A parent can add their player onto a team they own the season for, or
         // onto a team another one of their linked players is already rostered on
         // (covers a second parent who doesn't own the season).
-        private async Task<bool> CanManageTeamAsync(int teamId, int userId)
+        private async Task<bool> CanManageTeamAsync(Guid teamId, Guid userId)
         {
             return await _context.Teams.AnyAsync(t =>
                 t.Id == teamId && (
@@ -103,7 +103,7 @@ namespace StatsHub.Api.Services
                 ));
         }
 
-        public async Task<bool> AddPlayerToTeamAsync(int teamId, int playerId, int userId, int? jerseyNumber)
+        public async Task<bool> AddPlayerToTeamAsync(Guid teamId, Guid playerId, Guid userId, int? jerseyNumber)
         {
             if (!await CanManageTeamAsync(teamId, userId)) return false;
 
@@ -124,7 +124,7 @@ namespace StatsHub.Api.Services
             return true;
         }
 
-        public async Task<bool> RemovePlayerFromTeamAsync(int teamId, int playerId, int userId)
+        public async Task<bool> RemovePlayerFromTeamAsync(Guid teamId, Guid playerId, Guid userId)
         {
             if (!await CanManageTeamAsync(teamId, userId)) return false;
 
@@ -136,7 +136,7 @@ namespace StatsHub.Api.Services
             return true;
         }
 
-        public async Task<bool> UpdatePlayerTeamJerseyAsync(int teamId, int playerId, int jerseyNumber, int userId)
+        public async Task<bool> UpdatePlayerTeamJerseyAsync(Guid teamId, Guid playerId, int jerseyNumber, Guid userId)
         {
             if (!await CanManageTeamAsync(teamId, userId)) return false;
 

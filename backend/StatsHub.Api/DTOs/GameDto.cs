@@ -2,8 +2,8 @@ namespace StatsHub.Api.DTOs
 {
     public class GameDto
     {
-        public int Id { get; set; }
-        public int TeamId { get; set; }
+        public Guid Id { get; set; }
+        public Guid TeamId { get; set; }
         public string TeamName { get; set; } = string.Empty;
         // The viewing team's own crest - only populated when that app Team is
         // itself linked to an IbbaTeam, regardless of whether this particular
@@ -35,7 +35,7 @@ namespace StatsHub.Api.DTOs
 
     public class CreateGameDto
     {
-        public int TeamId { get; set; }
+        public Guid TeamId { get; set; }
         public string GameType { get; set; } = "League";
         public string OpponentName { get; set; } = string.Empty;
         public DateTime GameDate { get; set; }

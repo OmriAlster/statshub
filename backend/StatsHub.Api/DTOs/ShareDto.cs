@@ -2,15 +2,15 @@ namespace StatsHub.Api.DTOs
 {
     public class CreateShareLinkDto
     {
-        public int PlayerId { get; set; }
-        public int? GameId { get; set; }
+        public Guid PlayerId { get; set; }
+        public Guid? GameId { get; set; }
     }
 
     public class ShareLinkDto
     {
         public string Token { get; set; } = string.Empty;
-        public int PlayerId { get; set; }
-        public int? GameId { get; set; }
+        public Guid PlayerId { get; set; }
+        public Guid? GameId { get; set; }
         public DateTime CreatedAt { get; set; }
     }
 

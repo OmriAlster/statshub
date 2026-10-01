@@ -5,13 +5,17 @@ namespace StatsHub.Api.IbbaScraping;
 /// <summary>
 /// ibasketball.co.il is served through two caches - Cloudflare (a separate
 /// saved copy in every data center) and the site's own LiteSpeed page cache.
-/// A cached schedule could still show a game's old date/time after IBBA
-/// changed it: the production server (in the US) got a stale US copy and saw
-/// "nothing changed", while a sync from Israel got fresh data. A unique query
-/// parameter on every request makes both caches treat it as a new address and
-/// fetch fresh from IBBA itself. WordPress ignores the unknown parameter.
-/// Our traffic is small (a nightly sync plus manual syncs), so skipping the
-/// cache doesn't load their site meaningfully.
+/// A cached schedule (the games spreadsheet) could still show a game's old
+/// date/time after IBBA changed it: the production server (in the US) got a
+/// stale copy and saw "nothing changed", while a sync from Israel got fresh
+/// data. So the spreadsheet is always fetched fresh - a unique query parameter
+/// makes both caches treat it as a new address. WordPress ignores it.
+///
+/// Only the spreadsheet, though: IBBA takes 15-25 seconds to build any page
+/// itself, against ~0.3s for a cached copy, and skipping the cache for every
+/// page made one IBBA link take minutes. The player, team and league pages
+/// (team list, crest, standings) aren't where game times live, and IBBA's
+/// page cache is refreshed when that content changes.
 /// </summary>
 public class IbbaNoCacheHandler : DelegatingHandler
 {
@@ -20,7 +24,8 @@ public class IbbaNoCacheHandler : DelegatingHandler
     protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
     {
         if (request.Method == HttpMethod.Get && request.RequestUri is { } uri &&
-            uri.Host.EndsWith("ibasketball.co.il", StringComparison.OrdinalIgnoreCase))
+            uri.Host.EndsWith("ibasketball.co.il", StringComparison.OrdinalIgnoreCase) &&
+            IsGamesSpreadsheet(uri))
         {
             request.RequestUri = WithCacheBuster(uri);
             request.Headers.CacheControl = new CacheControlHeaderValue { NoCache = true };
@@ -28,6 +33,8 @@ public class IbbaNoCacheHandler : DelegatingHandler
         }
         return base.SendAsync(request, cancellationToken);
     }
+
+    public static bool IsGamesSpreadsheet(Uri uri) => uri.Query.Contains("feed=xlsx", StringComparison.OrdinalIgnoreCase);
 
     public static Uri WithCacheBuster(Uri uri)
     {

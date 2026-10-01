@@ -8,7 +8,7 @@ namespace StatsHub.Api.Models
     // isn't worth the extra request).
     public class IbbaTeam
     {
-        public int Id { get; set; }
+        public Guid Id { get; set; } = Guid.CreateVersion7();
 
         // Numeric slug id parsed from the team URL (e.g. "151" from
         // /team/151-.../) - the same id space as a game row's

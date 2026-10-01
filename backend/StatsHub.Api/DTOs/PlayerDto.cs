@@ -2,7 +2,7 @@ namespace StatsHub.Api.DTOs
 {
     public class PlayerDto
     {
-        public int Id { get; set; }
+        public Guid Id { get; set; }
         public string FirstName { get; set; } = string.Empty;
         public string LastName { get; set; } = string.Empty;
         public string Position { get; set; } = string.Empty;
@@ -16,7 +16,7 @@ namespace StatsHub.Api.DTOs
 
     public class ParentDto
     {
-        public int UserId { get; set; }
+        public Guid UserId { get; set; }
         public string FirstName { get; set; } = string.Empty;
         public string LastName { get; set; } = string.Empty;
     }

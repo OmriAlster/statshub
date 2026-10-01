@@ -14,6 +14,9 @@ namespace StatsHub.Api.Tests.Infrastructure;
 // race the tests over the same rows.
 public class StatsHubFactory : WebApplicationFactory<Program>
 {
+    // Set before first use to test the sign-in attempt limit itself.
+    public string? RateLimitOverride { get; init; }
+
     private readonly string _dbPath = Path.Combine(Path.GetTempPath(), $"statshub-test-{Guid.NewGuid():N}.db");
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
@@ -22,6 +25,10 @@ public class StatsHubFactory : WebApplicationFactory<Program>
         builder.UseSetting("ConnectionStrings:Default", $"Data Source={_dbPath}");
         builder.UseSetting("DATABASE_URL", ""); // never Postgres, even if the machine has one set
         builder.UseSetting("Logging:LogLevel:Default", "Warning"); // SQL-per-query logging is just noise here
+        // Every test signs in from the same address, many times - attempt
+        // limits are tested on their own (SecurityTests) with a fresh factory.
+        builder.UseSetting("RateLimits:SignInPerMinute", RateLimitOverride ?? "100000");
+        builder.UseSetting("RateLimits:RequestsPerMinute", "100000");
 
         builder.ConfigureTestServices(services =>
         {

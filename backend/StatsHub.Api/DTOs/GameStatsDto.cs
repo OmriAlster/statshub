@@ -2,9 +2,9 @@ namespace StatsHub.Api.DTOs
 {
     public class GameStatsDto
     {
-        public int Id { get; set; }
-        public int GameId { get; set; }
-        public int PlayerId { get; set; }
+        public Guid Id { get; set; }
+        public Guid GameId { get; set; }
+        public Guid PlayerId { get; set; }
         public string PlayerName { get; set; } = string.Empty;
         
         public int FieldGoalsMade { get; set; }
@@ -40,8 +40,8 @@ namespace StatsHub.Api.DTOs
 
     public class CreateGameStatsDto
     {
-        public int GameId { get; set; }
-        public int PlayerId { get; set; }
+        public Guid GameId { get; set; }
+        public Guid PlayerId { get; set; }
         
         public int FieldGoalsMade { get; set; }
         public int FieldGoalsAttempted { get; set; }

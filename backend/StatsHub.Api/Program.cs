@@ -1,5 +1,8 @@
+using System.Security.Claims;
 using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using StatsHub.Api.Data;
@@ -13,6 +16,22 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddControllers();
 builder.Services.AddOpenApi();
 builder.Services.AddHttpContextAccessor();
+builder.Services.AddMemoryCache();
+builder.Services.AddScoped<RequestTimings>();
+builder.Services.AddSingleton<IbbaSyncTracker>();
+builder.Services.AddTransient<StatsHub.Api.IbbaScraping.IbbaTimingHandler>();
+RateLimits.Add(builder.Services, builder.Configuration);
+
+// Behind Railway's proxy every request seems to come from the proxy - read
+// the real address from X-Forwarded-For (the proxy's own entry only), so
+// attempt limits are per person, not one shared bucket for everyone.
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    options.ForwardLimit = 1;
+    options.KnownIPNetworks.Clear();
+    options.KnownProxies.Clear();
+});
 
 // Add CORS - origins come from localhost (dev) plus any production frontend
 // URL(s) supplied via config/env (comma-separated for multiple domains, e.g.
@@ -56,6 +75,10 @@ var usingPostgres = !string.IsNullOrEmpty(databaseUrl);
 
 builder.Services.AddDbContext<AppDbContext>(options =>
 {
+    // Round trips per request, in Server-Timing. Locally, optionally with a
+    // production-like delay per query (Diagnostics:SimulatedDbLatencyMs).
+    var simulatedDbLatencyMs = builder.Environment.IsDevelopment() ? builder.Configuration.GetValue("Diagnostics:SimulatedDbLatencyMs", 0) : 0;
+    options.AddInterceptors(new TimingDbInterceptor(simulatedDbLatencyMs));
     if (usingPostgres)
     {
         options.UseNpgsql(ToNpgsqlConnectionString(databaseUrl!));
@@ -95,6 +118,32 @@ builder.Services.AddAuthentication(options =>
         ValidAudience = jwtAudience,
         IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey))
     };
+
+    // A token stops working once its account's security stamp changes
+    // ("Log out of all devices") - checked against the database, cached for
+    // 30 seconds so it isn't a query on every request.
+    options.Events = new JwtBearerEvents
+    {
+        OnTokenValidated = async context =>
+        {
+            if (!Guid.TryParse(context.Principal?.FindFirstValue(ClaimTypes.NameIdentifier), out var userId))
+            {
+                context.Fail("Invalid token.");
+                return;
+            }
+            var cache = context.HttpContext.RequestServices.GetRequiredService<IMemoryCache>();
+            var currentStamp = await cache.GetOrCreateAsync(SessionStamp.CacheKey(userId), async entry =>
+            {
+                entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(30);
+                var db = context.HttpContext.RequestServices.GetRequiredService<AppDbContext>();
+                var user = await db.Users.Where(u => u.Id == userId).Select(u => new { u.SecurityStamp }).FirstOrDefaultAsync();
+                return user == null ? null : user.SecurityStamp ?? string.Empty;
+            });
+            var tokenStamp = context.Principal?.FindFirstValue(SessionStamp.ClaimType);
+            if (currentStamp == null || (currentStamp != string.Empty && currentStamp != tokenStamp))
+                context.Fail("This session has ended - please sign in again.");
+        },
+    };
 });
 
 builder.Services.AddAuthorization();
@@ -122,6 +171,8 @@ builder.Services.AddHttpClient("Ibba", client =>
 {
     AutomaticDecompression = System.Net.DecompressionMethods.All
 })
+// Times each IBBA page for the request's Server-Timing - see IbbaTimingHandler.
+.AddHttpMessageHandler<StatsHub.Api.IbbaScraping.IbbaTimingHandler>()
 // Always fetch fresh from IBBA, never a cached copy - see IbbaNoCacheHandler.
 .AddHttpMessageHandler(() => new StatsHub.Api.IbbaScraping.IbbaNoCacheHandler());
 
@@ -137,13 +188,18 @@ using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
     db.Database.EnsureCreated();
-    if (usingPostgres)
+
+    // A database from before UUID ids: bring its (numeric-id) schema up to
+    // date with the old upgraders, then convert every id to a UUID - once.
+    // A database created since (or already converted) has the current schema
+    // from EnsureCreated, so the old upgraders - written for numeric ids -
+    // never run on it. A schema change from now on needs its own idempotent
+    // step here for UUID databases (EnsureCreated never alters an existing one).
+    if (UuidMigration.IsLegacy(db))
     {
-        PostgresSchemaUpgrader.Apply(db);
-    }
-    else
-    {
-        SchemaUpgrader.Apply(db);
+        if (usingPostgres) PostgresSchemaUpgrader.Apply(db);
+        else SchemaUpgrader.Apply(db);
+        UuidMigration.Run(db, scope.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger("UuidMigration"));
     }
 }
 
@@ -151,14 +207,50 @@ using (var scope = app.Services.CreateScope())
 // Server-Timing response header (visible in the browser's network tab) - so
 // slowness can be split into "the server was slow" vs "the network was slow"
 // without shell access to the host.
+// The games-spreadsheet reader's one-time setup, off the first sync's path.
+_ = Task.Run(() =>
+{
+    try { StatsHub.Api.IbbaScraping.IbbaTeamScraper.WarmUpSpreadsheetReader(); }
+    catch (Exception ex) { app.Logger.LogWarning(ex, "Spreadsheet reader warm-up failed"); }
+});
+
+// Requests that did slow work (IBBA pages, sync phases) list each part too,
+// and are logged with the breakdown - see RequestTimings.
 app.Use(async (context, next) =>
 {
     var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+    var timings = context.RequestServices.GetRequiredService<RequestTimings>();
+    RequestTimings.Current = timings;
     context.Response.OnStarting(() =>
     {
-        context.Response.Headers["Server-Timing"] = $"app;dur={stopwatch.Elapsed.TotalMilliseconds:F1}";
+        var header = $"app;dur={stopwatch.Elapsed.TotalMilliseconds:F1}";
+        if (timings.Any) header += ", " + timings.ToServerTimingHeader();
+        context.Response.Headers["Server-Timing"] = header;
         return Task.CompletedTask;
     });
+    await next();
+    if (timings.Any)
+    {
+        app.Logger.LogInformation("{Method} {Path} took {Total:F0}ms: {Breakdown}",
+            context.Request.Method, context.Request.Path, stopwatch.Elapsed.TotalMilliseconds, timings);
+    }
+});
+
+if (!app.Environment.IsDevelopment())
+{
+    app.UseForwardedHeaders();
+    app.UseHsts();
+}
+
+// Standard hardening headers on every response. The API only returns JSON,
+// so it never needs to be framed, sniffed as another type, or send a referrer.
+app.Use(async (context, next) =>
+{
+    var headers = context.Response.Headers;
+    headers["X-Content-Type-Options"] = "nosniff";
+    headers["X-Frame-Options"] = "DENY";
+    headers["Referrer-Policy"] = "no-referrer";
+    headers["Content-Security-Policy"] = "default-src 'none'; frame-ancestors 'none'";
     await next();
 });
 
@@ -168,95 +260,10 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 }
 
-// TEMPORARY latency probe - measures the database round trip from inside
-// the server (DNS lookup, opening a brand-new connection, and a trivial
-// query on a pooled one), to find why every query takes ~150ms in
-// production vs ~1ms locally. Returns only timings - no hostnames,
-// credentials, or data. Remove once the cause is found.
-app.MapGet("/api/diag/latency", async (AppDbContext db) =>
-{
-    if (!usingPostgres) return Results.NotFound();
-
-    var csb = new Npgsql.NpgsqlConnectionStringBuilder(ToNpgsqlConnectionString(databaseUrl!));
-    var sw = System.Diagnostics.Stopwatch.StartNew();
-
-    var dnsStart = sw.Elapsed;
-    var addresses = await System.Net.Dns.GetHostAddressesAsync(csb.Host!);
-    var dnsMs = (sw.Elapsed - dnsStart).TotalMilliseconds;
-
-    // A brand-new physical connection (pooling off): TCP + TLS + auth.
-    csb.Pooling = false;
-    var openStart = sw.Elapsed;
-    await using (var fresh = new Npgsql.NpgsqlConnection(csb.ConnectionString))
-    {
-        await fresh.OpenAsync();
-    }
-    var freshOpenMs = (sw.Elapsed - openStart).TotalMilliseconds;
-
-    // The app's own pooled connection, same path every request uses.
-    var conn = db.Database.GetDbConnection();
-    var pooledOpenStart = sw.Elapsed;
-    await conn.OpenAsync();
-    var pooledOpenMs = (sw.Elapsed - pooledOpenStart).TotalMilliseconds;
-
-    var selectMs = new List<double>();
-    for (var i = 0; i < 5; i++)
-    {
-        var start = sw.Elapsed;
-        await using var cmd = conn.CreateCommand();
-        cmd.CommandText = "SELECT 1";
-        await cmd.ExecuteScalarAsync();
-        selectMs.Add(Math.Round((sw.Elapsed - start).TotalMilliseconds, 1));
-    }
-    await conn.CloseAsync();
-
-    // Where is this server really running? TCP connect time ~= one network
-    // round trip, so the lowest of these points at the real location.
-    var referenceHosts = new Dictionary<string, string>
-    {
-        ["frankfurt"] = "dynamodb.eu-central-1.amazonaws.com",
-        ["ireland"] = "dynamodb.eu-west-1.amazonaws.com",
-        ["usEast"] = "dynamodb.us-east-1.amazonaws.com",
-        ["usWest"] = "dynamodb.us-west-2.amazonaws.com",
-        ["singapore"] = "dynamodb.ap-southeast-1.amazonaws.com",
-    };
-    var locationProbeMs = new Dictionary<string, double?>();
-    foreach (var (name, host) in referenceHosts)
-    {
-        try
-        {
-            var ip = (await System.Net.Dns.GetHostAddressesAsync(host)).First(a => a.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork);
-            using var tcp = new System.Net.Sockets.TcpClient();
-            var start = sw.Elapsed;
-            await tcp.ConnectAsync(ip, 443).WaitAsync(TimeSpan.FromSeconds(3));
-            locationProbeMs[name] = Math.Round((sw.Elapsed - start).TotalMilliseconds, 1);
-        }
-        catch
-        {
-            locationProbeMs[name] = null;
-        }
-    }
-
-    return Results.Ok(new
-    {
-        // Private network (*.railway.internal) vs the public TCP proxy -
-        // yes/no plus port only, nothing that identifies the database.
-        usesPrivateNetwork = csb.Host!.EndsWith(".railway.internal", StringComparison.OrdinalIgnoreCase),
-        dbPort = csb.Port,
-        sslMode = csb.SslMode.ToString(),
-        locationProbeMs,
-        dnsMs = Math.Round(dnsMs, 1),
-        addressFamilies = addresses.Select(a => a.AddressFamily.ToString()).Distinct(),
-        freshConnectionOpenMs = Math.Round(freshOpenMs, 1),
-        pooledConnectionOpenMs = Math.Round(pooledOpenMs, 1),
-        selectOneMs = selectMs,
-        totalMs = Math.Round(sw.Elapsed.TotalMilliseconds, 1),
-    });
-});
-
 app.UseCors("AllowFrontend");
 
 app.UseAuthentication();
+app.UseRateLimiter(); // after authentication, so limits are per signed-in account
 app.UseAuthorization();
 
 app.MapControllers();

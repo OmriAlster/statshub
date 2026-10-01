@@ -184,6 +184,9 @@ namespace StatsHub.Api.Data
             // Live on/off court indicator - see GameStats.OnCourt.
             db.ExecuteSqlRaw(@"ALTER TABLE ""GameStats"" ADD COLUMN IF NOT EXISTS ""OnCourt"" boolean;");
 
+            // Ending every session of an account - see User.SecurityStamp.
+            db.ExecuteSqlRaw(@"ALTER TABLE ""Users"" ADD COLUMN IF NOT EXISTS ""SecurityStamp"" text;");
+
             db.ExecuteSqlRaw(@"
                 CREATE TABLE IF NOT EXISTS ""PushSubscriptions"" (
                     ""Id"" SERIAL PRIMARY KEY,

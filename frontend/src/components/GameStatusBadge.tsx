@@ -29,7 +29,7 @@ export function OnCourtChip({ onCourt }: { onCourt: boolean }) {
 
 // The player's on/off court in a game (the given player's, or the one player
 // whose stats the game carries) - null when nobody tracks it.
-export function onCourtIn(game: GameDto, playerId?: number): boolean | null {
+export function onCourtIn(game: GameDto, playerId?: string): boolean | null {
   const stats = playerId != null ? game.playerStats.find((s) => s.playerId === playerId) : game.playerStats.find((s) => s.onCourt != null)
   return stats?.onCourt ?? null
 }

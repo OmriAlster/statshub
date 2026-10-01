@@ -7,10 +7,10 @@ namespace StatsHub.Api.Services
 {
     public interface IShotService
     {
-        Task<ShotDto?> CreateShotAsync(CreateShotDto dto, int requestingUserId);
-        Task<bool> DeleteShotAsync(int id, int requestingUserId);
-        Task<List<ShotDto>> GetShotsByGameStatsAsync(int gameStatsId, int requestingUserId);
-        Task<List<ShotDto>> GetShotsByPlayerAndTeamAsync(int playerId, int teamId, int requestingUserId);
+        Task<ShotDto?> CreateShotAsync(CreateShotDto dto, Guid requestingUserId);
+        Task<bool> DeleteShotAsync(Guid id, Guid requestingUserId);
+        Task<List<ShotDto>> GetShotsByGameStatsAsync(Guid gameStatsId, Guid requestingUserId);
+        Task<List<ShotDto>> GetShotsByPlayerAndTeamAsync(Guid playerId, Guid teamId, Guid requestingUserId);
     }
 
     public class ShotService : IShotService
@@ -22,14 +22,14 @@ namespace StatsHub.Api.Services
             _context = context;
         }
 
-        private async Task<bool> CanReadPlayerAsync(int playerId, int userId) =>
+        private async Task<bool> CanReadPlayerAsync(Guid playerId, Guid userId) =>
             await _context.Players.AnyAsync(p =>
                 p.Id == playerId && (p.LinkedUserId == userId || p.Parents.Any(pp => pp.UserId == userId)));
 
-        private Task<bool> CanWritePlayerAsync(int playerId, int userId) =>
+        private Task<bool> CanWritePlayerAsync(Guid playerId, Guid userId) =>
             _context.PlayerParents.AnyAsync(pp => pp.PlayerId == playerId && pp.UserId == userId);
 
-        public async Task<ShotDto?> CreateShotAsync(CreateShotDto dto, int requestingUserId)
+        public async Task<ShotDto?> CreateShotAsync(CreateShotDto dto, Guid requestingUserId)
         {
             var gameStats = await _context.GameStats.FindAsync(dto.GameStatsId);
             if (gameStats == null || !await CanWritePlayerAsync(gameStats.PlayerId, requestingUserId)) return null;
@@ -55,7 +55,7 @@ namespace StatsHub.Api.Services
             return await MapToDtoAsync(shot);
         }
 
-        public async Task<bool> DeleteShotAsync(int id, int requestingUserId)
+        public async Task<bool> DeleteShotAsync(Guid id, Guid requestingUserId)
         {
             var shot = await _context.Shots.FindAsync(id);
             if (shot == null) return false;
@@ -72,7 +72,7 @@ namespace StatsHub.Api.Services
             return true;
         }
 
-        public async Task<List<ShotDto>> GetShotsByGameStatsAsync(int gameStatsId, int requestingUserId)
+        public async Task<List<ShotDto>> GetShotsByGameStatsAsync(Guid gameStatsId, Guid requestingUserId)
         {
             var gameStats = await _context.GameStats.FindAsync(gameStatsId);
             if (gameStats == null || !await CanReadPlayerAsync(gameStats.PlayerId, requestingUserId)) return new List<ShotDto>();
@@ -85,7 +85,7 @@ namespace StatsHub.Api.Services
             return shots.Select(s => MapToDto(s, gameStats)).ToList();
         }
 
-        public async Task<List<ShotDto>> GetShotsByPlayerAndTeamAsync(int playerId, int teamId, int requestingUserId)
+        public async Task<List<ShotDto>> GetShotsByPlayerAndTeamAsync(Guid playerId, Guid teamId, Guid requestingUserId)
         {
             if (!await CanReadPlayerAsync(playerId, requestingUserId)) return new List<ShotDto>();
 
@@ -110,7 +110,7 @@ namespace StatsHub.Api.Services
         // Same live-recording lock as box-score and game edits: while a game
         // is live, only the parent tracking it can add or remove shots (each
         // shot changes the box score) - a watching co-parent can't.
-        private async Task<bool> IsLockedByAnotherTrackerAsync(GameStats gameStats, int requestingUserId)
+        private async Task<bool> IsLockedByAnotherTrackerAsync(GameStats gameStats, Guid requestingUserId)
         {
             var game = await _context.Games.FindAsync(gameStats.GameId);
             return game != null && game.Status == "In Progress"

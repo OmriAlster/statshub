@@ -10,6 +10,7 @@ interface AuthContextValue {
   register: (email: string, password: string, firstName: string, lastName: string) => Promise<void>
   devLogin: (email: string, firstName: string, lastName: string) => Promise<void>
   logout: () => void
+  logoutEverywhere: () => Promise<void>
   refreshUser: () => Promise<void>
 }
 
@@ -71,8 +72,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null)
   }
 
+  // Ends every login of this account on every device; this one gets a fresh
+  // token and stays signed in.
+  const logoutEverywhere = async () => {
+    const { data } = await api.post('/auth/logout-all')
+    localStorage.setItem(TOKEN_STORAGE_KEY, data.token)
+    setUser(data.user)
+  }
+
   const value = useMemo(
-    () => ({ user, loading, loginWithGoogle, loginWithPassword, register, devLogin, logout, refreshUser }),
+    () => ({ user, loading, loginWithGoogle, loginWithPassword, register, devLogin, logout, logoutEverywhere, refreshUser }),
     [user, loading]
   )
 

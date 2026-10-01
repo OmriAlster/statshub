@@ -1,9 +1,10 @@
-<Project Sdk="Microsoft.NET.Sdk.Web">
+﻿<Project Sdk="Microsoft.NET.Sdk.Web">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <UserSecretsId>5a785826-9518-46ff-b714-56978da2ea55</UserSecretsId>
   </PropertyGroup>
 
   <ItemGroup>
@@ -16,6 +17,10 @@
     <PackageReference Include="HtmlAgilityPack" Version="1.11.61" />
     <PackageReference Include="ClosedXML" Version="0.104.1" />
     <PackageReference Include="WebPush" Version="1.0.13" />
+    <!-- Patched versions of packages the ones above pull in (known high-severity advisories in the older ones). -->
+    <PackageReference Include="Microsoft.OpenApi" Version="2.12.2" />
+    <PackageReference Include="SQLitePCLRaw.lib.e_sqlite3" Version="2.1.13" />
+    <PackageReference Include="System.IO.Packaging" Version="10.0.12" />
   </ItemGroup>
 
   <ItemGroup>

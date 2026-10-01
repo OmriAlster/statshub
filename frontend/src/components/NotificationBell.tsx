@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { usePushNotifications } from '../hooks/usePushNotifications'
+import { Busy } from './BouncingBall'
 
 // Header bell: shows whether notifications are on for THIS device, turns
 // them on (a tap - iPhone only allows setting them up from one), and sends a
@@ -84,11 +85,11 @@ export default function NotificationBell() {
           {supported && permission !== 'denied' && (
             on ? (
               <button className="submit-btn notif-panel-btn" onClick={test} disabled={sending}>
-                {sending ? 'Sending...' : 'Send test notification'}
+                {sending ? <Busy>Sending…</Busy> : 'Send test notification'}
               </button>
             ) : (
               <button className="submit-btn notif-panel-btn" onClick={turnOn} disabled={busy || sending}>
-                {busy ? 'Turning on...' : 'Turn on notifications'}
+                {busy ? <Busy>Turning on…</Busy> : 'Turn on notifications'}
               </button>
             )
           )}

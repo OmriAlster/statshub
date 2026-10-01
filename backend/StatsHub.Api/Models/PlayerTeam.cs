@@ -4,9 +4,9 @@ namespace StatsHub.Api.Models
     // season (e.g. a U16 squad and a U18 squad), so this is a many-to-many join.
     public class PlayerTeam
     {
-        public int Id { get; set; }
-        public int PlayerId { get; set; }
-        public int TeamId { get; set; }
+        public Guid Id { get; set; } = Guid.CreateVersion7();
+        public Guid PlayerId { get; set; }
+        public Guid TeamId { get; set; }
 
         // A player can wear a different number on each team roster.
         public int JerseyNumber { get; set; }

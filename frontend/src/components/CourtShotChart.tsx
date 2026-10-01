@@ -1,7 +1,7 @@
 import { useRef } from 'react'
 
 export interface ChartShot {
-  id?: number
+  id?: string
   x: number // 0..1, fraction of court width from left sideline
   y: number // 0..1, fraction of court length from baseline
   made: boolean
@@ -12,7 +12,7 @@ interface CourtShotChartProps {
   interactive?: boolean
   pendingShot?: { x: number; y: number } | null
   onCourtTap?: (x: number, y: number, value: 2 | 3) => void
-  onRemoveShot?: (id: number) => void
+  onRemoveShot?: (id: string) => void
   showLegend?: boolean
 }
 

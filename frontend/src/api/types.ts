@@ -1,5 +1,5 @@
 export interface TeamDto {
-  id: number
+  id: string
   name: string
   // Only present when this team appears in a player-specific context (e.g.
   // PlayerDto.teams) - a player can wear a different number per team.
@@ -7,13 +7,13 @@ export interface TeamDto {
 }
 
 export interface ParentDto {
-  userId: number
+  userId: string
   firstName: string
   lastName: string
 }
 
 export interface PlayerDto {
-  id: number
+  id: string
   firstName: string
   lastName: string
   position: string
@@ -26,7 +26,7 @@ export interface PlayerDto {
 }
 
 export interface UserDto {
-  id: number
+  id: string
   email: string
   firstName: string
   lastName: string
@@ -36,7 +36,7 @@ export interface UserDto {
 }
 
 export interface SeasonDto {
-  id: number
+  id: string
   name: string
   sport: string
   year: number
@@ -46,9 +46,9 @@ export interface SeasonDto {
 }
 
 export interface GameStatsDto {
-  id: number
-  gameId: number
-  playerId: number
+  id: string
+  gameId: string
+  playerId: string
   playerName: string
   fieldGoalsMade: number
   fieldGoalsAttempted: number
@@ -78,8 +78,8 @@ export interface GameStatsDto {
 export type GameType = 'League' | 'Cup' | 'Friendly'
 
 export interface GameDto {
-  id: number
-  teamId: number
+  id: string
+  teamId: string
   teamName: string
   teamLogoUrl?: string | null
   gameType: GameType
@@ -98,8 +98,8 @@ export interface GameDto {
 }
 
 export interface CreateGameStatsDto {
-  gameId: number
-  playerId: number
+  gameId: string
+  playerId: string
   fieldGoalsMade: number
   fieldGoalsAttempted: number
   threePointersMade: number
@@ -131,11 +131,11 @@ export interface UpdateGameDto {
 }
 
 export interface PlayerTeamStatsDto {
-  playerId: number
+  playerId: string
   playerName: string
   jerseyNumber: number
   position: string
-  teamId: number
+  teamId: string
   teamName: string
   gamesPlayed: number
   totalMinutes: number
@@ -175,10 +175,10 @@ export interface SharedPlayerDto {
 }
 
 export interface ShotDto {
-  id: number
-  gameStatsId: number
-  gameId: number
-  playerId: number
+  id: string
+  gameStatsId: string
+  gameId: string
+  playerId: string
   quarter: number
   x: number
   y: number
@@ -192,7 +192,7 @@ export interface InviteDto {
 }
 
 export interface CreateShotDto {
-  gameStatsId: number
+  gameStatsId: string
   quarter: number
   x: number
   y: number
@@ -211,11 +211,11 @@ export interface IbbaPreviewDto {
 }
 
 export interface IbbaTeamLinkDto {
-  id: number
+  id: string
   teamName: string
   teamUrl: string
   teamLogoUrl?: string | null
-  linkedTeamId?: number | null
+  linkedTeamId?: string | null
   linkedTeamName?: string | null
   ibbaLeagueUrl?: string | null
   ibbaLeagueName?: string | null
@@ -224,10 +224,12 @@ export interface IbbaTeamLinkDto {
 }
 
 export interface IbbaLinkStatusDto {
-  playerId: number
+  playerId: string
   ibbaPlayerUrl: string
   lastSyncedAt?: string | null
   lastSyncError?: string | null
+  // Games and standings still loading in the background after a link/sync.
+  gamesLoading?: boolean
   teams: IbbaTeamLinkDto[]
   // The family's teams not linked to IBBA - offered in the "add to an
   // existing team?" pop-up.

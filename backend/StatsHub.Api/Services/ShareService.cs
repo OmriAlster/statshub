@@ -7,7 +7,7 @@ namespace StatsHub.Api.Services
 {
     public interface IShareService
     {
-        Task<ShareLinkDto?> CreateShareLinkAsync(CreateShareLinkDto dto, int requestingUserId);
+        Task<ShareLinkDto?> CreateShareLinkAsync(CreateShareLinkDto dto, Guid requestingUserId);
         Task<SharedPlayerDto?> GetByTokenAsync(string token);
     }
 
@@ -22,7 +22,7 @@ namespace StatsHub.Api.Services
             _gameStatsService = gameStatsService;
         }
 
-        public async Task<ShareLinkDto?> CreateShareLinkAsync(CreateShareLinkDto dto, int requestingUserId)
+        public async Task<ShareLinkDto?> CreateShareLinkAsync(CreateShareLinkDto dto, Guid requestingUserId)
         {
             var player = await _context.Players.Include(p => p.Parents).FirstOrDefaultAsync(p => p.Id == dto.PlayerId);
             if (player == null || (player.LinkedUserId != requestingUserId && !player.Parents.Any(pp => pp.UserId == requestingUserId))) return null;
@@ -217,7 +217,7 @@ namespace StatsHub.Api.Services
                     .Distinct().ToList();
                 var ibbaTeams = ibbaTeamIds.Count > 0
                     ? await _context.IbbaTeams.Where(t => ibbaTeamIds.Contains(t.Id)).ToDictionaryAsync(t => t.Id)
-                    : new Dictionary<int, IbbaTeam>();
+                    : new Dictionary<Guid, IbbaTeam>();
 
                 dto.Games = games.Select(g =>
                 {
@@ -241,7 +241,7 @@ namespace StatsHub.Api.Services
 
         private async Task<GameDto> MapGameToDtoAsync(Game game, Team? viewTeam)
         {
-            var ibbaTeams = new Dictionary<int, IbbaTeam>();
+            var ibbaTeams = new Dictionary<Guid, IbbaTeam>();
             if (game.IbbaGameCode != null)
             {
                 var sideIds = new[] { game.HomeTeamId, game.AwayTeamId }.Where(id => id.HasValue).Select(id => id!.Value).ToList();
@@ -254,7 +254,7 @@ namespace StatsHub.Api.Services
         // relative to "us" (opponent name/logo, our score vs. theirs, home/away)
         // is derived here from the game's objective Home/Away ids compared
         // against viewTeam's own, never stored pre-baked on the row.
-        private static GameDto MapGameToDto(Game game, Team? viewTeam, Dictionary<int, IbbaTeam> ibbaTeams)
+        private static GameDto MapGameToDto(Game game, Team? viewTeam, Dictionary<Guid, IbbaTeam> ibbaTeams)
         {
             var isIbba = game.IbbaGameCode != null;
             string opponentName;
@@ -264,7 +264,7 @@ namespace StatsHub.Api.Services
 
             if (isIbba)
             {
-                bool? viewerIsHome = viewTeam?.IbbaTeamId is int viewIbbaId
+                bool? viewerIsHome = viewTeam?.IbbaTeamId is Guid viewIbbaId
                     ? (game.HomeTeamId == viewIbbaId ? true : game.AwayTeamId == viewIbbaId ? false : (bool?)null)
                     : null;
 
@@ -291,7 +291,7 @@ namespace StatsHub.Api.Services
             return new GameDto
             {
                 Id = game.Id,
-                TeamId = viewTeam?.Id ?? 0,
+                TeamId = viewTeam?.Id ?? Guid.Empty,
                 TeamName = viewTeam?.Name ?? string.Empty,
                 TeamLogoUrl = viewTeam?.IbbaTeam?.LogoUrl,
                 GameType = game.GameType,

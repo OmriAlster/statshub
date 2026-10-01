@@ -32,24 +32,24 @@ describe('Dashboard upcoming games', () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-10-10T12:00:00Z'))
     const games = [
-      makeGame({ id: 1, gameDate: '2026-10-20T16:00:00Z' }),
-      makeGame({ id: 2, gameDate: '2026-10-12T16:00:00Z' }),
-      makeGame({ id: 3, gameDate: '2026-10-10T09:00:00Z' }), // 3h ago, not scored yet: still listed
-      makeGame({ id: 4, gameDate: '2026-10-09T09:00:00Z' }), // a day ago, never scored: dropped
-      makeGame({ id: 5, gameDate: '2026-10-08T09:00:00Z', status: 'Completed' }),
-      makeGame({ id: 6, gameDate: '2026-10-25T16:00:00Z', status: 'In Progress' }),
+      makeGame({ id: '1', gameDate: '2026-10-20T16:00:00Z' }),
+      makeGame({ id: '2', gameDate: '2026-10-12T16:00:00Z' }),
+      makeGame({ id: '3', gameDate: '2026-10-10T09:00:00Z' }), // 3h ago, not scored yet: still listed
+      makeGame({ id: '4', gameDate: '2026-10-09T09:00:00Z' }), // a day ago, never scored: dropped
+      makeGame({ id: '5', gameDate: '2026-10-08T09:00:00Z', status: 'Completed' }),
+      makeGame({ id: '6', gameDate: '2026-10-25T16:00:00Z', status: 'In Progress' }),
     ]
     const upcoming = collectUpcomingGames([{ player: makePlayer(), gamesByTeam: { 10: games } }])
-    expect(upcoming.map((u) => u.game.id)).toEqual([6, 3, 2, 1])
+    expect(upcoming.map((u) => u.game.id)).toEqual(['6', '3', '2', '1'])
   })
 
   it('siblings on the same game share one row', () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-10-10T12:00:00Z'))
-    const game = makeGame({ id: 7, gameDate: '2026-10-12T16:00:00Z' })
+    const game = makeGame({ id: '7', gameDate: '2026-10-12T16:00:00Z' })
     const upcoming = collectUpcomingGames([
-      { player: makePlayer({ id: 1, firstName: 'Older' }), gamesByTeam: { 10: [game] } },
-      { player: makePlayer({ id: 2, firstName: 'Younger' }), gamesByTeam: { 11: [{ ...game, teamId: 11 }] } },
+      { player: makePlayer({ id: '1', firstName: 'Older' }), gamesByTeam: { 10: [game] } },
+      { player: makePlayer({ id: '2', firstName: 'Younger' }), gamesByTeam: { 11: [{ ...game, teamId: '11' }] } },
     ])
     expect(upcoming).toHaveLength(1)
     expect(upcoming[0].players.map((p) => p.firstName)).toEqual(['Older', 'Younger'])

@@ -8,6 +8,7 @@ import { formatGameTime } from '../utils/formatGameDate'
 import { computeStatsFromEvents, EVENT_ICONS, EVENT_LABELS, seedEventsFromStats, type EventType, type GameEvent } from './gameEvents'
 import { courtSeconds, endOfGame, formatClock, formatClockInput, isOnCourt, minutesFromSeconds, parseClock, periodLabel, QUARTERS, substitutionProblem, type Substitution } from './courtTime'
 import { useLiveGameOverlay } from './LiveGameContext'
+import BouncingBall, { Busy } from '../components/BouncingBall'
 
 function isToday(iso: string) {
   const d = new Date(iso)
@@ -29,9 +30,9 @@ interface ActionLogEntry {
 }
 
 interface ActiveGame {
-  gameId: number
-  gameStatsId: number
-  playerId: number
+  gameId: string
+  gameStatsId: string
+  playerId: string
   playerName: string
   jerseyNumber: number
   teamName: string
@@ -69,8 +70,8 @@ export default function LiveGameWidget() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  const [selectedPlayerId, setSelectedPlayerId] = useState<number | ''>('')
-  const [selectedTeamId, setSelectedTeamId] = useState<number | ''>('')
+  const [selectedPlayerId, setSelectedPlayerId] = useState<string>('')
+  const [selectedTeamId, setSelectedTeamId] = useState<string>('')
   const [gameType, setGameType] = useState<GameType>('League')
   const [opponent, setOpponent] = useState('')
   const [location, setLocation] = useState('')
@@ -97,7 +98,7 @@ export default function LiveGameWidget() {
     if (!storageKey) return
 
     const saved = localStorage.getItem(storageKey)
-    let restoredGameId: number | null = null
+    let restoredGameId: string | null = null
     if (saved) {
       try {
         const parsed = JSON.parse(saved) as ActiveGame
@@ -117,7 +118,7 @@ export default function LiveGameWidget() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storageKey])
 
-  const promoteToLive = async (gameId: number, playerId: number) => {
+  const promoteToLive = async (gameId: string, playerId: string) => {
     setPromoting(true)
     setError(null)
     try {
@@ -174,7 +175,7 @@ export default function LiveGameWidget() {
 
       setActive({
         gameId,
-        gameStatsId: stats?.id ?? 0,
+        gameStatsId: stats?.id ?? '',
         playerId: player.id,
         playerName: `${player.firstName} ${player.lastName}`,
         jerseyNumber: team?.jerseyNumber ?? 0,
@@ -211,7 +212,7 @@ export default function LiveGameWidget() {
   // quiet: reloading while the widget is already on screen (opening the live
   // screen) - doesn't hide the widget behind a loading state, and doesn't
   // override a player/team already picked in the setup form.
-  const loadSetupData = async (restoredGameId: number | null = null, quiet = false) => {
+  const loadSetupData = async (restoredGameId: string | null = null, quiet = false) => {
     try {
       if (!quiet) setLoading(true)
       const { data } = await api.get<PlayerDto[]>('/players')
@@ -384,7 +385,7 @@ export default function LiveGameWidget() {
   const selectedPlayer = players.find((p) => p.id === selectedPlayerId)
   const playerTeams = selectedPlayer?.teams ?? []
 
-  const selectPlayer = (playerId: number) => {
+  const selectPlayer = (playerId: string) => {
     setSelectedPlayerId(playerId)
     const player = players.find((p) => p.id === playerId)
     setSelectedTeamId(player && player.teams.length > 0 ? player.teams[0].id : '')
@@ -400,7 +401,7 @@ export default function LiveGameWidget() {
   // it, this always finds the very game being resumed and refuses to
   // continue, which silently defeated every "get back to live" attempt that
   // didn't go through the local-storage-restore path.
-  const playerHasActiveGame = async (playerId: number, excludeGameId?: number) => {
+  const playerHasActiveGame = async (playerId: string, excludeGameId?: string) => {
     const { data } = await api.get<GameDto[]>(`/games/player/${playerId}`)
     return data.some((g) => g.status === 'In Progress' && g.id !== excludeGameId)
   }
@@ -500,7 +501,7 @@ export default function LiveGameWidget() {
   // The last tap saves on a short delay - kept here so it can be saved right
   // away when the game ends or the live screen closes, instead of the page
   // behind reloading a box score from just before it.
-  const pendingSave = useRef<{ gameStatsId: number; payload: ReturnType<typeof computeStatsFromEvents> & { onCourt?: boolean } } | null>(null)
+  const pendingSave = useRef<{ gameStatsId: string; payload: ReturnType<typeof computeStatsFromEvents> & { onCourt?: boolean } } | null>(null)
   const liveStatsChanged = useRef(false)
 
   const flushPendingSave = async () => {
@@ -525,7 +526,7 @@ export default function LiveGameWidget() {
 
   // subs: the on/off court changes to save with the stats (default: as they
   // are now). Untracked games don't send on/off court at all.
-  const persistStats = (events: GameEvent[], minutesPlayed: number, gameStatsId: number, subs = active?.subs ?? [], forceOnCourt?: boolean) => {
+  const persistStats = (events: GameEvent[], minutesPlayed: number, gameStatsId: string, subs = active?.subs ?? [], forceOnCourt?: boolean) => {
     liveStatsChanged.current = true
     if (saveTimer.current) window.clearTimeout(saveTimer.current)
     const onCourt = forceOnCourt ?? (subs.length > 0 ? isOnCourt(subs) : undefined)
@@ -697,7 +698,7 @@ export default function LiveGameWidget() {
     }
   }
 
-  const removeShot = async (id: number) => {
+  const removeShot = async (id: string) => {
     if (!active) return
     try {
       await api.delete(`/shots/${id}`)
@@ -717,7 +718,7 @@ export default function LiveGameWidget() {
     const last = active.actionLog[active.actionLog.length - 1]
     if (last.kind === 'event') removeEvent(last.id as string)
     else if (last.kind === 'sub') removeLastSub()
-    else removeShot(last.id as number)
+    else removeShot(last.id as string)
   }
 
   const shotsMade = (value: 2 | 3) => (value === 2 ? shotStats.made2 : shotStats.made3)
@@ -833,7 +834,7 @@ export default function LiveGameWidget() {
 
           {promoting ? (
             <div className="game-setup">
-              <p>Going live...</p>
+              <BouncingBall label="Going live…" />
             </div>
           ) : !active ? (
             <div className="game-setup">
@@ -890,7 +891,7 @@ export default function LiveGameWidget() {
                   <div className="setup-form">
                     <div>
                       <label>Player:</label>
-                      <select value={selectedPlayerId} onChange={(e) => selectPlayer(Number(e.target.value))}>
+                      <select value={selectedPlayerId} onChange={(e) => selectPlayer(e.target.value)}>
                         <option value="">Select a player</option>
                         {players.map((p) => (
                           <option key={p.id} value={p.id}>
@@ -907,7 +908,7 @@ export default function LiveGameWidget() {
                             This player isn't on a team yet - add one from the Players page first.
                           </p>
                         ) : (
-                          <select value={selectedTeamId} onChange={(e) => setSelectedTeamId(Number(e.target.value))}>
+                          <select value={selectedTeamId} onChange={(e) => setSelectedTeamId(e.target.value)}>
                             {playerTeams.map((t) => (
                               <option key={t.id} value={t.id}>
                                 {t.name}
@@ -963,7 +964,7 @@ export default function LiveGameWidget() {
                   </div>
                   <button className="start-game-btn" onClick={startGame} disabled={starting}>
                     {starting ? (
-                      'Starting...'
+                      <Busy>Starting…</Busy>
                     ) : (
                       <>
                         <svg className="icon" style={{ stroke: '#2b1400' }}><use href="#i-ball" /></svg> Start Game
@@ -1036,7 +1037,7 @@ export default function LiveGameWidget() {
               <div className="live-header-actions">
                 {!active.shareUrl ? (
                   <button className="share-live-btn" onClick={createShareLink} disabled={sharing}>
-                    <svg className="icon"><use href="#i-share" /></svg> {sharing ? 'Creating link...' : 'Share Live'}
+                    <svg className="icon"><use href="#i-share" /></svg> {sharing ? <Busy>Creating link…</Busy> : 'Share Live'}
                   </button>
                 ) : (
                   <button className="share-live-btn" onClick={copyShareLink}>
