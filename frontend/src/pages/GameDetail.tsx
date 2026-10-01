@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useLiveRefresh } from '../hooks/useLiveRefresh'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { api } from '../api/client'
 import { useLiveGameOverlay } from '../live/LiveGameContext'
@@ -32,6 +33,9 @@ export default function GameDetail() {
     if (id) load(Number(id), true)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [liveGameVersion])
+
+  // Tracked live on another phone: keep the score and on court / on bench current.
+  useLiveRefresh(game?.status === 'In Progress', () => { if (id) load(Number(id), true) })
 
   // quiet: no "Loading..." flash, and a failure keeps showing what's there.
   const load = async (gameId: number, quiet = false) => {

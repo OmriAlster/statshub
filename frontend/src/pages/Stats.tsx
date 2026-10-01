@@ -18,7 +18,8 @@ import { useAuth } from '../auth/AuthContext'
 import CourtShotChart from '../components/CourtShotChart'
 import { AveragesCard, ScheduleGameCards, StatsGameCards } from '../components/GameCards'
 import GameStatsEditor from '../components/GameStatsEditor'
-import GameStatusBadge from '../components/GameStatusBadge'
+import GameStatusBadge, { onCourtIn } from '../components/GameStatusBadge'
+import { useLiveRefresh } from '../hooks/useLiveRefresh'
 import SegmentedControl from '../components/SegmentedControl'
 import StandingsModal from '../components/StandingsModal'
 import TeamCrest from '../components/TeamCrest'
@@ -168,6 +169,10 @@ function PlayerProfilePanel({ player, prefetched }: { player: PlayerDto; prefetc
     load(true)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [liveGameVersion])
+
+  // A game tracked live on another phone: keep its score and on court /
+  // on bench current.
+  useLiveRefresh(games.some((g) => g.status === 'In Progress'), () => load(true))
 
   // quiet: reloading after an action on data already on screen - no
   // "Loading..." flash, and a failure keeps showing what's there.
@@ -639,7 +644,7 @@ function SchedulePanel({
                       {won ? 'W' : 'L'} {game.teamScore}&ndash;{game.opponentScore}
                     </td>
                   ) : (
-                    <td className="games-table-status"><GameStatusBadge status={game.status} /></td>
+                    <td className="games-table-status"><GameStatusBadge status={game.status} onCourt={onCourtIn(game)} /></td>
                   )}
                   <td>
                     <div className="flex gap-1">

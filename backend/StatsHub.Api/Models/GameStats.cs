@@ -25,6 +25,9 @@ namespace StatsHub.Api.Models
         public int Turnovers { get; set; }
         public int Fouls { get; set; }
         public int MinutesPlayed { get; set; }
+        // During a live game: is the player on the court right now, as the
+        // tracker last set it with Sub in/out. Null = not tracked.
+        public bool? OnCourt { get; set; }
         
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;

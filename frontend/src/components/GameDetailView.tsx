@@ -2,7 +2,7 @@ import type { ReactNode } from 'react'
 import type { GameDto } from '../api/types'
 import { formatGameDateTimeFull } from '../utils/formatGameDate'
 import CourtShotChart from './CourtShotChart'
-import GameStatusBadge from './GameStatusBadge'
+import GameStatusBadge, { onCourtIn } from './GameStatusBadge'
 import IbbaBadge from './IbbaBadge'
 
 interface GameDetailViewProps {
@@ -52,7 +52,7 @@ export default function GameDetailView({ game, headerActions }: GameDetailViewPr
         </div>
       ) : (
         <div className="game-upcoming">
-          <p><GameStatusBadge status={game.status} /></p>
+          <p><GameStatusBadge status={game.status} onCourt={onCourtIn(game)} /></p>
           {(game.teamLogoUrl || game.opponentLogoUrl) && (
             <div className="score-matchup" style={{ marginTop: '0.6rem' }}>
               <div className="score-side">

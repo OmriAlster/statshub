@@ -29,6 +29,7 @@ namespace StatsHub.Api.DTOs
         public int Turnovers { get; set; }
         public int Fouls { get; set; }
         public int MinutesPlayed { get; set; }
+        public bool? OnCourt { get; set; }
         public int TotalPoints { get; set; }
 
         // Only populated where a caller specifically asks for it (e.g. a shared
@@ -78,5 +79,6 @@ namespace StatsHub.Api.DTOs
         public int? Turnovers { get; set; }
         public int? Fouls { get; set; }
         public int? MinutesPlayed { get; set; }
+        public bool? OnCourt { get; set; }
     }
 }

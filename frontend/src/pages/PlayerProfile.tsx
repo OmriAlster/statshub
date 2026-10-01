@@ -1,8 +1,11 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { api } from '../api/client'
-import type { CreatePlayerFromIbbaResultDto, IbbaLinkStatusDto, IbbaPreviewDto, InviteDto, PlayerDto, TeamDto } from '../api/types'
+import type { CreatePlayerFromIbbaResultDto, GameDto, IbbaLinkStatusDto, IbbaPreviewDto, InviteDto, PlayerDto, TeamDto } from '../api/types'
 import { useAuth } from '../auth/AuthContext'
 import ConfirmModal from '../components/ConfirmModal'
+import { OnCourtChip, onCourtIn } from '../components/GameStatusBadge'
+import { useLiveRefresh } from '../hooks/useLiveRefresh'
 import IbbaBadge from '../components/IbbaBadge'
 import StandingsModal from '../components/StandingsModal'
 import TeamCrest from '../components/TeamCrest'
@@ -22,7 +25,6 @@ export default function PlayerProfile() {
   const { user } = useAuth()
   const isPlayerRole = user?.role === 'Player'
   const [players, setPlayers] = useState<PlayerDto[]>([])
-  const [allTeams, setAllTeams] = useState<TeamDto[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [showAddForm, setShowAddForm] = useState(false)
@@ -45,6 +47,8 @@ export default function PlayerProfile() {
   const [pickerJerseyNumber, setPickerJerseyNumber] = useState('')
   const [teamBusy, setTeamBusy] = useState(false)
   const [jerseyEdits, setJerseyEdits] = useState<Record<string, string>>({})
+  // Player whose IBBA teams need a "link existing or create new" choice.
+  const [choiceFor, setChoiceFor] = useState<number | null>(null)
   const [renaming, setRenaming] = useState<{ playerId: number; teamId: number; value: string; busy: boolean } | null>(null)
 
   const [ibbaLinks, setIbbaLinks] = useState<Record<number, IbbaLinkStatusDto | null>>({})
@@ -62,18 +66,38 @@ export default function PlayerProfile() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // Each player's game being played right now, if any - shown on their card
+  // (with on court / on bench) and kept current while it's live.
+  const [liveGames, setLiveGames] = useState<Record<number, GameDto | undefined>>({})
+  const loadLiveGames = async (playerIds: number[]) => {
+    const entries = await Promise.all(
+      playerIds.map(async (playerId): Promise<[number, GameDto | undefined]> => {
+        try {
+          const { data } = await api.get<GameDto[]>(`/games/player/${playerId}`)
+          return [playerId, data.find((g) => g.status === 'In Progress')]
+        } catch {
+          return [playerId, undefined]
+        }
+      })
+    )
+    setLiveGames(Object.fromEntries(entries))
+  }
+  useEffect(() => {
+    if (players.length > 0) loadLiveGames(players.map((p) => p.id))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [players.map((p) => p.id).join(',')])
+  useLiveRefresh(Object.values(liveGames).some(Boolean), () => loadLiveGames(players.map((p) => p.id)))
+
   const load = async () => {
     try {
       setLoading(true)
       if (isPlayerRole && user?.linkedPlayer) {
         setPlayers([user.linkedPlayer])
       } else {
-        const [{ data: playerList }, { data: teamList }] = await Promise.all([
-          api.get<PlayerDto[]>('/players'),
-          api.get<TeamDto[]>('/teams'),
-        ])
+        // (No separate team list anymore - "add an existing team" is gone,
+        // teams are created here or linked from IBBA.)
+        const { data: playerList } = await api.get<PlayerDto[]>('/players')
         setPlayers(playerList)
-        setAllTeams(teamList)
 
         const linkEntries = await Promise.all(
           playerList.map(async (p): Promise<[number, IbbaLinkStatusDto | null]> => {
@@ -146,6 +170,8 @@ export default function PlayerProfile() {
       setIbbaNewPreview(null)
       setShowAddIbbaForm(false)
       setError(null)
+      // You already have a team without IBBA - ask whether it's this one.
+      if (data.ibba?.teams.some((t) => !t.linkedTeamId)) setChoiceFor(data.player.id)
     } catch {
       setIbbaNewError('Could not create this player from IBBA.')
     } finally {
@@ -233,24 +259,6 @@ export default function PlayerProfile() {
     )
   }
 
-  const addExistingTeam = async (playerId: number, teamId: number) => {
-    const team = allTeams.find((t) => t.id === teamId)
-    if (!team) return
-    const jerseyNumber = pickerJerseyNumber.trim() === '' ? undefined : Number(pickerJerseyNumber)
-    setTeamBusy(true)
-    try {
-      await api.post(`/teams/${teamId}/players/${playerId}`, { jerseyNumber })
-      attachTeamToPlayer(playerId, team, jerseyNumber)
-      refreshPlayer(playerId)
-      setTeamPickerOpenFor(null)
-      setPickerJerseyNumber('')
-    } catch {
-      setError('Could not add player to that team.')
-    } finally {
-      setTeamBusy(false)
-    }
-  }
-
   const createAndAddTeam = async (playerId: number) => {
     if (!newTeamName.trim()) return
     const jerseyNumber = pickerJerseyNumber.trim() === '' ? undefined : Number(pickerJerseyNumber)
@@ -258,7 +266,6 @@ export default function PlayerProfile() {
     try {
       const { data: team } = await api.post<TeamDto>('/teams', { name: newTeamName.trim() })
       await api.post(`/teams/${team.id}/players/${playerId}`, { jerseyNumber })
-      setAllTeams((prev) => [...prev, team])
       attachTeamToPlayer(playerId, team, jerseyNumber)
       refreshPlayer(playerId)
       setNewTeamName('')
@@ -293,13 +300,11 @@ export default function PlayerProfile() {
     try {
       const { data } = await api.put<TeamDto>(`/teams/${renaming.teamId}`, { name })
       const teamId = renaming.teamId
-      // The same team can be on more than one player's card (siblings), in
-      // the "add existing team" picker, and in an IBBA "Synced to" label -
-      // rename it everywhere it's shown.
+      // The same team can be on more than one player's card (siblings) and
+      // behind IBBA link info - rename it everywhere it's shown.
       setPlayers((prev) =>
         prev.map((p) => ({ ...p, teams: (p.teams ?? []).map((t) => (t.id === teamId ? { ...t, name: data.name } : t)) }))
       )
-      setAllTeams((prev) => prev.map((t) => (t.id === teamId ? { ...t, name: data.name } : t)))
       setIbbaLinks((prev) =>
         Object.fromEntries(
           Object.entries(prev).map(([pid, link]) => [
@@ -363,7 +368,10 @@ export default function PlayerProfile() {
     try {
       const { data } = await api.post<IbbaLinkStatusDto>(`/players/${playerId}/ibba/link`, { ibbaPlayerUrl: url })
       setIbbaLinks((prev) => ({ ...prev, [playerId]: data }))
-      refreshPlayer(playerId) // the link's first sync sets the IBBA profile photo
+      // The link's first sync sets the IBBA photo and creates/links the
+      // player's teams - show them, and ask about any team that needs a choice.
+      await refreshPlayer(playerId)
+      if (data.teams.some((t) => !t.linkedTeamId)) setChoiceFor(playerId)
       setIbbaPreview((prev) => ({ ...prev, [playerId]: null }))
       setIbbaUrlInput((prev) => ({ ...prev, [playerId]: '' }))
       setIbbaError((prev) => ({ ...prev, [playerId]: null }))
@@ -379,7 +387,9 @@ export default function PlayerProfile() {
     try {
       const { data } = await api.post<IbbaLinkStatusDto>(`/players/${playerId}/ibba/sync`)
       setIbbaLinks((prev) => ({ ...prev, [playerId]: data }))
-      refreshPlayer(playerId) // a sync can update the IBBA profile photo
+      // A sync can update the IBBA photo and link a newly joined IBBA team.
+      await refreshPlayer(playerId)
+      if (data.teams.some((t) => !t.linkedTeamId)) setChoiceFor(playerId)
     } catch {
       setIbbaError((prev) => ({ ...prev, [playerId]: 'Sync failed - try again shortly.' }))
     } finally {
@@ -403,9 +413,9 @@ export default function PlayerProfile() {
   const mapIbbaTeamToExisting = async (playerId: number, ibbaTeamLinkId: number, teamId: number) => {
     setIbbaBusy((prev) => ({ ...prev, [playerId]: true }))
     try {
-      const { data } = await api.put<IbbaLinkStatusDto>(`/ibba/team-links/${ibbaTeamLinkId}`, { teamId })
+      const { data } = await api.put<IbbaLinkStatusDto>(`/ibba/team-links/${ibbaTeamLinkId}`, { teamId, playerId })
       setIbbaLinks((prev) => ({ ...prev, [playerId]: data }))
-      refreshPlayer(playerId)
+      await refreshPlayer(playerId)
     } catch {
       setIbbaError((prev) => ({ ...prev, [playerId]: 'Could not link that team.' }))
     } finally {
@@ -413,34 +423,16 @@ export default function PlayerProfile() {
     }
   }
 
-  // A player on two IBBA teams that share a name (the same club in two
-  // leagues/age groups, e.g. both "מכבי תל מונד") would otherwise end up with
-  // two identically-named teams everywhere in the app. When the name isn't
-  // unique for this player - among their IBBA teams or teams they're already
-  // on - add the league to tell them apart.
-  const nameForNewIbbaTeam = (player: PlayerDto, ibbaTeam: IbbaLinkStatusDto['teams'][number]) => {
-    const key = (name: string) => name.trim().toLowerCase()
-    const base = ibbaTeam.teamName.trim()
-    const sameNameIbbaTeams = (ibbaLinks[player.id]?.teams ?? []).filter((it) => key(it.teamName) === key(base)).length
-    const sameNameExistingTeams = (player.teams ?? []).filter((pt) => key(pt.name) === key(base)).length
-    const isAmbiguous = sameNameIbbaTeams > 1 || sameNameExistingTeams > 0
-    return isAmbiguous && ibbaTeam.ibbaLeagueName ? `${base} - ${ibbaTeam.ibbaLeagueName.trim()}` : base
-  }
-
-  const mapIbbaTeamToNew = async (playerId: number, ibbaTeamLinkId: number, teamName: string) => {
-    if (!teamName.trim()) return
+  // "Create a new team" in the choice pop-up - the server names it (adding
+  // the league when the name repeats), links it, and syncs its games.
+  const createTeamForIbba = async (playerId: number, ibbaTeamId: number) => {
     setIbbaBusy((prev) => ({ ...prev, [playerId]: true }))
     try {
-      const { data: team } = await api.post<TeamDto>('/teams', { name: teamName.trim() })
-      await api.post(`/teams/${team.id}/players/${playerId}`, {})
-      setAllTeams((prev) => [...prev, team])
-      const { data } = await api.put<IbbaLinkStatusDto>(`/ibba/team-links/${ibbaTeamLinkId}`, { teamId: team.id })
+      const { data } = await api.post<IbbaLinkStatusDto>(`/ibba/team-links/${ibbaTeamId}/new-team`, { playerId })
       setIbbaLinks((prev) => ({ ...prev, [playerId]: data }))
     } catch {
       setIbbaError((prev) => ({ ...prev, [playerId]: 'Could not create that team.' }))
     } finally {
-      // The new team is created and joined before the IBBA link step - show
-      // it on the player right away, even if the link step itself failed.
       await refreshPlayer(playerId)
       setIbbaBusy((prev) => ({ ...prev, [playerId]: false }))
     }
@@ -472,6 +464,17 @@ export default function PlayerProfile() {
               <div className="profile-id">
                 <h3>{player.firstName} {player.lastName}</h3>
                 <p className="profile-id-sub">{player.position || 'Player'}</p>
+                {liveGames[player.id] && (() => {
+                  const game = liveGames[player.id]!
+                  const onCourt = onCourtIn(game, player.id)
+                  return (
+                    <Link className="profile-live-line" to={`/games/${game.id}?playerId=${player.id}`}>
+                      <span className="live-title-tag"><span className="fab-live-dot" /> Live</span>
+                      <span className="profile-live-opponent" dir="auto">vs {game.opponentName}</span>
+                      {onCourt != null && <OnCourtChip onCourt={onCourt} />}
+                    </Link>
+                  )
+                })()}
               </div>
             </div>
 
@@ -537,6 +540,17 @@ export default function PlayerProfile() {
                             )}
                           </span>
                         )}
+                        {ibbaTeam?.ibbaLeagueName && (
+                          <button
+                            className="league-chip tcv2-league"
+                            onClick={() => setStandingsFor({ leagueUrl: ibbaTeam.ibbaLeagueUrl!, leagueName: ibbaTeam.ibbaLeagueName ?? '', teamName: t.name, teamUrl: ibbaTeam.teamUrl })}
+                            title="View standings"
+                          >
+                            <svg className="icon"><use href="#i-trophy" /></svg>
+                            <span dir="rtl">{ibbaTeam.ibbaLeagueName}</span>
+                            {!!ibbaTeam.position && ibbaTeam.position > 0 && ` · ${ibbaTeam.position} of ${ibbaTeam.totalTeams}`}
+                          </button>
+                        )}
                         {!isPlayerRole ? (
                           <div className="tcv2-jersey-row">
                             <label htmlFor={`jersey-${player.id}-${t.id}`}>Jersey</label>
@@ -571,35 +585,32 @@ export default function PlayerProfile() {
                 <>
                   {teamPickerOpenFor === player.id ? (
                     <div className="team-picker">
-                      {allTeams.filter((t) => !(player.teams ?? []).some((pt) => pt.id === t.id)).length > 0 && (
-                        <select
-                          defaultValue=""
-                          disabled={teamBusy}
-                          onChange={(e) => e.target.value && addExistingTeam(player.id, Number(e.target.value))}
-                        >
-                          <option value="">Add existing team...</option>
-                          {allTeams
-                            .filter((t) => !(player.teams ?? []).some((pt) => pt.id === t.id))
-                            .map((t) => (
-                              <option key={t.id} value={t.id}>{t.name}</option>
-                            ))}
-                        </select>
-                      )}
-                      <div className="flex gap-1">
+                      {/* Name on its own full-width line - squeezed into one row with
+                          the jersey box and buttons, it was ~70px wide on a phone and
+                          you couldn't see what you typed. */}
+                      <input
+                        type="text"
+                        className="team-picker-name"
+                        placeholder="New team name (e.g. U16)"
+                        aria-label="New team name"
+                        value={newTeamName}
+                        autoFocus
+                        maxLength={100}
+                        onChange={(e) => setNewTeamName(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') createAndAddTeam(player.id)
+                        }}
+                      />
+                      <div className="team-picker-row">
                         <input
                           type="number"
+                          className="team-picker-jersey"
                           placeholder="Jersey #"
+                          aria-label="Jersey number"
                           value={pickerJerseyNumber}
                           onChange={(e) => setPickerJerseyNumber(e.target.value)}
-                          style={{ maxWidth: '9rem' }}
                         />
-                        <input
-                          type="text"
-                          placeholder="New team name (e.g. U16)"
-                          value={newTeamName}
-                          onChange={(e) => setNewTeamName(e.target.value)}
-                        />
-                        <button className="submit-btn" disabled={teamBusy} onClick={() => createAndAddTeam(player.id)}>
+                        <button className="submit-btn" disabled={teamBusy || !newTeamName.trim()} onClick={() => createAndAddTeam(player.id)}>
                           Add
                         </button>
                         <button className="nav-btn" onClick={() => { setTeamPickerOpenFor(null); setNewTeamName(''); setPickerJerseyNumber('') }}>
@@ -628,65 +639,17 @@ export default function PlayerProfile() {
                   {ibbaLinks[player.id]!.lastSyncError && (
                     <p className="error">{ibbaLinks[player.id]!.lastSyncError}</p>
                   )}
-                  {ibbaLinks[player.id]!.teams.map((t) => (
-                    <div className="ibba-team-row" key={t.id}>
-                      <TeamCrest
-                        logoUrl={t.teamLogoUrl}
-                        showIbbaMark
-                        size="sm"
-                        onClick={t.ibbaLeagueUrl ? () => setStandingsFor({ leagueUrl: t.ibbaLeagueUrl!, leagueName: t.ibbaLeagueName ?? '', teamName: t.teamName, teamUrl: t.teamUrl }) : undefined}
-                      />
-                      <div style={{ flex: 1, minWidth: '10rem' }}>
-                        <div className="team-name-clamp" style={{ fontWeight: 700, fontSize: '0.9rem' }} dir="rtl" title={t.teamName}>{t.teamName}</div>
-                        {t.ibbaLeagueName && (
-                          <button
-                            className="league-chip"
-                            style={{ marginTop: '0.3rem', padding: '0.15rem 0.6rem 0.15rem 0.4rem', fontSize: '0.7rem' }}
-                            onClick={() => setStandingsFor({ leagueUrl: t.ibbaLeagueUrl!, leagueName: t.ibbaLeagueName ?? '', teamName: t.teamName, teamUrl: t.teamUrl })}
-                          >
-                            <svg className="icon" style={{ width: 11, height: 11 }}><use href="#i-trophy" /></svg>
-                            <span dir="rtl">{t.ibbaLeagueName}</span>
-                            {!!t.position && t.position > 0 && ` · ${t.position} of ${t.totalTeams}`}
-                          </button>
-                        )}
+                  {/* The player's IBBA teams show once, in the team list above (with
+                      their league and standings) - here only what needs a decision. */}
+                  {(() => {
+                    const pending = ibbaLinks[player.id]!.teams.filter((t) => !t.linkedTeamId).length
+                    return pending > 0 ? (
+                      <div className="ibba-pending-row">
+                        <span>{pending === 1 ? '1 IBBA team needs your choice' : `${pending} IBBA teams need your choice`}</span>
+                        <button className="submit-btn" onClick={() => setChoiceFor(player.id)}>Choose</button>
                       </div>
-                      {t.linkedTeamId ? (
-                        <span className="ibba-synced-to" title={t.linkedTeamName ?? undefined}>
-                          Synced to <b dir="auto">{t.linkedTeamName}</b>
-                        </span>
-                      ) : (
-                        <div className="flex gap-1" style={{ flexWrap: 'wrap' }}>
-                          {(player.teams ?? []).length > 0 && (
-                            <select
-                              className="ibba-link-select"
-                              defaultValue=""
-                              disabled={ibbaBusy[player.id]}
-                              onChange={(e) => e.target.value && mapIbbaTeamToExisting(player.id, t.id, Number(e.target.value))}
-                            >
-                              <option value="">Link to existing team...</option>
-                              {(player.teams ?? []).map((pt) => (
-                                <option key={pt.id} value={pt.id}>{pt.name}</option>
-                              ))}
-                            </select>
-                          )}
-                          {(() => {
-                            const newTeamName = nameForNewIbbaTeam(player, t)
-                            return (
-                              <button
-                                className="submit-btn ibba-create-team-btn"
-                                disabled={ibbaBusy[player.id]}
-                                onClick={() => mapIbbaTeamToNew(player.id, t.id, newTeamName)}
-                                title={`Create team "${newTeamName}"`}
-                              >
-                                <span>Create new team</span>
-                                <span className="ibba-create-team-name team-name-clamp" dir="auto">{newTeamName}</span>
-                              </button>
-                            )
-                          })()}
-                        </div>
-                      )}
-                    </div>
-                  ))}
+                    ) : null
+                  })()}
                   <div className="flex gap-1" style={{ marginTop: '0.75rem' }}>
                     <button className="add-team-btn" disabled={ibbaBusy[player.id]} onClick={() => syncIbba(player.id)}>
                       🔄 Sync Now
@@ -881,6 +844,27 @@ export default function PlayerProfile() {
         </div>
       )}
 
+      {choiceFor !== null && (() => {
+        const player = players.find((p) => p.id === choiceFor)
+        const link = ibbaLinks[choiceFor]
+        const pending = link?.teams.filter((t) => !t.linkedTeamId) ?? []
+        if (!player || pending.length === 0) return null
+        // Your teams that aren't linked to any IBBA team yet.
+        const candidates = link?.existingTeams ?? []
+        return (
+          <IbbaTeamChoiceModal
+            playerName={player.firstName}
+            pending={pending}
+            total={link?.teams.length ?? pending.length}
+            candidates={candidates}
+            busy={!!ibbaBusy[player.id]}
+            onLink={(ibbaTeamId, teamId) => mapIbbaTeamToExisting(player.id, ibbaTeamId, teamId)}
+            onCreate={(ibbaTeamId) => createTeamForIbba(player.id, ibbaTeamId)}
+            onClose={() => setChoiceFor(null)}
+          />
+        )
+      })()}
+
       {standingsFor && (
         <StandingsModal
           leagueUrl={standingsFor.leagueUrl}
@@ -907,6 +891,84 @@ export default function PlayerProfile() {
           onCancel={() => setDeletingPlayer(null)}
         />
       )}
+    </div>
+  )
+}
+
+// "Link to your existing team, or create a new one?" for each IBBA team that
+// couldn't be linked automatically - only asked when the player already has a
+// team that isn't linked to IBBA (it might be the same team).
+function IbbaTeamChoiceModal({
+  playerName,
+  pending,
+  total,
+  candidates,
+  busy,
+  onLink,
+  onCreate,
+  onClose,
+}: {
+  playerName: string
+  pending: IbbaLinkStatusDto['teams']
+  total: number
+  candidates: TeamDto[]
+  busy: boolean
+  onLink: (ibbaTeamId: number, teamId: number) => void
+  onCreate: (ibbaTeamId: number) => void
+  onClose: () => void
+}) {
+  const [picked, setPicked] = useState<Record<number, number>>({})
+
+  return (
+    <div className="game-edit-modal-backdrop" onClick={onClose}>
+      <div className="game-edit-modal-panel ibba-choice-panel" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Link IBBA teams">
+        <div className="modal-head">
+          <div className="modal-head-title">
+            <h3>Add {playerName}&apos;s IBBA team to your team?</h3>
+            {total > 1 && <p className="ibba-choice-step">IBBA team {total - pending.length + 1} of {total}</p>}
+            <p>
+              {candidates.length > 0
+                ? `Pick the existing team this IBBA team is - its games go there. A new team is made only if you say no.`
+                : `All your teams are linked to IBBA now - create a team for this one.`}
+            </p>
+          </div>
+          <button className="modal-close" onClick={onClose} aria-label="Close">
+            <svg className="icon"><use href="#i-x" /></svg>
+          </button>
+        </div>
+        <div className="modal-body ibba-choice-list">
+          {busy && (
+            <p className="ibba-choice-busy" role="status">Linking and loading the team&apos;s games - this takes a few seconds...</p>
+          )}
+          {pending.slice(0, 1).map((t) => {
+            const teamId = picked[t.id] ?? candidates[0]?.id
+            return (
+              <div className="ibba-choice-item" key={t.id}>
+                <div className="ibba-choice-team">
+                  <TeamCrest logoUrl={t.teamLogoUrl} showIbbaMark size="sm" />
+                  <div style={{ minWidth: 0 }}>
+                    <div className="team-name-clamp ibba-choice-name" dir="auto" title={t.teamName}>{t.teamName}</div>
+                    {t.ibbaLeagueName && <div className="ibba-choice-league" dir="rtl">{t.ibbaLeagueName}</div>}
+                  </div>
+                </div>
+                {candidates.length > 0 && (
+                  <div className="ibba-choice-option">
+                    <select value={teamId} onChange={(e) => setPicked((prev) => ({ ...prev, [t.id]: Number(e.target.value) }))} disabled={busy}>
+                      {candidates.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    </select>
+                    <button className="submit-btn" disabled={busy || !teamId} onClick={() => teamId && onLink(t.id, teamId)}>
+                      Yes, add to this team
+                    </button>
+                  </div>
+                )}
+                <button className="add-team-btn ibba-choice-new" disabled={busy} onClick={() => onCreate(t.id)}>
+                  {candidates.length > 0 ? 'No, create a new team' : 'Create a new team'}
+                </button>
+              </div>
+            )
+          })}
+        </div>
+      </div>
     </div>
   )
 }

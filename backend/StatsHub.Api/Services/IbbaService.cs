@@ -18,7 +18,8 @@ namespace StatsHub.Api.Services
         // access check. Never expose this through a controller.
         Task SyncLinkForScheduledJobAsync(int linkId);
         Task<IbbaLinkStatusDto?> GetLinkStatusAsync(int playerId, int requestingUserId);
-        Task<IbbaLinkStatusDto?> LinkTeamAsync(int ibbaTeamId, int teamId, int requestingUserId);
+        Task<IbbaLinkStatusDto?> LinkTeamAsync(int ibbaTeamId, int teamId, int requestingUserId, int? playerId = null);
+        Task<IbbaLinkStatusDto?> CreateTeamForIbbaTeamAsync(int ibbaTeamId, int playerId, int requestingUserId);
         Task<List<IbbaStandingDto>> GetStandingsAsync(string leagueUrl);
     }
 
@@ -30,9 +31,11 @@ namespace StatsHub.Api.Services
         private readonly IPushNotificationService _push;
         private readonly ILogger<IbbaService> _logger;
         private readonly IServiceScopeFactory _scopeFactory;
+        private readonly ISeasonService _seasonService;
 
-        public IbbaService(AppDbContext context, IPlayerService playerService, IHttpClientFactory httpClientFactory, IPushNotificationService push, ILogger<IbbaService> logger, IServiceScopeFactory scopeFactory)
+        public IbbaService(AppDbContext context, IPlayerService playerService, IHttpClientFactory httpClientFactory, IPushNotificationService push, ILogger<IbbaService> logger, IServiceScopeFactory scopeFactory, ISeasonService seasonService)
         {
+            _seasonService = seasonService;
             _context = context;
             _playerService = playerService;
             _httpClientFactory = httpClientFactory;
@@ -49,6 +52,29 @@ namespace StatsHub.Api.Services
                     t.Season.UserId == requestingUserId ||
                     t.PlayerTeams.Any(pt => pt.Player.Parents.Any(pp => pp.UserId == requestingUserId))
                 ));
+
+        // The existing teams (not linked to IBBA) the pop-up offers to add the
+        // player's IBBA teams to - one IBBA team at a time, for as long as any
+        // is left:
+        //  - the player's own teams without IBBA;
+        //  - for a player with no teams at all, the family's teams without IBBA
+        //    (made by the user, or with one of their children on it).
+        // Empty -> nothing to ask; IBBA teams get their own new team.
+        private async Task<List<Team>> ExistingTeamsToOfferAsync(int playerId)
+        {
+            var own = await _context.Teams
+                .Where(t => t.PlayerTeams.Any(pt => pt.PlayerId == playerId))
+                .ToListAsync();
+            if (own.Count > 0) return own.Where(t => t.IbbaTeamId == null).OrderBy(t => t.Name).ToList();
+
+            var familyUserId = await _context.Players.Where(p => p.Id == playerId).Select(p => p.UserId).FirstAsync();
+            return await _context.Teams
+                .Where(t => t.IbbaTeamId == null && (
+                    t.Season.UserId == familyUserId ||
+                    t.PlayerTeams.Any(pt => pt.Player.Parents.Any(pp => pp.UserId == familyUserId))))
+                .OrderBy(t => t.Name)
+                .ToListAsync();
+        }
 
         public async Task<IbbaPreviewDto> PreviewAsync(string playerUrl)
         {
@@ -207,17 +233,22 @@ namespace StatsHub.Api.Services
                 };
             }).ToList();
 
+            var existingTeams = teamDtos.Any(t => t.LinkedTeamId == null)
+                ? (await ExistingTeamsToOfferAsync(playerId)).Select(t => new TeamDto { Id = t.Id, Name = t.Name }).ToList()
+                : new List<TeamDto>();
+
             return new IbbaLinkStatusDto
             {
                 PlayerId = link.PlayerId,
                 IbbaPlayerUrl = link.IbbaPlayerUrl,
                 LastSyncedAt = link.LastSyncedAt,
                 LastSyncError = link.LastSyncError,
-                Teams = teamDtos
+                Teams = teamDtos,
+                ExistingTeams = existingTeams,
             };
         }
 
-        public async Task<IbbaLinkStatusDto?> LinkTeamAsync(int ibbaTeamId, int teamId, int requestingUserId)
+        public async Task<IbbaLinkStatusDto?> LinkTeamAsync(int ibbaTeamId, int teamId, int requestingUserId, int? playerId = null)
         {
             var ibbaTeam = await _context.IbbaTeams.FindAsync(ibbaTeamId);
             if (ibbaTeam == null) return null;
@@ -229,6 +260,7 @@ namespace StatsHub.Api.Services
                 .Where(pit => pit.IbbaTeamId == ibbaTeamId)
                 .Select(pit => pit.PlayerIbbaLink)
                 .ToListAsync();
+            if (playerId != null) candidateLinks = candidateLinks.Where(l => l.PlayerId == playerId).ToList();
 
             PlayerIbbaLink? accessibleLink = null;
             foreach (var candidate in candidateLinks)
@@ -248,7 +280,20 @@ namespace StatsHub.Api.Services
             var team = await _context.Teams.FindAsync(teamId);
             if (team == null) return null;
             team.IbbaTeamId = ibbaTeamId;
+            // The existing team may not have this player on it yet (e.g. a
+            // team made before the player was added).
+            if (!await _context.PlayerTeams.AnyAsync(pt => pt.PlayerId == accessibleLink.PlayerId && pt.TeamId == teamId))
+            {
+                _context.PlayerTeams.Add(new PlayerTeam { PlayerId = accessibleLink.PlayerId, TeamId = teamId, CreatedAt = DateTime.UtcNow });
+            }
             await _context.SaveChangesAsync();
+
+            // No existing team left to offer -> the player's other IBBA teams
+            // get their own new team; otherwise the pop-up asks about the next.
+            if ((await ExistingTeamsToOfferAsync(accessibleLink.PlayerId)).Count == 0)
+            {
+                await CreateTeamsForUndecidedIbbaTeamsAsync(accessibleLink);
+            }
 
             // Now that this team has somewhere to put games, sync it immediately
             // rather than waiting for the next scheduled/manual sync.
@@ -296,6 +341,9 @@ namespace StatsHub.Api.Services
                     if (playerEntity != null) playerEntity.ProfilePictureUrl = player.PhotoUrl;
                 }
 
+                // 1) Every IBBA team the player is on: identity, the player's
+                //    membership, and league standings.
+                var synced = new List<(IbbaTeamReport Report, IbbaTeam Team)>();
                 foreach (var report in teamReports)
                 {
                     var ownTeam = await UpsertTeamIdentityAsync(report.Team);
@@ -317,10 +365,18 @@ namespace StatsHub.Api.Services
                         EnqueueCrestBackfill(standingsTeamIds);
                     }
 
-                    // Games only get synced once this player's own app Team is
-                    // actually linked - there's nowhere meaningful to attribute
-                    // them to otherwise. (The row itself no longer needs to know
-                    // which app Team triggered this - see UpsertGamesAsync.)
+                    synced.Add((report, ownTeam));
+                }
+
+                // 2) Give each IBBA team an app team - automatically, except when
+                //    the parent has to choose (see AutoLinkAppTeamsAsync).
+                await AutoLinkAppTeamsAsync(link.PlayerId, synced.Select(x => x.Team).ToList());
+
+                // 3) Games, for every IBBA team that now has the player's app team
+                //    linked - including ones linked a moment ago, so a newly linked
+                //    player's schedule arrives in this same sync.
+                foreach (var (report, ownTeam) in synced)
+                {
                     var hasLinkedAppTeam = await _context.Teams
                         .AnyAsync(t => t.IbbaTeamId == ownTeam.Id && t.PlayerTeams.Any(pt => pt.PlayerId == link.PlayerId));
                     if (hasLinkedAppTeam)
@@ -338,6 +394,148 @@ namespace StatsHub.Api.Services
             }
 
             await _context.SaveChangesAsync();
+        }
+
+        // Makes sure the player is on an app team for each of their IBBA teams,
+        // with no "Create team" button to press:
+        //   1. already on a team linked to it -> nothing to do;
+        //   2. there's an existing team to offer (ExistingTeamsToOfferAsync) ->
+        //      leave it for the parent: the Player Profiles page asks, one IBBA
+        //      team at a time, whether to add it to an existing team or create
+        //      a new one - right after linking/creating;
+        //   3. otherwise -> create a new team (named by NameForNewTeam) and link it.
+        // Runs on every sync (manual, nightly, first link), so a new IBBA team
+        // mid-season gets its app team the same way.
+        internal async Task AutoLinkAppTeamsAsync(int playerId, IReadOnlyList<IbbaTeam> ibbaTeams)
+        {
+            var player = await _context.Players.FindAsync(playerId);
+            if (player == null) return;
+            // Decided up front for all the IBBA teams at once, so none is
+            // created behind the parent's back while there's a choice to make.
+            var waitForParent = (await ExistingTeamsToOfferAsync(playerId)).Count > 0;
+
+            foreach (var ibbaTeam in ibbaTeams)
+            {
+                var playerTeams = await _context.PlayerTeams
+                    .Where(pt => pt.PlayerId == playerId)
+                    .Include(pt => pt.Team)
+                    .ToListAsync();
+
+                if (playerTeams.Any(pt => pt.Team.IbbaTeamId == ibbaTeam.Id)) continue;
+
+                if (waitForParent) continue;
+
+                await CreateLinkedTeamAsync(player, ibbaTeam, ibbaTeams.Select(t => t.Name), playerTeams.Select(pt => pt.Team.Name));
+            }
+
+            await AddLeagueToClashingTeamNamesAsync(playerId);
+        }
+
+        // Teams created before the league-name rule existed (the old "Create
+        // team" button) can still share a plain name - e.g. two teams both
+        // called "מכבי תל מונד". Any of the player's IBBA-linked teams that
+        // still carries exactly its plain IBBA name and clashes with another of
+        // the player's teams gets its league added. A name the parent changed
+        // themselves is never touched.
+        internal async Task AddLeagueToClashingTeamNamesAsync(int playerId)
+        {
+            static string Key(string name) => name.Trim().ToLowerInvariant();
+
+            var teams = await _context.PlayerTeams
+                .Where(pt => pt.PlayerId == playerId)
+                .Include(pt => pt.Team).ThenInclude(t => t.IbbaTeam)
+                .Select(pt => pt.Team)
+                .ToListAsync();
+
+            // Decided from the names as they are now, before renaming any - so
+            // both teams of a clashing pair get their league, not just one.
+            var clashing = teams
+                .Where(t => teams.Count(other => Key(other.Name) == Key(t.Name)) > 1)
+                .ToList();
+
+            var changed = false;
+            foreach (var team in clashing)
+            {
+                var ibba = team.IbbaTeam;
+                if (ibba == null || string.IsNullOrWhiteSpace(ibba.LeagueName)) continue;
+                if (Key(team.Name) != Key(ibba.Name)) continue; // renamed by the parent
+
+                team.Name = $"{ibba.Name.Trim()} - {ibba.LeagueName.Trim()}";
+                team.UpdatedAt = DateTime.UtcNow;
+                changed = true;
+            }
+
+            if (changed) await _context.SaveChangesAsync();
+        }
+
+        // The parent chose "create a new team" for an IBBA team in the pop-up.
+        public async Task<IbbaLinkStatusDto?> CreateTeamForIbbaTeamAsync(int ibbaTeamId, int playerId, int requestingUserId)
+        {
+            if (!await _playerService.CanAccessPlayerAsync(playerId, requestingUserId)) return null;
+
+            var link = await _context.PlayerIbbaLinks
+                .Include(l => l.Teams).ThenInclude(pit => pit.IbbaTeam)
+                .FirstOrDefaultAsync(l => l.PlayerId == playerId);
+            var ibbaTeam = link?.Teams.FirstOrDefault(pit => pit.IbbaTeamId == ibbaTeamId)?.IbbaTeam;
+            var player = await _context.Players.FindAsync(playerId);
+            if (link == null || ibbaTeam == null || player == null) return null;
+
+            var playerTeams = await _context.PlayerTeams.Where(pt => pt.PlayerId == playerId).Include(pt => pt.Team).ToListAsync();
+            if (!playerTeams.Any(pt => pt.Team.IbbaTeamId == ibbaTeamId))
+            {
+                await CreateLinkedTeamAsync(player, ibbaTeam, link.Teams.Select(pit => pit.IbbaTeam.Name), playerTeams.Select(pt => pt.Team.Name));
+                await RunSyncAsync(link); // the new team's schedule
+            }
+
+            return await GetLinkStatusAsync(playerId, requestingUserId);
+        }
+
+        private async Task CreateTeamsForUndecidedIbbaTeamsAsync(PlayerIbbaLink link)
+        {
+            var player = await _context.Players.FindAsync(link.PlayerId);
+            if (player == null) return;
+            var ibbaTeams = await _context.PlayerIbbaTeams
+                .Where(pit => pit.PlayerIbbaLinkId == link.Id)
+                .Select(pit => pit.IbbaTeam)
+                .ToListAsync();
+
+            foreach (var ibbaTeam in ibbaTeams)
+            {
+                var playerTeams = await _context.PlayerTeams.Where(pt => pt.PlayerId == player.Id).Include(pt => pt.Team).ToListAsync();
+                if (playerTeams.Any(pt => pt.Team.IbbaTeamId == ibbaTeam.Id)) continue;
+                await CreateLinkedTeamAsync(player, ibbaTeam, ibbaTeams.Select(t => t.Name), playerTeams.Select(pt => pt.Team.Name));
+            }
+        }
+
+        private async Task CreateLinkedTeamAsync(Player player, IbbaTeam ibbaTeam, IEnumerable<string> playerIbbaTeamNames, IEnumerable<string> playerTeamNames)
+        {
+            var season = await _seasonService.GetOrCreateCurrentSeasonAsync(player.UserId);
+            var team = new Team
+            {
+                SeasonId = season.Id,
+                Name = NameForNewTeam(ibbaTeam, playerIbbaTeamNames, playerTeamNames),
+                IbbaTeamId = ibbaTeam.Id,
+                CreatedAt = DateTime.UtcNow,
+            };
+            _context.Teams.Add(team);
+            await _context.SaveChangesAsync();
+
+            _context.PlayerTeams.Add(new PlayerTeam { PlayerId = player.Id, TeamId = team.Id, CreatedAt = DateTime.UtcNow });
+            await _context.SaveChangesAsync();
+        }
+
+        // A player on two IBBA teams sharing a name (the same club in two
+        // leagues/age groups, e.g. both "מכבי תל מונד") would otherwise get two
+        // identically named teams everywhere in the app. When the name isn't
+        // unique for this player - among their IBBA teams or teams they're
+        // already on - the league is added: "מכבי תל מונד - נוער ארצית שרון".
+        internal static string NameForNewTeam(IbbaTeam ibbaTeam, IEnumerable<string> playerIbbaTeamNames, IEnumerable<string> playerTeamNames)
+        {
+            static string Key(string name) => name.Trim().ToLowerInvariant();
+            var name = ibbaTeam.Name.Trim();
+            var ambiguous = playerIbbaTeamNames.Count(n => Key(n) == Key(name)) > 1
+                || playerTeamNames.Any(n => Key(n) == Key(name));
+            return ambiguous && !string.IsNullOrWhiteSpace(ibbaTeam.LeagueName) ? $"{name} - {ibbaTeam.LeagueName.Trim()}" : name;
         }
 
         // Find-or-create this one team by its URL (the stable identifier), and

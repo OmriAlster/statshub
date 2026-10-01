@@ -31,6 +31,13 @@ namespace StatsHub.Api.DTOs
     public class LinkIbbaTeamDto
     {
         public int TeamId { get; set; }
+        // The player the pop-up was for - they're added to the team if needed.
+        public int? PlayerId { get; set; }
+    }
+
+    public class CreateTeamForIbbaTeamDto
+    {
+        public int PlayerId { get; set; }
     }
 
     public class IbbaLinkStatusDto
@@ -40,6 +47,9 @@ namespace StatsHub.Api.DTOs
         public DateTime? LastSyncedAt { get; set; }
         public string? LastSyncError { get; set; }
         public List<IbbaTeamLinkDto> Teams { get; set; } = new();
+        // The family's teams not linked to any IBBA team - what the pop-up
+        // offers to add an IBBA team to, instead of creating a new one.
+        public List<TeamDto> ExistingTeams { get; set; } = new();
     }
 
     public class IbbaTeamLinkDto

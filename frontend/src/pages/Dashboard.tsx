@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { OnCourtChip, onCourtIn } from '../components/GameStatusBadge'
+import { useLiveRefresh } from '../hooks/useLiveRefresh'
 import { Link } from 'react-router-dom'
 import { api } from '../api/client'
 import { useLiveGameOverlay } from '../live/LiveGameContext'
@@ -49,6 +51,9 @@ export default function Dashboard() {
     load(true)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [liveGameVersion])
+
+  // A game tracked live on another phone: keep it (and on court / on bench) current.
+  useLiveRefresh(upcomingGames.some(({ game }) => game.status === 'In Progress'), () => load(true))
 
   // quiet: no "Loading..." flash over what's already shown.
   const load = async (quiet = false) => {
@@ -273,7 +278,13 @@ export default function Dashboard() {
                       </div>
                       <div className="dash-upcoming-when">
                         {isLive ? (
-                          <span className="dash-upcoming-live"><span className="fab-live-dot" /> Live</span>
+                          <span className="dash-upcoming-live-wrap">
+                            <span className="dash-upcoming-live"><span className="fab-live-dot" /> Live</span>
+                            {(() => {
+                              const onCourt = onCourtIn(game, gamePlayers[0].id)
+                              return onCourt != null && <OnCourtChip onCourt={onCourt} />
+                            })()}
+                          </span>
                         ) : (
                           <span className="dash-upcoming-time">{formatGameTime(game.gameDate)}</span>
                         )}

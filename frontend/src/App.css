@@ -890,6 +890,22 @@ select:focus {
   width: 100%;
 }
 
+/* New team: name gets the full width, jersey + buttons share the row below. */
+.team-picker .team-picker-name {
+  width: 100%;
+  flex: none;
+}
+
+.team-picker-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.team-picker .team-picker-jersey {
+  flex: 0 1 7rem;
+}
+
 .team-picker input {
   padding: 0.6rem 0.8rem;
   background: var(--color-surface);
@@ -5804,4 +5820,280 @@ a.game-card:active {
 
 .notif-panel-btn {
   width: 100%;
+}
+
+/* Player Profiles: league chip on an IBBA-linked team */
+.league-chip.tcv2-league {
+  align-self: flex-start;
+  max-width: 100%;
+  padding: 0.12rem 0.55rem 0.12rem 0.4rem;
+  font-size: 0.68rem;
+}
+
+.league-chip.tcv2-league .icon {
+  width: 11px;
+  height: 11px;
+  flex-shrink: 0;
+}
+
+.league-chip.tcv2-league span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* IBBA section: an IBBA team waiting for the parent's choice */
+.ibba-pending-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+  padding: 0.6rem 0.75rem;
+  border: 1px dashed var(--color-accent);
+  border-radius: var(--radius-md);
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+/* "Link to your existing team or create a new one" pop-up */
+.ibba-choice-panel {
+  max-width: 32rem;
+}
+
+.ibba-choice-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.ibba-choice-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding: 0.85rem;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.ibba-choice-team {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  min-width: 0;
+}
+
+.ibba-choice-name {
+  font-weight: 700;
+  font-size: 0.92rem;
+}
+
+.ibba-choice-league {
+  font-size: 0.74rem;
+  color: var(--color-text-faint);
+}
+
+.ibba-choice-option {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.ibba-choice-option select {
+  flex: 1;
+  min-width: 10rem;
+}
+
+.ibba-choice-new {
+  align-self: flex-start;
+}
+
+.ibba-choice-busy {
+  margin: 0;
+  padding: 0.55rem 0.75rem;
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  border: 1px solid var(--color-accent);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.ibba-choice-step {
+  margin: 0.15rem 0 0;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-text-faint);
+}
+
+/* ---- Live game: on/off court ---- */
+.court-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin: -0.75rem 0 1.25rem;
+  padding: 0.75rem 0.9rem;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: var(--color-surface-alt);
+}
+.court-panel.is-on {
+  border-color: var(--color-success);
+  background: var(--color-success-soft);
+}
+.court-panel-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+.court-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-weight: 700;
+  color: var(--color-text-muted);
+}
+.court-status.on { color: var(--color-success); }
+.court-dot {
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 50%;
+  background: var(--color-text-faint);
+}
+.court-status.on .court-dot {
+  background: var(--color-success);
+  box-shadow: 0 0 0 3px var(--color-success-soft);
+}
+.court-minutes {
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+}
+.court-btn { margin-left: auto; }
+.court-form {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.court-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+}
+.court-form select,
+.court-form input {
+  min-height: 2.5rem;
+  padding: 0 0.6rem;
+  font-size: 1rem;
+  color: var(--color-text);
+  background: var(--color-surface);
+  border: 1.5px solid var(--color-border-strong);
+  border-radius: 10px;
+}
+.court-form input:focus,
+.court-form select:focus {
+  outline: none;
+  border-color: var(--color-accent);
+}
+.court-form input::placeholder { color: var(--color-text-faint); }
+.court-btn.is-out {
+  color: var(--color-text);
+  background: var(--color-surface);
+  border: 1.5px solid var(--color-border-strong);
+}
+.court-form input { width: 5.5rem; font-variant-numeric: tabular-nums; }
+.court-problem {
+  flex-basis: 100%;
+  margin: 0;
+  color: var(--color-danger);
+  font-size: 0.85rem;
+}
+.court-log {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+.court-log-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  border: 1px solid var(--color-border);
+}
+.court-log-chip.in { color: var(--color-success); }
+.court-log-remove {
+  display: inline-flex;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+}
+.court-log-remove .icon { width: 0.8rem; height: 0.8rem; }
+
+/* ---- On court / bench next to a live badge ---- */
+.live-badge-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+.on-court-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  white-space: nowrap;
+  color: var(--color-text-muted);
+  background: var(--color-surface-alt);
+  border: 1px solid var(--color-border);
+}
+.on-court-chip.on {
+  color: var(--color-success);
+  background: var(--color-success-soft);
+  border-color: var(--color-success);
+}
+.on-court-chip-dot {
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.profile-live-line {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  margin-top: 0.35rem;
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+  text-decoration: none;
+}
+.profile-live-opponent {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 12rem;
+}
+.dash-upcoming-live-wrap {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.25rem;
 }
