@@ -145,6 +145,7 @@ namespace StatsHub.Api.Services
             if (dto.Turnovers.HasValue) gameStats.Turnovers = dto.Turnovers.Value;
             if (dto.Fouls.HasValue) gameStats.Fouls = dto.Fouls.Value;
             if (dto.MinutesPlayed.HasValue) gameStats.MinutesPlayed = dto.MinutesPlayed.Value;
+            if (dto.OnCourt.HasValue) gameStats.OnCourt = dto.OnCourt.Value;
 
             gameStats.UpdatedAt = DateTime.UtcNow;
             await _context.SaveChangesAsync();
@@ -312,6 +313,7 @@ namespace StatsHub.Api.Services
             Turnovers = gs.Turnovers,
             Fouls = gs.Fouls,
             MinutesPlayed = gs.MinutesPlayed,
+            OnCourt = gs.OnCourt,
             TotalPoints = gs.TotalPoints
         };
     }

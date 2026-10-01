@@ -25,6 +25,11 @@ public class StatsHubFactory : WebApplicationFactory<Program>
 
         builder.ConfigureTestServices(services =>
         {
+            // Nothing in the tests may ever reach the real ibasketball.co.il -
+            // every IBBA request gets "not found" (a sync then just records a
+            // sync error, like a real site outage).
+            services.AddHttpClient("Ibba").ConfigurePrimaryHttpMessageHandler(() => new OfflineIbbaSite());
+
             foreach (var jobType in new[] { typeof(GameReminderBackgroundService), typeof(IbbaNightlySyncBackgroundService) })
             {
                 var registration = services.FirstOrDefault(d => d.ServiceType == typeof(IHostedService) && d.ImplementationType == jobType);
@@ -42,10 +47,22 @@ public class StatsHubFactory : WebApplicationFactory<Program>
         await action(db);
     }
 
+    private sealed class OfflineIbbaSite : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
+            Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.NotFound) { RequestMessage = request });
+    }
+
     protected override void Dispose(bool disposing)
     {
         base.Dispose(disposing);
-        Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+        // Only THIS database's pooled connections - not ClearAllPools(), which
+        // also closes the connections of other test classes still running in
+        // parallel against their own databases (a flaky "disposed object").
+        using (var connection = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={_dbPath}"))
+        {
+            Microsoft.Data.Sqlite.SqliteConnection.ClearPool(connection);
+        }
         try { File.Delete(_dbPath); } catch (IOException) { }
     }
 }

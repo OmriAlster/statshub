@@ -181,6 +181,9 @@ namespace StatsHub.Api.Data
             // longer "In Progress" - see Game.cs.
             db.ExecuteSqlRaw(@"ALTER TABLE ""Games"" ADD COLUMN IF NOT EXISTS ""LiveTrackedByUserId"" integer;");
 
+            // Live on/off court indicator - see GameStats.OnCourt.
+            db.ExecuteSqlRaw(@"ALTER TABLE ""GameStats"" ADD COLUMN IF NOT EXISTS ""OnCourt"" boolean;");
+
             db.ExecuteSqlRaw(@"
                 CREATE TABLE IF NOT EXISTS ""PushSubscriptions"" (
                     ""Id"" SERIAL PRIMARY KEY,

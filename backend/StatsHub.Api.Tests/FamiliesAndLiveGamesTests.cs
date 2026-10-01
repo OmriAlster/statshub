@@ -11,6 +11,32 @@ public class FamiliesAndLiveGamesTests : IClassFixture<StatsHubFactory>
     private readonly StatsHubFactory _factory;
     public FamiliesAndLiveGamesTests(StatsHubFactory factory) => _factory = factory;
 
+    // ---- On court / on bench ----
+
+    [Fact]
+    public async Task On_court_set_by_the_tracker_reaches_the_other_parent()
+    {
+        var parent = await TestUser.SignInAsync(_factory, "mom");
+        var player = await parent.CreatePlayerAsync();
+        var team = await parent.CreateTeamWithPlayerAsync(player.Id);
+        var game = await parent.CreateGameAsync(team.Id);
+        var stats = await parent.CreateStatsAsync(game.Id, player.Id);
+        var coParent = await parent.InviteCoParentAsync(_factory, player.Id);
+
+        GameStatsDto StatsSeenBy(List<GameDto> games) => games.Single(g => g.Id == game.Id).PlayerStats.Single(s => s.PlayerId == player.Id);
+        Assert.Null(StatsSeenBy(await coParent.GetAsync<List<GameDto>>($"/api/games/player/{player.Id}")).OnCourt); // not tracked
+
+        await parent.PutAsync<GameStatsDto>($"/api/gamestats/{stats.Id}", new UpdateGameStatsDto { OnCourt = true, MinutesPlayed = 6 });
+        Assert.True(StatsSeenBy(await coParent.GetAsync<List<GameDto>>($"/api/games/player/{player.Id}")).OnCourt);
+
+        // A stats save that doesn't mention it (e.g. a rebound) leaves it as it is.
+        await parent.PutAsync<GameStatsDto>($"/api/gamestats/{stats.Id}", new UpdateGameStatsDto { DefensiveRebounds = 1 });
+        Assert.True(StatsSeenBy(await coParent.GetAsync<List<GameDto>>($"/api/games/player/{player.Id}")).OnCourt);
+
+        await parent.PutAsync<GameStatsDto>($"/api/gamestats/{stats.Id}", new UpdateGameStatsDto { OnCourt = false });
+        Assert.False(StatsSeenBy(await coParent.GetAsync<List<GameDto>>($"/api/games/player/{player.Id}")).OnCourt);
+    }
+
     // ---- Co-parents ----
 
     [Fact]

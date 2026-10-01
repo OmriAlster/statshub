@@ -68,6 +68,8 @@ export interface GameStatsDto {
   turnovers: number
   fouls: number
   minutesPlayed: number
+  // Live game: on the court right now (as the tracker set it); null = not tracked.
+  onCourt?: boolean | null
   totalPoints: number
   // Only populated where a caller specifically asks for it (e.g. a shared game view).
   shots?: ShotDto[]
@@ -227,6 +229,9 @@ export interface IbbaLinkStatusDto {
   lastSyncedAt?: string | null
   lastSyncError?: string | null
   teams: IbbaTeamLinkDto[]
+  // The family's teams not linked to IBBA - offered in the "add to an
+  // existing team?" pop-up.
+  existingTeams?: TeamDto[]
 }
 
 export interface CreatePlayerFromIbbaDto {

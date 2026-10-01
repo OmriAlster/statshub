@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import type { GameDto } from '../api/types'
 import { countsTowardStats } from '../utils/countedGames'
 import { formatGameTime } from '../utils/formatGameDate'
-import GameStatusBadge from './GameStatusBadge'
+import GameStatusBadge, { onCourtIn } from './GameStatusBadge'
 
 // Phone layout for the Stats and Schedule tables: a 5-13 column table can't
 // fit a phone screen (only Opponent and Date were visible, everything else
@@ -57,7 +57,7 @@ function Matchup({ game }: { game: GameDto }) {
 }
 
 function Result({ game }: { game: GameDto }) {
-  if (game.status !== 'Completed') return <GameStatusBadge status={game.status} />
+  if (game.status !== 'Completed') return <GameStatusBadge status={game.status} onCourt={onCourtIn(game)} />
   const won = (game.teamScore ?? 0) > (game.opponentScore ?? 0)
   return (
     <span className={`game-card-score ${won ? 'win' : 'loss'}`}>

@@ -209,6 +209,9 @@ namespace StatsHub.Api.Data
                 // no longer "In Progress" - see Game.cs.
                 AddColumnIfMissing(connection, "Games", "LiveTrackedByUserId", "INTEGER");
 
+                // Live on/off court indicator - see GameStats.OnCourt.
+                AddColumnIfMissing(connection, "GameStats", "OnCourt", "INTEGER");
+
                 CreateTableIfMissing(connection, @"
                     CREATE TABLE IF NOT EXISTS ""PushSubscriptions"" (
                         ""Id"" INTEGER NOT NULL CONSTRAINT ""PK_PushSubscriptions"" PRIMARY KEY AUTOINCREMENT,

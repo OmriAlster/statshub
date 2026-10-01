@@ -6,6 +6,7 @@ import CourtShotChart, { type ChartShot } from '../components/CourtShotChart'
 import TeamCrest from '../components/TeamCrest'
 import { formatGameTime } from '../utils/formatGameDate'
 import { computeStatsFromEvents, EVENT_ICONS, EVENT_LABELS, seedEventsFromStats, type EventType, type GameEvent } from './gameEvents'
+import { courtSeconds, endOfGame, formatClock, formatClockInput, isOnCourt, minutesFromSeconds, parseClock, periodLabel, QUARTERS, substitutionProblem, type Substitution } from './courtTime'
 import { useLiveGameOverlay } from './LiveGameContext'
 
 function isToday(iso: string) {
@@ -22,7 +23,7 @@ interface TodaysGame {
 }
 
 interface ActionLogEntry {
-  kind: 'event' | 'shot'
+  kind: 'event' | 'shot' | 'sub'
   id: string | number
   at: number
 }
@@ -43,6 +44,11 @@ interface ActiveGame {
   shots: ShotDto[]
   actionLog: ActionLogEntry[]
   minutesPlayed: number
+  // On/off court changes - once there are any, minutes played are worked
+  // out from them instead of typed in (see courtTime.ts).
+  subs: Substitution[]
+  // Watching someone else track: on court / on bench as last saved by them.
+  remoteOnCourt?: boolean | null
   shareUrl?: string
   // False when someone else already claimed recording rights on this game -
   // this account just watches (read-only), like the public share-player
@@ -95,7 +101,7 @@ export default function LiveGameWidget() {
     if (saved) {
       try {
         const parsed = JSON.parse(saved) as ActiveGame
-        setActive({ ...parsed, minutesPlayed: parsed.minutesPlayed ?? 0, canRecord: parsed.canRecord ?? true })
+        setActive({ ...parsed, minutesPlayed: parsed.minutesPlayed ?? 0, subs: parsed.subs ?? [], canRecord: parsed.canRecord ?? true })
         restoredGameId = parsed.gameId
         api
           .get<ShotDto[]>(`/shots/gamestats/${parsed.gameStatsId}`)
@@ -181,6 +187,7 @@ export default function LiveGameWidget() {
         events: stats ? seedEventsFromStats(stats) : [],
         shots,
         actionLog: [],
+        subs: [],
         minutesPlayed: stats?.minutesPlayed ?? 0,
         canRecord,
       })
@@ -359,6 +366,7 @@ export default function LiveGameWidget() {
                 events: stats ? seedEventsFromStats(stats) : [],
                 shots,
                 minutesPlayed: stats?.minutesPlayed ?? prev.minutesPlayed,
+                remoteOnCourt: stats?.onCourt ?? null,
               }
             : prev
         )
@@ -475,6 +483,7 @@ export default function LiveGameWidget() {
         events: [],
         shots: [],
         actionLog: [],
+        subs: [],
         minutesPlayed: 0,
         canRecord: true,
       })
@@ -491,7 +500,7 @@ export default function LiveGameWidget() {
   // The last tap saves on a short delay - kept here so it can be saved right
   // away when the game ends or the live screen closes, instead of the page
   // behind reloading a box score from just before it.
-  const pendingSave = useRef<{ gameStatsId: number; payload: ReturnType<typeof computeStatsFromEvents> } | null>(null)
+  const pendingSave = useRef<{ gameStatsId: number; payload: ReturnType<typeof computeStatsFromEvents> & { onCourt?: boolean } } | null>(null)
   const liveStatsChanged = useRef(false)
 
   const flushPendingSave = async () => {
@@ -514,10 +523,13 @@ export default function LiveGameWidget() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [overlayOpen])
 
-  const persistStats = (events: GameEvent[], minutesPlayed: number, gameStatsId: number) => {
+  // subs: the on/off court changes to save with the stats (default: as they
+  // are now). Untracked games don't send on/off court at all.
+  const persistStats = (events: GameEvent[], minutesPlayed: number, gameStatsId: number, subs = active?.subs ?? [], forceOnCourt?: boolean) => {
     liveStatsChanged.current = true
     if (saveTimer.current) window.clearTimeout(saveTimer.current)
-    pendingSave.current = { gameStatsId, payload: computeStatsFromEvents(events, minutesPlayed) }
+    const onCourt = forceOnCourt ?? (subs.length > 0 ? isOnCourt(subs) : undefined)
+    pendingSave.current = { gameStatsId, payload: { ...computeStatsFromEvents(events, minutesPlayed), onCourt } }
     saveTimer.current = window.setTimeout(() => {
       saveTimer.current = null
       const pending = pendingSave.current
@@ -549,6 +561,35 @@ export default function LiveGameWidget() {
     const actionLog = active.actionLog.filter((a) => !(a.kind === 'event' && a.id === eventId))
     setActive({ ...active, events, actionLog })
     persistStats(events, active.minutesPlayed, active.gameStatsId)
+  }
+
+  // A change on/off court at the quarter + time left typed in; minutes
+  // played follow from all of them.
+  const recordSub = (type: 'IN' | 'OUT', quarter: number, secondsLeft: number): string | null => {
+    if (!active) return null
+    const problem = substitutionProblem(active.subs, { type, quarter, secondsLeft })
+    if (problem) return problem
+    const sub: Substitution = { id: `${Date.now()}-${Math.random()}`, type, quarter, secondsLeft }
+    const subs = [...active.subs, sub]
+    const minutesPlayed = minutesFromSeconds(courtSeconds(subs))
+    const actionLog = [...active.actionLog, { kind: 'sub' as const, id: sub.id, at: Date.now() }]
+    // Stats and shots from now on go in this period.
+    setActive({ ...active, subs, minutesPlayed, actionLog, currentQuarter: quarter })
+    persistStats(active.events, minutesPlayed, active.gameStatsId, subs)
+    return null
+  }
+
+  // Only the latest change can go - removing one in the middle would leave
+  // on/off out of order.
+  const removeLastSub = () => {
+    if (!active || active.subs.length === 0) return
+    const removed = active.subs[active.subs.length - 1]
+    const subs = active.subs.slice(0, -1)
+    const minutesPlayed = subs.length > 0 ? minutesFromSeconds(courtSeconds(subs)) : 0
+    const actionLog = active.actionLog.filter((a) => !(a.kind === 'sub' && a.id === removed.id))
+    const currentQuarter = subs.length > 0 ? subs[subs.length - 1].quarter : active.currentQuarter
+    setActive({ ...active, subs, minutesPlayed, actionLog, currentQuarter })
+    persistStats(active.events, minutesPlayed, active.gameStatsId, subs, isOnCourt(subs))
   }
 
   const updateMinutesPlayed = (minutes: number) => {
@@ -675,6 +716,7 @@ export default function LiveGameWidget() {
     if (!active || active.actionLog.length === 0) return
     const last = active.actionLog[active.actionLog.length - 1]
     if (last.kind === 'event') removeEvent(last.id as string)
+    else if (last.kind === 'sub') removeLastSub()
     else removeShot(last.id as number)
   }
 
@@ -718,6 +760,11 @@ export default function LiveGameWidget() {
       return
     }
     try {
+      // Still on court at the final buzzer - that stint runs to the end.
+      if (active.subs.length > 0 && isOnCourt(active.subs)) {
+        const lastPeriod = active.subs[active.subs.length - 1].quarter
+        persistStats(active.events, minutesFromSeconds(courtSeconds(active.subs, endOfGame(lastPeriod))), active.gameStatsId)
+      }
       await flushPendingSave()
       liveStatsChanged.current = false
       // playerId: the final score is entered as "us vs. them" - the server
@@ -749,7 +796,7 @@ export default function LiveGameWidget() {
             <>
               <span className="fab-live-dot" />
               <span>
-                Live &middot; <b>{totalPoints}</b> PTS &middot; Q{active.currentQuarter}
+                Live &middot; <b>{totalPoints}</b> PTS &middot; {periodLabel(active.currentQuarter)}
               </span>
             </>
           ) : (
@@ -931,6 +978,13 @@ export default function LiveGameWidget() {
               <p className="watching-banner">
                 <svg className="icon"><use href="#i-live" /></svg> Another parent is tracking this game live - you're watching.
               </p>
+              {active.remoteOnCourt != null && (
+                <div className={`court-panel ${active.remoteOnCourt ? 'is-on' : ''}`}>
+                  <div className="court-panel-row">
+                    <OnCourtTag onCourt={active.remoteOnCourt} />
+                  </div>
+                </div>
+              )}
 
               <div className="live-recent-strip">
                 <div className="live-recent-totals">
@@ -960,7 +1014,7 @@ export default function LiveGameWidget() {
                         <div key={`shot-${shot.id}`} className={`event-item event-${shot.made ? 'make' : 'miss'}`}>
                           <div className="event-content">
                             <svg className="icon"><use href={shot.made ? '#i-check' : '#i-x'} /></svg>
-                            <span className="event-display">Q{shot.quarter} · {shot.value}PT {shot.made ? 'Make' : 'Miss'}</span>
+                            <span className="event-display">{periodLabel(shot.quarter)} · {shot.value}PT {shot.made ? 'Make' : 'Miss'}</span>
                           </div>
                         </div>
                       ))}
@@ -968,7 +1022,7 @@ export default function LiveGameWidget() {
                         <div key={event.id} className={`event-item event-${event.type.toLowerCase()}`}>
                           <div className="event-content">
                             <svg className="icon"><use href={`#${EVENT_ICONS[event.type]}`} /></svg>
-                            <span className="event-display">Q{event.quarter} · {event.display}</span>
+                            <span className="event-display">{periodLabel(event.quarter)} · {event.display}</span>
                           </div>
                         </div>
                       ))}
@@ -1022,19 +1076,17 @@ export default function LiveGameWidget() {
               )}
 
               <div className="quarter-selector">
-                {[1, 2, 3, 4].map((q) => (
-                  <button
-                    key={q}
-                    className={`quarter-btn ${active.currentQuarter === q ? 'active' : ''}`}
-                    onClick={() => setActive({ ...active, currentQuarter: q })}
-                  >
-                    Q{q}
-                  </button>
-                ))}
                 <button className="undo-last-btn" onClick={undoLastAction} disabled={active.actionLog.length === 0}>
                   <svg className="icon"><use href="#i-undo" /></svg> Undo
                 </button>
               </div>
+
+              <CourtTimePanel
+                subs={active.subs}
+                currentQuarter={active.currentQuarter}
+                onRecord={recordSub}
+                onRemoveLast={removeLastSub}
+              />
 
               {/* Mobile only: live totals + last few taps, right up top so
                   nothing requires scrolling past the whole button grid. */}
@@ -1138,13 +1190,13 @@ export default function LiveGameWidget() {
                 <div className="live-game-right">
                   <div className="event-log">
                     <h3>
-                      <svg className="icon"><use href="#i-chart" /></svg> Q{active.currentQuarter} Events (
+                      <svg className="icon"><use href="#i-chart" /></svg> {periodLabel(active.currentQuarter)} Events (
                       {getQuarterEvents(active.currentQuarter).length + getQuarterShots(active.currentQuarter).length})
                     </h3>
                     <div className="events-list">
                       {getQuarterEvents(active.currentQuarter).length === 0 &&
                       getQuarterShots(active.currentQuarter).length === 0 ? (
-                        <div className="no-events">No events in Q{active.currentQuarter}</div>
+                        <div className="no-events">No events in {periodLabel(active.currentQuarter)}</div>
                       ) : (
                         <>
                           {getQuarterShots(active.currentQuarter).map((shot) => (
@@ -1177,7 +1229,7 @@ export default function LiveGameWidget() {
                     </div>
                     <div className="all-quarters-summary">
                       <h4><svg className="icon"><use href="#i-chart" /></svg> Quarter Summary</h4>
-                      {[1, 2, 3, 4].map((q) => {
+                      {[1, 2, 3, 4, ...[...new Set([...active.events.map((e) => e.quarter), ...active.shots.map((sh) => sh.quarter)])].filter((q) => q > QUARTERS).sort()].map((q) => {
                         const qEvents = getQuarterEvents(q)
                         const qShots = getQuarterShots(q)
                         const qShotPoints = qShots.filter((s) => s.made).reduce((sum, s) => sum + s.value, 0)
@@ -1185,7 +1237,7 @@ export default function LiveGameWidget() {
                         const qShotCount = qShots.length
                         return (
                           <div key={q} className="quarter-summary-row">
-                            <span className="q-label">Q{q}:</span>
+                            <span className="q-label">{periodLabel(q)}:</span>
                             <span className="q-events">{qEvents.length + qShotCount} events</span>
                             <span className="q-points">{qPoints} pts</span>
                           </div>
@@ -1211,18 +1263,24 @@ export default function LiveGameWidget() {
             <div className="live-bottom-chip"><span>{getTotal(['BLK'])}</span>Blk</div>
             <div className="live-bottom-chip"><span>{getTotal(['TO'])}</span>To</div>
             <div className="live-bottom-chip"><span>{getTotal(['FOUL'])}</span>Foul</div>
-            <div className="live-bottom-chip edit">
-              <input
-                className="minutes-input"
-                type="number"
-                min={0}
-                max={48}
-                value={active.minutesPlayed}
-                onChange={(e) => updateMinutesPlayed(Number(e.target.value))}
-                aria-label="Minutes played"
-              />
-              <span>Min</span>
-            </div>
+            {active.subs.length > 0 ? (
+              <div className="live-bottom-chip" title="Worked out from on/off court">
+                <span>{active.minutesPlayed}</span>Min
+              </div>
+            ) : (
+              <div className="live-bottom-chip edit">
+                <input
+                  className="minutes-input"
+                  type="number"
+                  min={0}
+                  max={48}
+                  value={active.minutesPlayed}
+                  onChange={(e) => updateMinutesPlayed(Number(e.target.value))}
+                  aria-label="Minutes played"
+                />
+                <span>Min</span>
+              </div>
+            )}
             <div className="live-bottom-splits">
               2P {shotsMade(2)}/{shotsAttempted(2)} · 3P {shotsMade(3)}/{shotsAttempted(3)} · FT {getTotal(['FT_MAKE'])}/{getTotal(['FT_MAKE', 'FT_MISS'])}
             </div>
@@ -1230,5 +1288,121 @@ export default function LiveGameWidget() {
         )}
       </div>
     </>
+  )
+}
+
+// On court / on bench, with a "Sub in" / "Sub out" that asks for the quarter
+// and the time left on the clock. Minutes played are worked out from these.
+function CourtTimePanel({
+  subs,
+  currentQuarter,
+  onRecord,
+  onRemoveLast,
+}: {
+  subs: Substitution[]
+  currentQuarter: number
+  onRecord: (type: 'IN' | 'OUT', quarter: number, secondsLeft: number) => string | null
+  onRemoveLast: () => void
+}) {
+  const onCourt = isOnCourt(subs)
+  const [open, setOpen] = useState(false)
+  const [quarter, setQuarter] = useState(currentQuarter)
+  const [clock, setClock] = useState('')
+  const [problem, setProblem] = useState<string | null>(null)
+  const seconds = courtSeconds(subs)
+
+  const last = subs[subs.length - 1]
+  // Overtime periods show once the game could be in one (from Q4 on).
+  const lastPeriod = Math.max(currentQuarter, last?.quarter ?? 1)
+  const periods = Array.from({ length: Math.max(QUARTERS, lastPeriod >= QUARTERS ? lastPeriod + 1 : QUARTERS) }, (_, i) => i + 1)
+
+  const start = () => {
+    // Time only goes forward - start from the last change (tip-off the first time).
+    setQuarter(last?.quarter ?? 1)
+    setClock(last ? formatClock(last.secondsLeft) : '10:00')
+    setProblem(null)
+    setOpen(true)
+  }
+
+  const confirm = () => {
+    const secondsLeft = parseClock(clock, quarter)
+    if (secondsLeft === null) {
+      setProblem(quarter > QUARTERS ? 'Type the time left in overtime, like 2:30 (overtime is 5:00).' : 'Type the time left in the quarter, like 6:30 (a quarter is 10:00).')
+      return
+    }
+    const result = onRecord(onCourt ? 'OUT' : 'IN', quarter, secondsLeft)
+    if (result) setProblem(result)
+    else setOpen(false)
+  }
+
+  return (
+    <div className={`court-panel ${onCourt ? 'is-on' : ''}`}>
+      <div className="court-panel-row">
+        <OnCourtTag onCourt={onCourt} />
+        {subs.length > 0 && (
+          <span className="court-minutes tabular" title="Finished stints - a stint still going is added when the player comes off, or at the end of the game">
+            {formatClock(seconds)} min
+          </span>
+        )}
+        {!open && (
+          <button className={onCourt ? 'submit-btn court-btn is-out' : 'submit-btn court-btn'} onClick={start}>
+            {onCourt ? 'Sub out' : 'Sub in'}
+          </button>
+        )}
+      </div>
+
+      {open && (
+        <div className="court-form">
+          <label>
+            <span>Quarter</span>
+            <select value={quarter} onChange={(e) => setQuarter(Number(e.target.value))}>
+              {periods.map((q) => (
+                <option key={q} value={q}>{periodLabel(q)}</option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span>Time left</span>
+            <input
+              value={clock}
+              onChange={(e) => setClock(formatClockInput(e.target.value))}
+              onFocus={(e) => e.target.select()}
+              onKeyDown={(e) => { if (e.key === 'Enter') confirm() }}
+              placeholder="630"
+              inputMode="numeric"
+              autoFocus
+              aria-label="Time left in the quarter"
+            />
+          </label>
+          <button className="submit-btn" onClick={confirm}>{onCourt ? 'Out' : 'In'}</button>
+          <button className="nav-btn" onClick={() => setOpen(false)}>Cancel</button>
+          {problem && <p className="court-problem" role="alert">{problem}</p>}
+        </div>
+      )}
+
+      {subs.length > 0 && (
+        <div className="court-log">
+          {subs.map((sub, i) => (
+            <span key={sub.id} className={`court-log-chip ${sub.type === 'IN' ? 'in' : 'out'}`}>
+              {sub.type === 'IN' ? 'In' : 'Out'} {periodLabel(sub.quarter)} {formatClock(sub.secondsLeft)}
+              {i === subs.length - 1 && (
+                <button className="court-log-remove" onClick={onRemoveLast} aria-label="Remove the last change">
+                  <svg className="icon"><use href="#i-x" /></svg>
+                </button>
+              )}
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function OnCourtTag({ onCourt }: { onCourt: boolean }) {
+  return (
+    <span className={`court-status ${onCourt ? 'on' : 'off'}`}>
+      <span className="court-dot" aria-hidden="true" />
+      {onCourt ? 'On court' : 'On bench'}
+    </span>
   )
 }

@@ -108,8 +108,18 @@ namespace StatsHub.Api.Controllers
         [HttpPut("ibba/team-links/{ibbaTeamId}")]
         public async Task<ActionResult<IbbaLinkStatusDto>> LinkTeam(int ibbaTeamId, [FromBody] LinkIbbaTeamDto dto)
         {
-            var status = await _ibbaService.LinkTeamAsync(ibbaTeamId, dto.TeamId, _currentUser.UserId);
+            var status = await _ibbaService.LinkTeamAsync(ibbaTeamId, dto.TeamId, _currentUser.UserId, dto.PlayerId);
             if (status == null) return NotFound(new { message = "IBBA team or app team not found" });
+            return Ok(status);
+        }
+
+        // The parent chose "create a new team" for this IBBA team (instead of
+        // linking one of the player's existing teams).
+        [HttpPost("ibba/team-links/{ibbaTeamId}/new-team")]
+        public async Task<ActionResult<IbbaLinkStatusDto>> CreateTeamForIbbaTeam(int ibbaTeamId, [FromBody] CreateTeamForIbbaTeamDto dto)
+        {
+            var status = await _ibbaService.CreateTeamForIbbaTeamAsync(ibbaTeamId, dto.PlayerId, _currentUser.UserId);
+            if (status == null) return NotFound(new { message = "IBBA team or player not found" });
             return Ok(status);
         }
 

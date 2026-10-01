@@ -7,7 +7,7 @@ import CourtShotChart from '../components/CourtShotChart'
 import { AveragesCard, ScheduleGameCards, StatsGameCards } from '../components/GameCards'
 import { countsTowardStats } from '../utils/countedGames'
 import GameDetailView from '../components/GameDetailView'
-import GameStatusBadge from '../components/GameStatusBadge'
+import GameStatusBadge, { onCourtIn } from '../components/GameStatusBadge'
 import SegmentedControl from '../components/SegmentedControl'
 import TeamCrest from '../components/TeamCrest'
 import { useElementVisible } from '../hooks/useElementVisible'
@@ -341,7 +341,7 @@ function SharedSchedulePanel({ games, token }: { games: GameDto[]; token: string
                 {game.status === 'Completed' ? (
                   <td className={`num ${won ? 'win' : 'loss'}`}>{won ? 'W' : 'L'} {game.teamScore}&ndash;{game.opponentScore}</td>
                 ) : (
-                  <td className="games-table-status"><GameStatusBadge status={game.status} /></td>
+                  <td className="games-table-status"><GameStatusBadge status={game.status} onCourt={onCourtIn(game)} /></td>
                 )}
               </GameRow>
             )

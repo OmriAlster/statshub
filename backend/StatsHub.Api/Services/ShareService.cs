@@ -330,6 +330,7 @@ namespace StatsHub.Api.Services
                     Turnovers = gs.Turnovers,
                     Fouls = gs.Fouls,
                     MinutesPlayed = gs.MinutesPlayed,
+                    OnCourt = gs.OnCourt,
                     TotalPoints = gs.TotalPoints,
                     Shots = gs.Shots.Select(s => new ShotDto
                     {
