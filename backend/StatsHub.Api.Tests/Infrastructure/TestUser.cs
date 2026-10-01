@@ -65,7 +65,7 @@ public class TestUser
     public Task<PlayerDto> CreatePlayerAsync(string firstName = "Kid") =>
         PostAsync<PlayerDto>("/api/players", new CreatePlayerDto { FirstName = firstName, LastName = "Test", Position = "PG", DateOfBirth = new DateTime(2012, 1, 1) });
 
-    public async Task<TeamDto> CreateTeamWithPlayerAsync(int playerId, string name = "Team", int? jersey = null)
+    public async Task<TeamDto> CreateTeamWithPlayerAsync(Guid playerId, string name = "Team", int? jersey = null)
     {
         var team = await PostAsync<TeamDto>("/api/teams", new CreateTeamDto { Name = name });
         var add = await Http.PostAsJsonAsync($"/api/teams/{team.Id}/players/{playerId}", new AddPlayerToTeamDto { JerseyNumber = jersey });
@@ -73,10 +73,10 @@ public class TestUser
         return team;
     }
 
-    public Task<GameDto> CreateGameAsync(int teamId, string type = "League", DateTime? date = null, string opponent = "Rivals") =>
+    public Task<GameDto> CreateGameAsync(Guid teamId, string type = "League", DateTime? date = null, string opponent = "Rivals") =>
         PostAsync<GameDto>("/api/games", new CreateGameDto { TeamId = teamId, GameType = type, OpponentName = opponent, GameDate = date ?? DateTime.UtcNow.AddDays(-1), Location = "Gym" });
 
-    public Task<GameStatsDto> CreateStatsAsync(int gameId, int playerId, int ftm = 0, int fta = 0, int reb = 0, int ast = 0, int minutes = 20) =>
+    public Task<GameStatsDto> CreateStatsAsync(Guid gameId, Guid playerId, int ftm = 0, int fta = 0, int reb = 0, int ast = 0, int minutes = 20) =>
         PostAsync<GameStatsDto>("/api/gamestats", new CreateGameStatsDto
         {
             GameId = gameId,
@@ -88,11 +88,11 @@ public class TestUser
             MinutesPlayed = minutes,
         });
 
-    public Task<GameDto> FinishGameAsync(int gameId, int teamScore, int opponentScore) =>
+    public Task<GameDto> FinishGameAsync(Guid gameId, int teamScore, int opponentScore) =>
         PutAsync<GameDto>($"/api/games/{gameId}", new UpdateGameDto { Status = "Completed", TeamScore = teamScore, OpponentScore = opponentScore });
 
     // A second parent with full access to the same player (the parent-invite flow).
-    public async Task<TestUser> InviteCoParentAsync(StatsHubFactory factory, int playerId)
+    public async Task<TestUser> InviteCoParentAsync(StatsHubFactory factory, Guid playerId)
     {
         var invite = await PostAsync<ParentInviteDto>($"/api/players/{playerId}/parent-invite", new CreateParentInviteDto());
         var coParent = await SignInAsync(factory, "coparent");

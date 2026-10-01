@@ -2,7 +2,7 @@ namespace StatsHub.Api.Models
 {
     public class Game
     {
-        public int Id { get; set; }
+        public Guid Id { get; set; } = Guid.CreateVersion7();
 
         public string GameType { get; set; } = "League"; // League, Cup or Friendly
 
@@ -26,7 +26,7 @@ namespace StatsHub.Api.Models
         // of two people racing to score the same game. Cleared once the game
         // leaves "In Progress" (completed, or reverted), so normal editing
         // rules apply again afterward.
-        public int? LiveTrackedByUserId { get; set; }
+        public Guid? LiveTrackedByUserId { get; set; }
 
         // The dedup key from IBBA's own per-game "Code" column - null for a
         // manually-created game. Also the discriminator for HomeTeamId/AwayTeamId
@@ -41,8 +41,8 @@ namespace StatsHub.Api.Models
         // For a manually-created game, at most one is set - your own app
         // Team id, on whichever side you're playing - since a manual
         // opponent isn't a tracked entity at all, just OpponentName below.
-        public int? HomeTeamId { get; set; }
-        public int? AwayTeamId { get; set; }
+        public Guid? HomeTeamId { get; set; }
+        public Guid? AwayTeamId { get; set; }
 
         // ---- Manually-created games only (IbbaGameCode == null) ----
         public string OpponentName { get; set; } = string.Empty;

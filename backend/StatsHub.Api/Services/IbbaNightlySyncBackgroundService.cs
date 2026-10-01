@@ -53,7 +53,7 @@ namespace StatsHub.Api.Services
 
         private async Task SyncAllAsync(CancellationToken stoppingToken)
         {
-            List<int> linkIds;
+            List<Guid> linkIds;
             using (var scope = _scopeFactory.CreateScope())
             {
                 var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();

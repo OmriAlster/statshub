@@ -1,6 +1,7 @@
 using System.Net;
 using ClosedXML.Excel;
 using HtmlAgilityPack;
+using StatsHub.Api.Services;
 
 namespace StatsHub.Api.IbbaScraping;
 
@@ -21,6 +22,7 @@ public class IbbaTeamScraper
     public async Task<HtmlDocument> LoadTeamPageAsync(string teamPageUrl)
     {
         var html = await _http.GetStringAsync(teamPageUrl);
+        using var parsing = RequestTimings.Time("parse-team-page");
         var doc = new HtmlDocument();
         doc.LoadHtml(html);
         return doc;
@@ -55,11 +57,29 @@ public class IbbaTeamScraper
     /// ליגה | Code | Week Day | תאריך | מחזור | Time | Home Team | Home Team Code |
     /// Away Team | Away Team Code | Venue | Home Score | Away Score
     /// </summary>
+    // The spreadsheet library does a lot of one-time setup on its first read
+    // (measured at 0.5-5s), which landed on whoever synced first after each
+    // deploy/restart. Reading a tiny made-up sheet at startup takes that hit
+    // in the background instead.
+    public static void WarmUpSpreadsheetReader()
+    {
+        using var stream = new MemoryStream();
+        using (var workbook = new XLWorkbook())
+        {
+            workbook.AddWorksheet("Games").Cell(1, 1).Value = "warm-up";
+            workbook.SaveAs(stream);
+        }
+        stream.Position = 0;
+        using var reread = new XLWorkbook(stream);
+        _ = reread.Worksheet(1).RangeUsed()?.RowsUsed().Count();
+    }
+
     public async Task<List<IbbaGameRow>> DownloadAndParseGamesAsync(string excelUrl)
     {
         var games = new List<IbbaGameRow>();
 
         byte[] fileBytes = await _http.GetByteArrayAsync(excelUrl);
+        using var parsing = RequestTimings.Time("parse-games-xlsx");
 
         using var stream = new MemoryStream(fileBytes);
         using var workbook = new XLWorkbook(stream);
@@ -161,6 +181,7 @@ public class IbbaTeamScraper
     public async Task<string?> FindTeamLogoUrlAsync(string teamPageUrl, string teamName)
     {
         var doc = await LoadTeamPageAsync(teamPageUrl);
+        using var finding = RequestTimings.Time("find-crest");
         return FindTeamLogo(doc, teamPageUrl, teamName);
     }
 
@@ -185,6 +206,7 @@ public class IbbaTeamScraper
         var finalUri = response.RequestMessage?.RequestUri;
         var canonicalUrl = finalUri != null ? IbbaNoCacheHandler.WithoutQuery(finalUri) : $"https://ibasketball.co.il/team/{teamId}";
         var html = await response.Content.ReadAsStringAsync();
+        using var parsing = RequestTimings.Time("parse-team-page");
         var doc = new HtmlDocument();
         doc.LoadHtml(html);
         var h1 = doc.DocumentNode.SelectSingleNode("//h1");

@@ -104,22 +104,28 @@ public class IbbaScrapingTests
     }
 
     [Fact]
-    public async Task Every_ibba_request_skips_their_caches()
+    public async Task The_games_spreadsheet_skips_their_caches_and_pages_use_them()
     {
         // IBBA sits behind Cloudflare + a page cache; a stale cached schedule
-        // kept an old game time in production. Each request must be unique.
+        // kept an old game time in production - so each spreadsheet request
+        // is unique. Pages may come from the cache: IBBA takes ~20s to build
+        // one itself, against ~0.3s cached.
         var site = new RecordingSite();
         var http = new HttpClient(new IbbaNoCacheHandler { InnerHandler = site });
 
         await http.GetAsync("https://ibasketball.co.il/team/13352-x/?feed=xlsx&team_id=746561");
         await http.GetAsync("https://ibasketball.co.il/team/13352-x/?feed=xlsx&team_id=746561");
+        await http.GetAsync("https://ibasketball.co.il/team/13352-x/");
+        await http.GetAsync("https://ibasketball.co.il/player/abc-123/");
         await http.GetAsync("https://example.com/other");
 
-        var (first, second, other) = (site.Requests[0].RequestUri!, site.Requests[1].RequestUri!, site.Requests[2].RequestUri!);
-        Assert.Contains("feed=xlsx&team_id=746561&_sh=", first.Query);
-        Assert.NotEqual(first, second);
+        var uris = site.Requests.Select(r => r.RequestUri!).ToList();
+        Assert.Contains("feed=xlsx&team_id=746561&_sh=", uris[0].Query);
+        Assert.NotEqual(uris[0], uris[1]);
         Assert.True(site.Requests[0].Headers.CacheControl!.NoCache);
-        Assert.Equal("https://example.com/other", other.ToString()); // other sites untouched
+        Assert.Equal("https://ibasketball.co.il/team/13352-x/", uris[2].ToString());
+        Assert.Equal("https://ibasketball.co.il/player/abc-123/", uris[3].ToString());
+        Assert.Equal("https://example.com/other", uris[4].ToString()); // other sites untouched
     }
 
     [Fact]
@@ -140,5 +146,24 @@ public class IbbaScrapingTests
         var row = new IbbaStandingRow { TeamName = "מכבי בקה גת" };
         Assert.False(row.IsTeam(null, "מכבי בקה"));
         Assert.True(row.IsTeam(null, "מכבי בקה גת"));
+    }
+}
+
+public class IbbaSyncTrackerTests
+{
+    [Fact]
+    public void A_sync_asked_for_while_one_runs_runs_again_afterwards()
+    {
+        var tracker = new StatsHub.Api.Services.IbbaSyncTracker();
+        var link = Guid.NewGuid();
+
+        Assert.True(tracker.TryStart(link));      // starts
+        Assert.True(tracker.IsRunning(link));     // "loading games"
+        Assert.False(tracker.TryStart(link));     // e.g. a team linked in the pop-up meanwhile
+        Assert.True(tracker.Finish(link));        // -> run once more
+        Assert.False(tracker.IsRunning(link));
+
+        Assert.True(tracker.TryStart(link));
+        Assert.False(tracker.Finish(link));       // nothing asked meanwhile -> done
     }
 }

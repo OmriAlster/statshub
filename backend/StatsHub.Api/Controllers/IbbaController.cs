@@ -71,7 +71,7 @@ namespace StatsHub.Api.Controllers
         }
 
         [HttpPost("players/{playerId}/ibba/link")]
-        public async Task<ActionResult<IbbaLinkStatusDto>> LinkPlayer(int playerId, [FromBody] LinkIbbaPlayerDto dto)
+        public async Task<ActionResult<IbbaLinkStatusDto>> LinkPlayer(Guid playerId, [FromBody] LinkIbbaPlayerDto dto)
         {
             if (string.IsNullOrWhiteSpace(dto.IbbaPlayerUrl))
                 return BadRequest(new { message = "ibbaPlayerUrl is required" });
@@ -82,7 +82,7 @@ namespace StatsHub.Api.Controllers
         }
 
         [HttpDelete("players/{playerId}/ibba/link")]
-        public async Task<ActionResult> UnlinkPlayer(int playerId)
+        public async Task<ActionResult> UnlinkPlayer(Guid playerId)
         {
             var success = await _ibbaService.UnlinkPlayerAsync(playerId, _currentUser.UserId);
             if (!success) return NotFound(new { message = "No IBBA link found for this player" });
@@ -90,7 +90,7 @@ namespace StatsHub.Api.Controllers
         }
 
         [HttpGet("players/{playerId}/ibba")]
-        public async Task<ActionResult<IbbaLinkStatusDto>> GetLinkStatus(int playerId)
+        public async Task<ActionResult<IbbaLinkStatusDto>> GetLinkStatus(Guid playerId)
         {
             var status = await _ibbaService.GetLinkStatusAsync(playerId, _currentUser.UserId);
             if (status == null) return NotFound(new { message = "No IBBA link found for this player" });
@@ -98,7 +98,7 @@ namespace StatsHub.Api.Controllers
         }
 
         [HttpPost("players/{playerId}/ibba/sync")]
-        public async Task<ActionResult<IbbaLinkStatusDto>> SyncPlayer(int playerId)
+        public async Task<ActionResult<IbbaLinkStatusDto>> SyncPlayer(Guid playerId)
         {
             var status = await _ibbaService.SyncPlayerAsync(playerId, _currentUser.UserId);
             if (status == null) return NotFound(new { message = "No IBBA link found for this player" });
@@ -106,7 +106,7 @@ namespace StatsHub.Api.Controllers
         }
 
         [HttpPut("ibba/team-links/{ibbaTeamId}")]
-        public async Task<ActionResult<IbbaLinkStatusDto>> LinkTeam(int ibbaTeamId, [FromBody] LinkIbbaTeamDto dto)
+        public async Task<ActionResult<IbbaLinkStatusDto>> LinkTeam(Guid ibbaTeamId, [FromBody] LinkIbbaTeamDto dto)
         {
             var status = await _ibbaService.LinkTeamAsync(ibbaTeamId, dto.TeamId, _currentUser.UserId, dto.PlayerId);
             if (status == null) return NotFound(new { message = "IBBA team or app team not found" });
@@ -116,7 +116,7 @@ namespace StatsHub.Api.Controllers
         // The parent chose "create a new team" for this IBBA team (instead of
         // linking one of the player's existing teams).
         [HttpPost("ibba/team-links/{ibbaTeamId}/new-team")]
-        public async Task<ActionResult<IbbaLinkStatusDto>> CreateTeamForIbbaTeam(int ibbaTeamId, [FromBody] CreateTeamForIbbaTeamDto dto)
+        public async Task<ActionResult<IbbaLinkStatusDto>> CreateTeamForIbbaTeam(Guid ibbaTeamId, [FromBody] CreateTeamForIbbaTeamDto dto)
         {
             var status = await _ibbaService.CreateTeamForIbbaTeamAsync(ibbaTeamId, dto.PlayerId, _currentUser.UserId);
             if (status == null) return NotFound(new { message = "IBBA team or player not found" });

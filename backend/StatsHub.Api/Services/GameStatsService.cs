@@ -7,13 +7,13 @@ namespace StatsHub.Api.Services
 {
     public interface IGameStatsService
     {
-        Task<GameStatsDto?> GetGameStatsByIdAsync(int id, int requestingUserId);
-        Task<GameStatsDto> CreateGameStatsAsync(CreateGameStatsDto dto, int requestingUserId);
-        Task<GameStatsDto?> UpdateGameStatsAsync(int id, UpdateGameStatsDto dto, int requestingUserId);
-        Task<bool> DeleteGameStatsAsync(int id, int requestingUserId);
-        Task<List<PlayerTeamStatsDto>> GetStatsByPlayerAsync(int playerId, int requestingUserId);
-        Task<PlayerTeamStatsDto?> GetTeamStatsForPlayerAsync(int playerId, int teamId, int requestingUserId);
-        Task<List<PlayerTeamStatsDto>> GetStatsByPlayerUnrestrictedAsync(int playerId);
+        Task<GameStatsDto?> GetGameStatsByIdAsync(Guid id, Guid requestingUserId);
+        Task<GameStatsDto> CreateGameStatsAsync(CreateGameStatsDto dto, Guid requestingUserId);
+        Task<GameStatsDto?> UpdateGameStatsAsync(Guid id, UpdateGameStatsDto dto, Guid requestingUserId);
+        Task<bool> DeleteGameStatsAsync(Guid id, Guid requestingUserId);
+        Task<List<PlayerTeamStatsDto>> GetStatsByPlayerAsync(Guid playerId, Guid requestingUserId);
+        Task<PlayerTeamStatsDto?> GetTeamStatsForPlayerAsync(Guid playerId, Guid teamId, Guid requestingUserId);
+        Task<List<PlayerTeamStatsDto>> GetStatsByPlayerUnrestrictedAsync(Guid playerId);
     }
 
     public class GameStatsService : IGameStatsService
@@ -25,18 +25,18 @@ namespace StatsHub.Api.Services
             _context = context;
         }
 
-        private async Task<bool> CanReadPlayerAsync(int playerId, int userId) =>
+        private async Task<bool> CanReadPlayerAsync(Guid playerId, Guid userId) =>
             await _context.Players.AnyAsync(p =>
                 p.Id == playerId && (p.LinkedUserId == userId || p.Parents.Any(pp => pp.UserId == userId)));
 
         // Any linked parent (not just the one who created the player) can record stats.
-        private Task<bool> CanWritePlayerAsync(int playerId, int userId) =>
+        private Task<bool> CanWritePlayerAsync(Guid playerId, Guid userId) =>
             _context.PlayerParents.AnyAsync(pp => pp.PlayerId == playerId && pp.UserId == userId);
 
         // Same rule as GameService: a manual game via its own team, an IBBA
         // game via any team linked to either side - owned by this user's
         // season, or with one of their players on the roster.
-        private async Task<bool> CanAccessGameAsync(Game game, int userId)
+        private async Task<bool> CanAccessGameAsync(Game game, Guid userId)
         {
             if (game.IbbaGameCode == null)
             {
@@ -52,7 +52,7 @@ namespace StatsHub.Api.Services
                 (t.Season.UserId == userId || t.PlayerTeams.Any(pt => pt.Player.Parents.Any(pp => pp.UserId == userId))));
         }
 
-        public async Task<GameStatsDto?> GetGameStatsByIdAsync(int id, int requestingUserId)
+        public async Task<GameStatsDto?> GetGameStatsByIdAsync(Guid id, Guid requestingUserId)
         {
             var stats = await _context.GameStats
                 .Include(gs => gs.Player)
@@ -63,7 +63,7 @@ namespace StatsHub.Api.Services
             return MapToDto(stats);
         }
 
-        public async Task<GameStatsDto> CreateGameStatsAsync(CreateGameStatsDto dto, int requestingUserId)
+        public async Task<GameStatsDto> CreateGameStatsAsync(CreateGameStatsDto dto, Guid requestingUserId)
         {
             if (!await CanWritePlayerAsync(dto.PlayerId, requestingUserId))
                 throw new UnauthorizedAccessException("Player not found or not owned by user");
@@ -119,7 +119,7 @@ namespace StatsHub.Api.Services
             return await GetGameStatsByIdAsync(gameStats.Id, requestingUserId) ?? new GameStatsDto();
         }
 
-        public async Task<GameStatsDto?> UpdateGameStatsAsync(int id, UpdateGameStatsDto dto, int requestingUserId)
+        public async Task<GameStatsDto?> UpdateGameStatsAsync(Guid id, UpdateGameStatsDto dto, Guid requestingUserId)
         {
             var gameStats = await _context.GameStats.Include(gs => gs.Game).FirstOrDefaultAsync(gs => gs.Id == id);
             if (gameStats == null || !await CanWritePlayerAsync(gameStats.PlayerId, requestingUserId)) return null;
@@ -153,7 +153,7 @@ namespace StatsHub.Api.Services
             return await GetGameStatsByIdAsync(id, requestingUserId);
         }
 
-        public async Task<bool> DeleteGameStatsAsync(int id, int requestingUserId)
+        public async Task<bool> DeleteGameStatsAsync(Guid id, Guid requestingUserId)
         {
             var gameStats = await _context.GameStats.FindAsync(id);
             if (gameStats == null || !await CanWritePlayerAsync(gameStats.PlayerId, requestingUserId)) return false;
@@ -163,18 +163,18 @@ namespace StatsHub.Api.Services
             return true;
         }
 
-        public async Task<List<PlayerTeamStatsDto>> GetStatsByPlayerAsync(int playerId, int requestingUserId)
+        public async Task<List<PlayerTeamStatsDto>> GetStatsByPlayerAsync(Guid playerId, Guid requestingUserId)
         {
             if (!await CanReadPlayerAsync(playerId, requestingUserId)) return new List<PlayerTeamStatsDto>();
             return await ComputeStatsByPlayerAsync(playerId);
         }
 
-        public async Task<List<PlayerTeamStatsDto>> GetStatsByPlayerUnrestrictedAsync(int playerId)
+        public async Task<List<PlayerTeamStatsDto>> GetStatsByPlayerUnrestrictedAsync(Guid playerId)
         {
             return await ComputeStatsByPlayerAsync(playerId);
         }
 
-        public async Task<PlayerTeamStatsDto?> GetTeamStatsForPlayerAsync(int playerId, int teamId, int requestingUserId)
+        public async Task<PlayerTeamStatsDto?> GetTeamStatsForPlayerAsync(Guid playerId, Guid teamId, Guid requestingUserId)
         {
             if (!await CanReadPlayerAsync(playerId, requestingUserId)) return null;
 
@@ -200,7 +200,7 @@ namespace StatsHub.Api.Services
             return BuildTeamStatsDto(player, team, jerseyNumber, gameStats);
         }
 
-        private async Task<List<PlayerTeamStatsDto>> ComputeStatsByPlayerAsync(int playerId)
+        private async Task<List<PlayerTeamStatsDto>> ComputeStatsByPlayerAsync(Guid playerId)
         {
             // The player comes along with their memberships - no teams means
             // no per-team stat lines to return anyway.

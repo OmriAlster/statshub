@@ -2,11 +2,11 @@ namespace StatsHub.Api.Models
 {
     public class ShareLink
     {
-        public int Id { get; set; }
+        public Guid Id { get; set; } = Guid.CreateVersion7();
         public string Token { get; set; } = string.Empty;
-        public int PlayerId { get; set; }
-        public int? GameId { get; set; } // null = share whole player profile/season, set = share a single game
-        public int CreatedByUserId { get; set; }
+        public Guid PlayerId { get; set; }
+        public Guid? GameId { get; set; } // null = share whole player profile/season, set = share a single game
+        public Guid CreatedByUserId { get; set; }
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public DateTime? ExpiresAt { get; set; }
 

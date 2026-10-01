@@ -2,8 +2,8 @@ namespace StatsHub.Api.Models
 {
     public class Player
     {
-        public int Id { get; set; }
-        public int UserId { get; set; }
+        public Guid Id { get; set; } = Guid.CreateVersion7();
+        public Guid UserId { get; set; }
         public string FirstName { get; set; } = string.Empty;
         public string LastName { get; set; } = string.Empty;
         public string Position { get; set; } = string.Empty; // PG, SG, SF, PF, C
@@ -14,7 +14,7 @@ namespace StatsHub.Api.Models
 
         // Player account linking: lets the player log in with their own
         // Google account and see a read-only view of their own stats.
-        public int? LinkedUserId { get; set; }
+        public Guid? LinkedUserId { get; set; }
         public string? InviteCode { get; set; }
         public DateTime? InviteCodeExpiresAt { get; set; }
         public string? InvitePasswordHash { get; set; }

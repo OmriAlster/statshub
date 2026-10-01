@@ -7,13 +7,13 @@ namespace StatsHub.Api.Services
 {
     public interface ISeasonService
     {
-        Task<List<SeasonDto>> GetSeasonsByUserAsync(int userId);
-        Task<SeasonDto?> GetSeasonByIdAsync(int id, int requestingUserId);
-        Task<SeasonDto> CreateSeasonAsync(int userId, CreateSeasonDto dto);
-        Task<SeasonDto?> UpdateSeasonAsync(int id, UpdateSeasonDto dto, int requestingUserId);
-        Task<bool> DeleteSeasonAsync(int id, int requestingUserId);
-        Task<bool> UserOwnsSeasonAsync(int seasonId, int userId);
-        Task<Season> GetOrCreateCurrentSeasonAsync(int userId);
+        Task<List<SeasonDto>> GetSeasonsByUserAsync(Guid userId);
+        Task<SeasonDto?> GetSeasonByIdAsync(Guid id, Guid requestingUserId);
+        Task<SeasonDto> CreateSeasonAsync(Guid userId, CreateSeasonDto dto);
+        Task<SeasonDto?> UpdateSeasonAsync(Guid id, UpdateSeasonDto dto, Guid requestingUserId);
+        Task<bool> DeleteSeasonAsync(Guid id, Guid requestingUserId);
+        Task<bool> UserOwnsSeasonAsync(Guid seasonId, Guid userId);
+        Task<Season> GetOrCreateCurrentSeasonAsync(Guid userId);
     }
 
     public class SeasonService : ISeasonService
@@ -29,14 +29,14 @@ namespace StatsHub.Api.Services
             _context = context;
         }
 
-        public async Task<bool> UserOwnsSeasonAsync(int seasonId, int userId)
+        public async Task<bool> UserOwnsSeasonAsync(Guid seasonId, Guid userId)
         {
             return await _context.Seasons.AnyAsync(s => s.Id == seasonId && s.UserId == userId);
         }
 
         // Every parent has exactly one active season right now; it's provisioned
         // automatically the first time it's needed instead of being user-managed.
-        public async Task<Season> GetOrCreateCurrentSeasonAsync(int userId)
+        public async Task<Season> GetOrCreateCurrentSeasonAsync(Guid userId)
         {
             var season = await _context.Seasons.FirstOrDefaultAsync(s => s.UserId == userId && s.Year == CurrentSeasonYear);
             if (season != null) return season;
@@ -56,7 +56,7 @@ namespace StatsHub.Api.Services
             return season;
         }
 
-        public async Task<List<SeasonDto>> GetSeasonsByUserAsync(int userId)
+        public async Task<List<SeasonDto>> GetSeasonsByUserAsync(Guid userId)
         {
             var seasons = await _context.Seasons
                 .Where(s => s.UserId == userId)
@@ -69,7 +69,7 @@ namespace StatsHub.Api.Services
             return result;
         }
 
-        public async Task<SeasonDto?> GetSeasonByIdAsync(int id, int requestingUserId)
+        public async Task<SeasonDto?> GetSeasonByIdAsync(Guid id, Guid requestingUserId)
         {
             var season = await _context.Seasons
                 .Include(s => s.Teams)
@@ -80,7 +80,7 @@ namespace StatsHub.Api.Services
             return await MapToDtoAsync(season);
         }
 
-        public async Task<SeasonDto> CreateSeasonAsync(int userId, CreateSeasonDto dto)
+        public async Task<SeasonDto> CreateSeasonAsync(Guid userId, CreateSeasonDto dto)
         {
             var season = new Season
             {
@@ -99,7 +99,7 @@ namespace StatsHub.Api.Services
             return await MapToDtoAsync(season);
         }
 
-        public async Task<SeasonDto?> UpdateSeasonAsync(int id, UpdateSeasonDto dto, int requestingUserId)
+        public async Task<SeasonDto?> UpdateSeasonAsync(Guid id, UpdateSeasonDto dto, Guid requestingUserId)
         {
             var season = await _context.Seasons.FindAsync(id);
             if (season == null || season.UserId != requestingUserId) return null;
@@ -115,7 +115,7 @@ namespace StatsHub.Api.Services
             return await GetSeasonByIdAsync(id, requestingUserId);
         }
 
-        public async Task<bool> DeleteSeasonAsync(int id, int requestingUserId)
+        public async Task<bool> DeleteSeasonAsync(Guid id, Guid requestingUserId)
         {
             var season = await _context.Seasons.FindAsync(id);
             if (season == null || season.UserId != requestingUserId) return false;

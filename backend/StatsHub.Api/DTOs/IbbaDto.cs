@@ -30,22 +30,25 @@ namespace StatsHub.Api.DTOs
 
     public class LinkIbbaTeamDto
     {
-        public int TeamId { get; set; }
+        public Guid TeamId { get; set; }
         // The player the pop-up was for - they're added to the team if needed.
-        public int? PlayerId { get; set; }
+        public Guid? PlayerId { get; set; }
     }
 
     public class CreateTeamForIbbaTeamDto
     {
-        public int PlayerId { get; set; }
+        public Guid PlayerId { get; set; }
     }
 
     public class IbbaLinkStatusDto
     {
-        public int PlayerId { get; set; }
+        public Guid PlayerId { get; set; }
         public string IbbaPlayerUrl { get; set; } = string.Empty;
         public DateTime? LastSyncedAt { get; set; }
         public string? LastSyncError { get; set; }
+        // The games and standings are still loading in the background (a link
+        // or sync answers as soon as the teams are known).
+        public bool GamesLoading { get; set; }
         public List<IbbaTeamLinkDto> Teams { get; set; } = new();
         // The family's teams not linked to any IBBA team - what the pop-up
         // offers to add an IBBA team to, instead of creating a new one.
@@ -54,11 +57,11 @@ namespace StatsHub.Api.DTOs
 
     public class IbbaTeamLinkDto
     {
-        public int Id { get; set; }
+        public Guid Id { get; set; }
         public string TeamName { get; set; } = string.Empty;
         public string TeamUrl { get; set; } = string.Empty;
         public string? TeamLogoUrl { get; set; }
-        public int? LinkedTeamId { get; set; }
+        public Guid? LinkedTeamId { get; set; }
         public string? LinkedTeamName { get; set; }
         public string? IbbaLeagueUrl { get; set; }
         public string? IbbaLeagueName { get; set; }

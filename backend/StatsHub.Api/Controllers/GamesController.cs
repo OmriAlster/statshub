@@ -20,14 +20,14 @@ namespace StatsHub.Api.Controllers
         }
 
         [HttpGet("team/{teamId}")]
-        public async Task<ActionResult<List<GameDto>>> GetGamesByTeam(int teamId)
+        public async Task<ActionResult<List<GameDto>>> GetGamesByTeam(Guid teamId)
         {
             var games = await _gameService.GetGamesByTeamAsync(teamId, _currentUser.UserId);
             return Ok(games);
         }
 
         [HttpGet("player/{playerId}")]
-        public async Task<ActionResult<List<GameDto>>> GetGamesByPlayer(int playerId)
+        public async Task<ActionResult<List<GameDto>>> GetGamesByPlayer(Guid playerId)
         {
             var games = await _gameService.GetGamesByPlayerAsync(playerId, _currentUser.UserId);
             return Ok(games);
@@ -36,7 +36,7 @@ namespace StatsHub.Api.Controllers
         [HttpGet("{id}")]
         // playerId (optional): the player whose page this game is shown on, so
         // the game is framed as that player's team's game.
-        public async Task<ActionResult<GameDto>> GetGameById(int id, [FromQuery] int? playerId)
+        public async Task<ActionResult<GameDto>> GetGameById(Guid id, [FromQuery] Guid? playerId)
         {
             var game = await _gameService.GetGameByIdAsync(id, _currentUser.UserId, playerId);
             if (game == null)
@@ -69,7 +69,7 @@ namespace StatsHub.Api.Controllers
         }
 
         [HttpPut("{id}")]
-        public async Task<ActionResult<GameDto>> UpdateGame(int id, [FromBody] UpdateGameDto dto, [FromQuery] int? playerId)
+        public async Task<ActionResult<GameDto>> UpdateGame(Guid id, [FromBody] UpdateGameDto dto, [FromQuery] Guid? playerId)
         {
             var game = await _gameService.UpdateGameAsync(id, dto, _currentUser.UserId, playerId);
             if (game == null)
@@ -78,7 +78,7 @@ namespace StatsHub.Api.Controllers
         }
 
         [HttpDelete("{id}")]
-        public async Task<ActionResult> DeleteGame(int id)
+        public async Task<ActionResult> DeleteGame(Guid id)
         {
             var success = await _gameService.DeleteGameAsync(id, _currentUser.UserId);
             if (!success)

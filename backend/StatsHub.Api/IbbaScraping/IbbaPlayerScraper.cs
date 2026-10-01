@@ -1,5 +1,6 @@
 using System.Text.RegularExpressions;
 using HtmlAgilityPack;
+using StatsHub.Api.Services;
 
 namespace StatsHub.Api.IbbaScraping;
 
@@ -20,6 +21,7 @@ public class IbbaPlayerScraper
     public async Task<IbbaPlayerInfo> GetPlayerInfoAsync(string playerUrl)
     {
         var html = await _http.GetStringAsync(playerUrl);
+        using var parsing = RequestTimings.Time("parse-player-page");
 
         var doc = new HtmlDocument();
         doc.LoadHtml(html);

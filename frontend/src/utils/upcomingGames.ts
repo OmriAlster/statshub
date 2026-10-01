@@ -15,8 +15,8 @@ export const UPCOMING_PREVIEW_COUNT = 5
 // played - keep it listed only for a few hours past tip-off, not forever.
 const UPCOMING_GRACE_MS = 3 * 60 * 60 * 1000
 
-export function collectUpcomingGames(cards: { player: PlayerDto; gamesByTeam: Record<number, GameDto[]> }[]): UpcomingGame[] {
-  const byId = new Map<number, UpcomingGame>()
+export function collectUpcomingGames(cards: { player: PlayerDto; gamesByTeam: Record<string, GameDto[]> }[]): UpcomingGame[] {
+  const byId = new Map<string, UpcomingGame>()
   const cutoff = Date.now() - UPCOMING_GRACE_MS
   for (const { player, gamesByTeam } of cards) {
     for (const game of Object.values(gamesByTeam).flat()) {

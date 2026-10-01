@@ -212,6 +212,9 @@ namespace StatsHub.Api.Data
                 // Live on/off court indicator - see GameStats.OnCourt.
                 AddColumnIfMissing(connection, "GameStats", "OnCourt", "INTEGER");
 
+                // Ending every session of an account - see User.SecurityStamp.
+                AddColumnIfMissing(connection, "Users", "SecurityStamp", "TEXT");
+
                 CreateTableIfMissing(connection, @"
                     CREATE TABLE IF NOT EXISTS ""PushSubscriptions"" (
                         ""Id"" INTEGER NOT NULL CONSTRAINT ""PK_PushSubscriptions"" PRIMARY KEY AUTOINCREMENT,

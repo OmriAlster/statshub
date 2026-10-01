@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using StatsHub.Api.DTOs;
 using StatsHub.Api.Services;
 
@@ -27,7 +28,7 @@ namespace StatsHub.Api.Controllers
         }
 
         [HttpGet("{id}")]
-        public async Task<ActionResult<PlayerDto>> GetPlayerById(int id)
+        public async Task<ActionResult<PlayerDto>> GetPlayerById(Guid id)
         {
             var player = await _playerService.GetPlayerByIdAsync(id, _currentUser.UserId);
             if (player == null)
@@ -46,7 +47,7 @@ namespace StatsHub.Api.Controllers
         }
 
         [HttpPut("{id}")]
-        public async Task<ActionResult<PlayerDto>> UpdatePlayer(int id, [FromBody] UpdatePlayerDto dto)
+        public async Task<ActionResult<PlayerDto>> UpdatePlayer(Guid id, [FromBody] UpdatePlayerDto dto)
         {
             var player = await _playerService.UpdatePlayerAsync(id, dto, _currentUser.UserId);
             if (player == null)
@@ -55,7 +56,7 @@ namespace StatsHub.Api.Controllers
         }
 
         [HttpDelete("{id}")]
-        public async Task<ActionResult> DeletePlayer(int id)
+        public async Task<ActionResult> DeletePlayer(Guid id)
         {
             var success = await _playerService.DeletePlayerAsync(id, _currentUser.UserId);
             if (!success)
@@ -66,7 +67,7 @@ namespace StatsHub.Api.Controllers
         // Generates a short-lived code the parent can send to their player so the
         // player can sign in with their own Google account and see their own stats.
         [HttpPost("{id}/invite")]
-        public async Task<ActionResult<PlayerInviteDto>> CreatePlayerInvite(int id, [FromBody] CreatePlayerInviteDto? dto)
+        public async Task<ActionResult<PlayerInviteDto>> CreatePlayerInvite(Guid id, [FromBody] CreatePlayerInviteDto? dto)
         {
             var invite = await _playerService.CreatePlayerInviteAsync(id, _currentUser.UserId, dto?.Password);
             if (invite == null)
@@ -74,6 +75,7 @@ namespace StatsHub.Api.Controllers
             return Ok(invite);
         }
 
+        [EnableRateLimiting(RateLimits.SignIn)] // short codes - limit guessing
         [HttpPost("claim-invite")]
         public async Task<ActionResult<PlayerDto>> ClaimInvite([FromBody] ClaimInviteDto dto)
         {
@@ -86,7 +88,7 @@ namespace StatsHub.Api.Controllers
         // Generates a short-lived code a second parent/guardian can use to get
         // full access to the same player (e.g. mom invites dad).
         [HttpPost("{id}/parent-invite")]
-        public async Task<ActionResult<ParentInviteDto>> CreateParentInvite(int id, [FromBody] CreateParentInviteDto? dto)
+        public async Task<ActionResult<ParentInviteDto>> CreateParentInvite(Guid id, [FromBody] CreateParentInviteDto? dto)
         {
             var invite = await _playerService.CreateParentInviteAsync(id, _currentUser.UserId, dto?.Password);
             if (invite == null)
@@ -94,6 +96,7 @@ namespace StatsHub.Api.Controllers
             return Ok(invite);
         }
 
+        [EnableRateLimiting(RateLimits.SignIn)] // short codes - limit guessing
         [HttpPost("claim-parent-invite")]
         public async Task<ActionResult<PlayerDto>> ClaimParentInvite([FromBody] ClaimParentInviteDto dto)
         {

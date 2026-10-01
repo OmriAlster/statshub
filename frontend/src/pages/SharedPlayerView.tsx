@@ -12,13 +12,14 @@ import SegmentedControl from '../components/SegmentedControl'
 import TeamCrest from '../components/TeamCrest'
 import { useElementVisible } from '../hooks/useElementVisible'
 import { formatGameDateOnly } from '../utils/formatGameDate'
+import BouncingBall from '../components/BouncingBall'
 
 export default function SharedPlayerView() {
   const { token, gameId } = useParams<{ token: string; gameId?: string }>()
   const [data, setData] = useState<SharedPlayerDto | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [selectedTeamId, setSelectedTeamId] = useState<number | null>(null)
+  const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null)
   const [tab, setTab] = useState<'stats' | 'schedule' | 'season'>('stats')
 
   const load = useCallback(async () => {
@@ -55,7 +56,7 @@ export default function SharedPlayerView() {
   if (loading) {
     return (
       <div className="login-container">
-        <div className="login-box"><p>Loading...</p></div>
+        <div className="login-box"><BouncingBall /></div>
       </div>
     )
   }

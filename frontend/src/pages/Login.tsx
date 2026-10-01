@@ -1,14 +1,18 @@
 import { useState } from 'react'
 import { GoogleLogin } from '@react-oauth/google'
-import { Navigate } from 'react-router-dom'
+import { Navigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
+import { Busy } from '../components/BouncingBall'
 
 const devLoginEnabled = import.meta.env.DEV
 const hasGoogleClientId = Boolean(import.meta.env.VITE_GOOGLE_CLIENT_ID)
 
 export default function Login() {
   const { user, loading, loginWithGoogle, loginWithPassword, register, devLogin } = useAuth()
-  const [error, setError] = useState<string | null>(null)
+  // Sent back here because this login was ended (another device chose
+  // "Log out of all devices", or it expired).
+  const [searchParams] = useSearchParams()
+  const [error, setError] = useState<string | null>(searchParams.get('ended') ? 'You were signed out - please sign in again.' : null)
 
   const [mode, setMode] = useState<'signin' | 'register'>('signin')
   const [email, setEmail] = useState('')
@@ -30,8 +34,8 @@ export default function Login() {
       setError('Enter an email and password')
       return
     }
-    if (mode === 'register' && password.length < 6) {
-      setError('Password must be at least 6 characters')
+    if (mode === 'register' && password.length < 10) {
+      setError('Use at least 10 characters - a short phrase is easiest to remember.')
       return
     }
     setBusy(true)
@@ -123,14 +127,14 @@ export default function Login() {
                 <label>Password:</label>
                 <input
                   type="password"
-                  placeholder={mode === 'register' ? 'At least 6 characters' : 'Your password'}
+                  placeholder={mode === 'register' ? 'At least 10 characters' : 'Your password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                 />
               </div>
             </div>
             <button className="submit-btn" onClick={handleSubmit} disabled={busy}>
-              {busy ? 'Please wait...' : mode === 'signin' ? 'Sign In' : 'Create Account'}
+              {busy ? <Busy>Please wait…</Busy> : mode === 'signin' ? 'Sign In' : 'Create Account'}
             </button>
           </div>
 
@@ -173,7 +177,7 @@ export default function Login() {
                 onChange={(e) => setDevName(e.target.value)}
               />
               <button className="submit-btn" onClick={handleDevLogin} disabled={devBusy}>
-                {devBusy ? 'Signing in...' : 'Continue with dev login'}
+                {devBusy ? <Busy>Signing in…</Busy> : 'Continue with dev login'}
               </button>
             </div>
           )}

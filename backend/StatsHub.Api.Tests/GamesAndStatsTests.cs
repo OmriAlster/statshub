@@ -100,7 +100,7 @@ public class GamesAndStatsTests : IClassFixture<StatsHubFactory>
     public async Task A_box_score_cannot_be_attached_to_a_game_that_does_not_exist()
     {
         var (parent, player, _) = await ParentWithPlayerOnTeamAsync();
-        var response = await parent.Http.PostAsJsonAsync("/api/gamestats", new CreateGameStatsDto { GameId = 999_999, PlayerId = player.Id });
+        var response = await parent.Http.PostAsJsonAsync("/api/gamestats", new CreateGameStatsDto { GameId = Guid.NewGuid(), PlayerId = player.Id });
         Assert.True(response.StatusCode is HttpStatusCode.NotFound or HttpStatusCode.BadRequest, $"got {(int)response.StatusCode}");
     }
 

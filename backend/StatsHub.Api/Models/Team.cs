@@ -2,8 +2,8 @@ namespace StatsHub.Api.Models
 {
     public class Team
     {
-        public int Id { get; set; }
-        public int SeasonId { get; set; }
+        public Guid Id { get; set; } = Guid.CreateVersion7();
+        public Guid SeasonId { get; set; }
         public string Name { get; set; } = string.Empty; // e.g. "U16", "U18"
 
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
@@ -12,7 +12,7 @@ namespace StatsHub.Api.Models
         // The real IBBA team this maps to - null until a user links one.
         // Many app Teams can point at the same IbbaTeam (e.g. two different
         // parents each tracking their own kid on the same real-world team).
-        public int? IbbaTeamId { get; set; }
+        public Guid? IbbaTeamId { get; set; }
 
         // Navigation properties
         public Season Season { get; set; } = null!;

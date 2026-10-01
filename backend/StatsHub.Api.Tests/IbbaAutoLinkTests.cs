@@ -33,14 +33,14 @@ public class IbbaAutoLinkTests : IClassFixture<StatsHubFactory>
         return created;
     }
 
-    private async Task AutoLinkAsync(int playerId, List<IbbaTeam> ibbaTeams)
+    private async Task AutoLinkAsync(Guid playerId, List<IbbaTeam> ibbaTeams)
     {
         using var scope = _factory.Services.CreateScope();
         var service = (IbbaService)scope.ServiceProvider.GetRequiredService<IIbbaService>();
         await service.AutoLinkAppTeamsAsync(playerId, ibbaTeams);
     }
 
-    private async Task<List<Team>> TeamsOfAsync(int playerId)
+    private async Task<List<Team>> TeamsOfAsync(Guid playerId)
     {
         var teams = new List<Team>();
         await _factory.WithDbAsync(async db =>
@@ -71,7 +71,7 @@ public class IbbaAutoLinkTests : IClassFixture<StatsHubFactory>
 
         await AutoLinkAsync(player.Id, ibba);
 
-        Assert.Equal(["מכבי תל מונד - נערים א מחוזית שרון", "מכבי תל מונד - נוער ארצית שרון"], (await TeamsOfAsync(player.Id)).Select(t => t.Name).ToArray());
+        Assert.Equivalent(new[] { "מכבי תל מונד - נערים א מחוזית שרון", "מכבי תל מונד - נוער ארצית שרון" }, (await TeamsOfAsync(player.Id)).Select(t => t.Name).ToArray(), strict: true);
     }
 
     [Fact]
@@ -130,7 +130,7 @@ public class IbbaAutoLinkTests : IClassFixture<StatsHubFactory>
         Assert.All(status.Teams, t => Assert.NotNull(t.LinkedTeamId));
         var teams = await TeamsOfAsync(player.Id);
         Assert.Equal(existing.Id, teams.Single(t => t.IbbaTeamId == ibba[0].Id).Id);
-        Assert.Equal([ibba[0].Id, ibba[1].Id], teams.Select(t => t.IbbaTeamId!.Value).Order().ToArray());
+        Assert.Equivalent(new[] { ibba[0].Id, ibba[1].Id }, teams.Select(t => t.IbbaTeamId!.Value).ToArray(), strict: true);
     }
 
     [Fact]
@@ -220,7 +220,7 @@ public class IbbaAutoLinkTests : IClassFixture<StatsHubFactory>
 
         // "Yes" for the second too.
         status = await parent.PutAsync<IbbaLinkStatusDto>($"/api/ibba/team-links/{ibba[1].Id}", new LinkIbbaTeamDto { TeamId = second.Id, PlayerId = player.Id });
-        Assert.Equal([first.Id, second.Id], status.Teams.Select(t => t.LinkedTeamId!.Value).Order().ToArray());
+        Assert.Equivalent(new[] { first.Id, second.Id }, status.Teams.Select(t => t.LinkedTeamId!.Value).ToArray(), strict: true);
         Assert.Equal(2, (await TeamsOfAsync(player.Id)).Count); // nothing new created
     }
 
@@ -255,7 +255,7 @@ public class IbbaAutoLinkTests : IClassFixture<StatsHubFactory>
 
         await AutoLinkAsync(player.Id, ibba); // any sync
 
-        Assert.Equal(["מכבי תל מונד - נערים א מחוזית שרון", "מכבי תל מונד - נוער ארצית שרון"], (await TeamsOfAsync(player.Id)).Select(t => t.Name).ToArray());
+        Assert.Equivalent(new[] { "מכבי תל מונד - נערים א מחוזית שרון", "מכבי תל מונד - נוער ארצית שרון" }, (await TeamsOfAsync(player.Id)).Select(t => t.Name).ToArray(), strict: true);
     }
 
     [Fact]
@@ -277,7 +277,7 @@ public class IbbaAutoLinkTests : IClassFixture<StatsHubFactory>
         await AutoLinkAsync(player.Id, ibba);
 
         var names = (await TeamsOfAsync(player.Id)).Select(t => t.Name).ToArray();
-        Assert.Equal(["Maccabi", "My kid's team", "My kid's team"], names); // "Maccabi" doesn't clash; the custom names aren't IBBA names
+        Assert.Equivalent(new[] { "Maccabi", "My kid's team", "My kid's team" }, names, strict: true); // "Maccabi" doesn't clash; the custom names aren't IBBA names
     }
 
     [Fact]

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useAuth } from '../auth/AuthContext'
 import { usePushNotifications } from '../hooks/usePushNotifications'
+import { Busy } from './BouncingBall'
 
 const DISMISSED_KEY = 'statshub_notification_banner_dismissed'
 
@@ -31,7 +32,7 @@ export default function NotificationBanner() {
         <span>New games, live starts, and final scores - straight to your phone.</span>
       </div>
       <button className="install-banner-btn" onClick={enable} disabled={busy}>
-        {busy ? 'Enabling...' : 'Enable'}
+        {busy ? <Busy>Enabling…</Busy> : 'Enable'}
       </button>
       <button className="install-banner-close" onClick={dismiss} aria-label="Dismiss">
         <svg className="icon"><use href="#i-x" /></svg>

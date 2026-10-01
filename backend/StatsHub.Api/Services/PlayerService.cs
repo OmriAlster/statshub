@@ -7,17 +7,17 @@ namespace StatsHub.Api.Services
 {
     public interface IPlayerService
     {
-        Task<List<PlayerDto>> GetPlayersOwnedByAsync(int userId);
-        Task<PlayerDto?> GetLinkedPlayerAsync(int linkedUserId);
-        Task<PlayerDto?> GetPlayerByIdAsync(int id, int requestingUserId);
-        Task<PlayerDto> CreatePlayerAsync(int userId, CreatePlayerDto dto);
-        Task<PlayerDto?> UpdatePlayerAsync(int id, UpdatePlayerDto dto, int requestingUserId);
-        Task<bool> DeletePlayerAsync(int id, int requestingUserId);
-        Task<PlayerInviteDto?> CreatePlayerInviteAsync(int playerId, int requestingUserId, string? password);
-        Task<PlayerDto?> ClaimPlayerInviteAsync(string inviteCode, int claimingUserId, string? password);
-        Task<ParentInviteDto?> CreateParentInviteAsync(int playerId, int requestingUserId, string? password);
-        Task<PlayerDto?> ClaimParentInviteAsync(string inviteCode, int claimingUserId, string? password);
-        Task<bool> CanAccessPlayerAsync(int playerId, int userId);
+        Task<List<PlayerDto>> GetPlayersOwnedByAsync(Guid userId);
+        Task<PlayerDto?> GetLinkedPlayerAsync(Guid linkedUserId);
+        Task<PlayerDto?> GetPlayerByIdAsync(Guid id, Guid requestingUserId);
+        Task<PlayerDto> CreatePlayerAsync(Guid userId, CreatePlayerDto dto);
+        Task<PlayerDto?> UpdatePlayerAsync(Guid id, UpdatePlayerDto dto, Guid requestingUserId);
+        Task<bool> DeletePlayerAsync(Guid id, Guid requestingUserId);
+        Task<PlayerInviteDto?> CreatePlayerInviteAsync(Guid playerId, Guid requestingUserId, string? password);
+        Task<PlayerDto?> ClaimPlayerInviteAsync(string inviteCode, Guid claimingUserId, string? password);
+        Task<ParentInviteDto?> CreateParentInviteAsync(Guid playerId, Guid requestingUserId, string? password);
+        Task<PlayerDto?> ClaimParentInviteAsync(string inviteCode, Guid claimingUserId, string? password);
+        Task<bool> CanAccessPlayerAsync(Guid playerId, Guid userId);
     }
 
     public class PlayerService : IPlayerService
@@ -36,10 +36,10 @@ namespace StatsHub.Api.Services
                 .Include(p => p.PlayerTeams).ThenInclude(pt => pt.Team)
                 .Include(p => p.Parents).ThenInclude(pp => pp.User);
 
-        private Task<bool> IsParentAsync(int playerId, int userId) =>
+        private Task<bool> IsParentAsync(Guid playerId, Guid userId) =>
             _context.PlayerParents.AnyAsync(pp => pp.PlayerId == playerId && pp.UserId == userId);
 
-        public async Task<List<PlayerDto>> GetPlayersOwnedByAsync(int userId)
+        public async Task<List<PlayerDto>> GetPlayersOwnedByAsync(Guid userId)
         {
             var players = await PlayersWithTeams()
                 .Where(p => p.Parents.Any(pp => pp.UserId == userId))
@@ -47,19 +47,19 @@ namespace StatsHub.Api.Services
             return players.Select(MapToDto).ToList();
         }
 
-        public async Task<PlayerDto?> GetLinkedPlayerAsync(int linkedUserId)
+        public async Task<PlayerDto?> GetLinkedPlayerAsync(Guid linkedUserId)
         {
             var player = await PlayersWithTeams().FirstOrDefaultAsync(p => p.LinkedUserId == linkedUserId);
             return player == null ? null : MapToDto(player);
         }
 
-        public async Task<bool> CanAccessPlayerAsync(int playerId, int userId)
+        public async Task<bool> CanAccessPlayerAsync(Guid playerId, Guid userId)
         {
             return await _context.Players.AnyAsync(p =>
                 p.Id == playerId && (p.LinkedUserId == userId || p.Parents.Any(pp => pp.UserId == userId)));
         }
 
-        public async Task<PlayerDto?> GetPlayerByIdAsync(int id, int requestingUserId)
+        public async Task<PlayerDto?> GetPlayerByIdAsync(Guid id, Guid requestingUserId)
         {
             var player = await PlayersWithTeams().FirstOrDefaultAsync(p => p.Id == id);
             if (player == null) return null;
@@ -68,7 +68,7 @@ namespace StatsHub.Api.Services
             return MapToDto(player);
         }
 
-        public async Task<PlayerDto> CreatePlayerAsync(int userId, CreatePlayerDto dto)
+        public async Task<PlayerDto> CreatePlayerAsync(Guid userId, CreatePlayerDto dto)
         {
             var player = new Player
             {
@@ -92,7 +92,7 @@ namespace StatsHub.Api.Services
             return await GetPlayerByIdAsync(player.Id, userId) ?? MapToDto(player);
         }
 
-        public async Task<PlayerDto?> UpdatePlayerAsync(int id, UpdatePlayerDto dto, int requestingUserId)
+        public async Task<PlayerDto?> UpdatePlayerAsync(Guid id, UpdatePlayerDto dto, Guid requestingUserId)
         {
             var player = await PlayersWithTeams().FirstOrDefaultAsync(p => p.Id == id);
             if (player == null || !player.Parents.Any(pp => pp.UserId == requestingUserId)) return null;
@@ -111,7 +111,7 @@ namespace StatsHub.Api.Services
             return MapToDto(player);
         }
 
-        public async Task<bool> DeletePlayerAsync(int id, int requestingUserId)
+        public async Task<bool> DeletePlayerAsync(Guid id, Guid requestingUserId)
         {
             var player = await _context.Players.Include(p => p.PlayerTeams).FirstOrDefaultAsync(p => p.Id == id);
             if (player == null || !await IsParentAsync(id, requestingUserId)) return false;
@@ -144,7 +144,7 @@ namespace StatsHub.Api.Services
 
         // Generates a short-lived code the parent can send to their player so the
         // player can sign in with their own Google account and see their own stats.
-        public async Task<PlayerInviteDto?> CreatePlayerInviteAsync(int playerId, int requestingUserId, string? password)
+        public async Task<PlayerInviteDto?> CreatePlayerInviteAsync(Guid playerId, Guid requestingUserId, string? password)
         {
             var player = await _context.Players.FindAsync(playerId);
             if (player == null || !await IsParentAsync(playerId, requestingUserId)) return null;
@@ -164,7 +164,7 @@ namespace StatsHub.Api.Services
             return new PlayerInviteDto { InviteCode = code, ExpiresAt = player.InviteCodeExpiresAt.Value };
         }
 
-        public async Task<PlayerDto?> ClaimPlayerInviteAsync(string inviteCode, int claimingUserId, string? password)
+        public async Task<PlayerDto?> ClaimPlayerInviteAsync(string inviteCode, Guid claimingUserId, string? password)
         {
             var player = await PlayersWithTeams().FirstOrDefaultAsync(p => p.InviteCode == inviteCode);
             if (player == null) return null;
@@ -190,7 +190,7 @@ namespace StatsHub.Api.Services
 
         // Generates a short-lived code a second parent/guardian can use to get
         // full access to the same player (e.g. mom invites dad).
-        public async Task<ParentInviteDto?> CreateParentInviteAsync(int playerId, int requestingUserId, string? password)
+        public async Task<ParentInviteDto?> CreateParentInviteAsync(Guid playerId, Guid requestingUserId, string? password)
         {
             var player = await _context.Players.FindAsync(playerId);
             if (player == null || !await IsParentAsync(playerId, requestingUserId)) return null;
@@ -210,7 +210,7 @@ namespace StatsHub.Api.Services
             return new ParentInviteDto { InviteCode = code, ExpiresAt = player.ParentInviteCodeExpiresAt.Value };
         }
 
-        public async Task<PlayerDto?> ClaimParentInviteAsync(string inviteCode, int claimingUserId, string? password)
+        public async Task<PlayerDto?> ClaimParentInviteAsync(string inviteCode, Guid claimingUserId, string? password)
         {
             var player = await PlayersWithTeams().FirstOrDefaultAsync(p => p.ParentInviteCode == inviteCode);
             if (player == null) return null;

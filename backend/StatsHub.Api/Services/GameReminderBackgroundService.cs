@@ -68,7 +68,7 @@ namespace StatsHub.Api.Services
                 .Distinct().ToList();
             var ibbaTeamNames = ibbaTeamIds.Count > 0
                 ? await context.IbbaTeams.Where(t => ibbaTeamIds.Contains(t.Id)).ToDictionaryAsync(t => t.Id, t => t.Name, stoppingToken)
-                : new Dictionary<int, string>();
+                : new Dictionary<Guid, string>();
 
             foreach (var game in games)
             {

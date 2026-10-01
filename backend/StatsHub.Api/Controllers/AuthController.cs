@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using StatsHub.Api.DTOs;
 using StatsHub.Api.Services;
 
@@ -19,6 +20,7 @@ namespace StatsHub.Api.Controllers
         }
 
         [AllowAnonymous]
+        [EnableRateLimiting(RateLimits.SignIn)]
         [HttpPost("google")]
         public async Task<ActionResult<AuthResponseDto>> GoogleLogin([FromBody] GoogleLoginDto dto)
         {
@@ -37,6 +39,7 @@ namespace StatsHub.Api.Controllers
         }
 
         [AllowAnonymous]
+        [EnableRateLimiting(RateLimits.SignIn)]
         [HttpPost("register")]
         public async Task<ActionResult<AuthResponseDto>> Register([FromBody] RegisterDto dto)
         {
@@ -55,6 +58,7 @@ namespace StatsHub.Api.Controllers
         }
 
         [AllowAnonymous]
+        [EnableRateLimiting(RateLimits.SignIn)]
         [HttpPost("login")]
         public async Task<ActionResult<AuthResponseDto>> Login([FromBody] PasswordLoginDto dto)
         {
@@ -85,6 +89,17 @@ namespace StatsHub.Api.Controllers
                 return BadRequest(new { message = "email is required" });
 
             var result = await _authService.DevLoginAsync(dto);
+            return Ok(result);
+        }
+
+        // Ends every session of this account (other phones, old browsers); the
+        // device asking keeps working with the new token it gets back.
+        [Authorize]
+        [HttpPost("logout-all")]
+        public async Task<ActionResult<AuthResponseDto>> LogOutEverywhere([FromServices] ICurrentUserService currentUser)
+        {
+            var result = await _authService.LogOutEverywhereAsync(currentUser.UserId);
+            if (result == null) return NotFound();
             return Ok(result);
         }
 

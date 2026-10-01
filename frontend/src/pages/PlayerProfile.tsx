@@ -9,6 +9,7 @@ import { useLiveRefresh } from '../hooks/useLiveRefresh'
 import IbbaBadge from '../components/IbbaBadge'
 import StandingsModal from '../components/StandingsModal'
 import TeamCrest from '../components/TeamCrest'
+import BouncingBall, { Busy } from '../components/BouncingBall'
 
 const emptyForm = {
   firstName: '',
@@ -37,25 +38,25 @@ export default function PlayerProfile() {
   const [ibbaNewBusy, setIbbaNewBusy] = useState(false)
   const [ibbaNewError, setIbbaNewError] = useState<string | null>(null)
 
-  const [invites, setInvites] = useState<Record<number, InviteDto>>({})
-  const [parentInvites, setParentInvites] = useState<Record<number, InviteDto>>({})
-  const [shareLinks, setShareLinks] = useState<Record<number, string>>({})
-  const [busyPlayerId, setBusyPlayerId] = useState<number | null>(null)
+  const [invites, setInvites] = useState<Record<string, InviteDto>>({})
+  const [parentInvites, setParentInvites] = useState<Record<string, InviteDto>>({})
+  const [shareLinks, setShareLinks] = useState<Record<string, string>>({})
+  const [busyPlayerId, setBusyPlayerId] = useState<string | null>(null)
 
-  const [teamPickerOpenFor, setTeamPickerOpenFor] = useState<number | null>(null)
+  const [teamPickerOpenFor, setTeamPickerOpenFor] = useState<string | null>(null)
   const [newTeamName, setNewTeamName] = useState('')
   const [pickerJerseyNumber, setPickerJerseyNumber] = useState('')
   const [teamBusy, setTeamBusy] = useState(false)
   const [jerseyEdits, setJerseyEdits] = useState<Record<string, string>>({})
   // Player whose IBBA teams need a "link existing or create new" choice.
-  const [choiceFor, setChoiceFor] = useState<number | null>(null)
-  const [renaming, setRenaming] = useState<{ playerId: number; teamId: number; value: string; busy: boolean } | null>(null)
+  const [choiceFor, setChoiceFor] = useState<string | null>(null)
+  const [renaming, setRenaming] = useState<{ playerId: string; teamId: string; value: string; busy: boolean } | null>(null)
 
-  const [ibbaLinks, setIbbaLinks] = useState<Record<number, IbbaLinkStatusDto | null>>({})
-  const [ibbaUrlInput, setIbbaUrlInput] = useState<Record<number, string>>({})
-  const [ibbaPreview, setIbbaPreview] = useState<Record<number, IbbaPreviewDto | null>>({})
-  const [ibbaBusy, setIbbaBusy] = useState<Record<number, boolean>>({})
-  const [ibbaError, setIbbaError] = useState<Record<number, string | null>>({})
+  const [ibbaLinks, setIbbaLinks] = useState<Record<string, IbbaLinkStatusDto | null>>({})
+  const [ibbaUrlInput, setIbbaUrlInput] = useState<Record<string, string>>({})
+  const [ibbaPreview, setIbbaPreview] = useState<Record<string, IbbaPreviewDto | null>>({})
+  const [ibbaBusy, setIbbaBusy] = useState<Record<string, boolean>>({})
+  const [ibbaError, setIbbaError] = useState<Record<string, string | null>>({})
   const [standingsFor, setStandingsFor] = useState<{ leagueUrl: string; leagueName: string; teamName: string; teamUrl: string } | null>(null)
 
   const [deletingPlayer, setDeletingPlayer] = useState<PlayerDto | null>(null)
@@ -68,10 +69,10 @@ export default function PlayerProfile() {
 
   // Each player's game being played right now, if any - shown on their card
   // (with on court / on bench) and kept current while it's live.
-  const [liveGames, setLiveGames] = useState<Record<number, GameDto | undefined>>({})
-  const loadLiveGames = async (playerIds: number[]) => {
+  const [liveGames, setLiveGames] = useState<Record<string, GameDto | undefined>>({})
+  const loadLiveGames = async (playerIds: string[]) => {
     const entries = await Promise.all(
-      playerIds.map(async (playerId): Promise<[number, GameDto | undefined]> => {
+      playerIds.map(async (playerId): Promise<[string, GameDto | undefined]> => {
         try {
           const { data } = await api.get<GameDto[]>(`/games/player/${playerId}`)
           return [playerId, data.find((g) => g.status === 'In Progress')]
@@ -100,7 +101,7 @@ export default function PlayerProfile() {
         setPlayers(playerList)
 
         const linkEntries = await Promise.all(
-          playerList.map(async (p): Promise<[number, IbbaLinkStatusDto | null]> => {
+          playerList.map(async (p): Promise<[string, IbbaLinkStatusDto | null]> => {
             try {
               const { data } = await api.get<IbbaLinkStatusDto>(`/players/${p.id}/ibba`)
               return [p.id, data]
@@ -179,7 +180,7 @@ export default function PlayerProfile() {
     }
   }
 
-  const generateInvite = async (playerId: number) => {
+  const generateInvite = async (playerId: string) => {
     setBusyPlayerId(playerId)
     try {
       const { data } = await api.post<InviteDto>(`/players/${playerId}/invite`, {})
@@ -191,7 +192,7 @@ export default function PlayerProfile() {
     }
   }
 
-  const generateParentInvite = async (playerId: number) => {
+  const generateParentInvite = async (playerId: string) => {
     setBusyPlayerId(playerId)
     try {
       const { data } = await api.post<InviteDto>(`/players/${playerId}/parent-invite`, {})
@@ -217,7 +218,7 @@ export default function PlayerProfile() {
     }
   }
 
-  const shareProfile = async (playerId: number) => {
+  const shareProfile = async (playerId: string) => {
     setBusyPlayerId(playerId)
     try {
       const { data } = await api.post('/share', { playerId })
@@ -240,7 +241,7 @@ export default function PlayerProfile() {
   // action's own response returns - an IBBA link/sync sets the player's
   // photo, linking an IBBA team creates/attaches a team, and adding or
   // removing a team changes which IBBA team shows as "Synced to".
-  const refreshPlayer = async (playerId: number) => {
+  const refreshPlayer = async (playerId: string) => {
     const [player, ibba] = await Promise.all([
       api.get<PlayerDto>(`/players/${playerId}`).then((res) => res.data).catch(() => null),
       api.get<IbbaLinkStatusDto>(`/players/${playerId}/ibba`).then((res) => res.data).catch(() => undefined),
@@ -249,7 +250,18 @@ export default function PlayerProfile() {
     if (ibba !== undefined) setIbbaLinks((prev) => ({ ...prev, [playerId]: ibba }))
   }
 
-  const attachTeamToPlayer = (playerId: number, team: TeamDto, jerseyNumber?: number) => {
+  // After a link or sync the games and standings load in the background -
+  // check back until they're in, then show the updated teams (league names
+  // added to teams that share a name, etc.).
+  const gamesLoadingFor = Object.entries(ibbaLinks).filter(([, link]) => link?.gamesLoading).map(([id]) => id).join(',')
+  useEffect(() => {
+    if (!gamesLoadingFor) return
+    const timer = window.setInterval(() => gamesLoadingFor.split(',').forEach((id) => refreshPlayer(id)), 2500)
+    return () => window.clearInterval(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gamesLoadingFor])
+
+  const attachTeamToPlayer = (playerId: string, team: TeamDto, jerseyNumber?: number) => {
     setPlayers((prev) =>
       prev.map((p) =>
         p.id === playerId && !(p.teams ?? []).some((t) => t.id === team.id)
@@ -259,7 +271,7 @@ export default function PlayerProfile() {
     )
   }
 
-  const createAndAddTeam = async (playerId: number) => {
+  const createAndAddTeam = async (playerId: string) => {
     if (!newTeamName.trim()) return
     const jerseyNumber = pickerJerseyNumber.trim() === '' ? undefined : Number(pickerJerseyNumber)
     setTeamBusy(true)
@@ -278,7 +290,7 @@ export default function PlayerProfile() {
     }
   }
 
-  const removeTeam = async (playerId: number, teamId: number) => {
+  const removeTeam = async (playerId: string, teamId: string) => {
     try {
       await api.delete(`/teams/${teamId}/players/${playerId}`)
       setPlayers((prev) => prev.map((p) => (p.id === playerId ? { ...p, teams: (p.teams ?? []).filter((t) => t.id !== teamId) } : p)))
@@ -320,9 +332,9 @@ export default function PlayerProfile() {
     }
   }
 
-  const editJerseyKey = (playerId: number, teamId: number) => `${playerId}-${teamId}`
+  const editJerseyKey = (playerId: string, teamId: string) => `${playerId}-${teamId}`
 
-  const commitJerseyEdit = async (playerId: number, teamId: number) => {
+  const commitJerseyEdit = async (playerId: string, teamId: string) => {
     const key = editJerseyKey(playerId, teamId)
     const raw = jerseyEdits[key]
     if (raw === undefined) return
@@ -345,7 +357,7 @@ export default function PlayerProfile() {
     }
   }
 
-  const previewIbba = async (playerId: number) => {
+  const previewIbba = async (playerId: string) => {
     const url = (ibbaUrlInput[playerId] ?? '').trim()
     if (!url) return
     setIbbaBusy((prev) => ({ ...prev, [playerId]: true }))
@@ -361,7 +373,7 @@ export default function PlayerProfile() {
     }
   }
 
-  const confirmLinkIbba = async (playerId: number) => {
+  const confirmLinkIbba = async (playerId: string) => {
     const url = (ibbaUrlInput[playerId] ?? '').trim()
     if (!url) return
     setIbbaBusy((prev) => ({ ...prev, [playerId]: true }))
@@ -382,7 +394,7 @@ export default function PlayerProfile() {
     }
   }
 
-  const syncIbba = async (playerId: number) => {
+  const syncIbba = async (playerId: string) => {
     setIbbaBusy((prev) => ({ ...prev, [playerId]: true }))
     try {
       const { data } = await api.post<IbbaLinkStatusDto>(`/players/${playerId}/ibba/sync`)
@@ -397,7 +409,7 @@ export default function PlayerProfile() {
     }
   }
 
-  const unlinkIbba = async (playerId: number) => {
+  const unlinkIbba = async (playerId: string) => {
     if (!window.confirm('Disconnect this player from IBBA? Games already synced keep their stats - only the IBBA connection itself is removed.')) return
     setIbbaBusy((prev) => ({ ...prev, [playerId]: true }))
     try {
@@ -410,7 +422,7 @@ export default function PlayerProfile() {
     }
   }
 
-  const mapIbbaTeamToExisting = async (playerId: number, ibbaTeamLinkId: number, teamId: number) => {
+  const mapIbbaTeamToExisting = async (playerId: string, ibbaTeamLinkId: string, teamId: string) => {
     setIbbaBusy((prev) => ({ ...prev, [playerId]: true }))
     try {
       const { data } = await api.put<IbbaLinkStatusDto>(`/ibba/team-links/${ibbaTeamLinkId}`, { teamId, playerId })
@@ -425,7 +437,7 @@ export default function PlayerProfile() {
 
   // "Create a new team" in the choice pop-up - the server names it (adding
   // the league when the name repeats), links it, and syncs its games.
-  const createTeamForIbba = async (playerId: number, ibbaTeamId: number) => {
+  const createTeamForIbba = async (playerId: string, ibbaTeamId: string) => {
     setIbbaBusy((prev) => ({ ...prev, [playerId]: true }))
     try {
       const { data } = await api.post<IbbaLinkStatusDto>(`/ibba/team-links/${ibbaTeamId}/new-team`, { playerId })
@@ -442,7 +454,7 @@ export default function PlayerProfile() {
     return (
       <div className="page-container">
         <h2>👤 Player Profiles</h2>
-        <p>Loading...</p>
+        <BouncingBall />
       </div>
     )
   }
@@ -636,6 +648,9 @@ export default function PlayerProfile() {
                       </span>
                     )}
                   </p>
+                  {ibbaLinks[player.id]!.gamesLoading && (
+                    <BouncingBall size="sm" label="Loading games and standings…" />
+                  )}
                   {ibbaLinks[player.id]!.lastSyncError && (
                     <p className="error">{ibbaLinks[player.id]!.lastSyncError}</p>
                   )}
@@ -652,7 +667,7 @@ export default function PlayerProfile() {
                   })()}
                   <div className="flex gap-1" style={{ marginTop: '0.75rem' }}>
                     <button className="add-team-btn" disabled={ibbaBusy[player.id]} onClick={() => syncIbba(player.id)}>
-                      🔄 Sync Now
+                      {ibbaBusy[player.id] ? <Busy>Syncing…</Busy> : '🔄 Sync Now'}
                     </button>
                     <button className="add-team-btn" disabled={ibbaBusy[player.id]} onClick={() => unlinkIbba(player.id)}>
                       Disconnect from IBBA
@@ -688,7 +703,7 @@ export default function PlayerProfile() {
                         onChange={(e) => setIbbaUrlInput((prev) => ({ ...prev, [player.id]: e.target.value }))}
                       />
                       <button className="submit-btn" disabled={ibbaBusy[player.id] || !(ibbaUrlInput[player.id] ?? '').trim()} onClick={() => previewIbba(player.id)}>
-                        {ibbaBusy[player.id] ? 'Checking...' : 'Preview'}
+                        {ibbaBusy[player.id] ? <Busy>Checking…</Busy> : 'Preview'}
                       </button>
                     </div>
                   )}
@@ -771,7 +786,7 @@ export default function PlayerProfile() {
                   <div className="flex gap-1" style={{ justifyContent: 'center', flexWrap: 'wrap' }}>
                     {ibbaNewPreview.dateOfBirth && (
                       <button className="submit-btn" onClick={createPlayerFromIbba} disabled={ibbaNewBusy}>
-                        {ibbaNewBusy ? 'Creating...' : 'Create Player'}
+                        {ibbaNewBusy ? <Busy>Creating…</Busy> : 'Create Player'}
                       </button>
                     )}
                     <button onClick={() => setIbbaNewPreview(null)} disabled={ibbaNewBusy}>Back</button>
@@ -793,7 +808,7 @@ export default function PlayerProfile() {
                       onChange={(e) => setIbbaNewForm({ ...ibbaNewForm, url: e.target.value })}
                     />
                     <button className="submit-btn" disabled={ibbaNewBusy || !ibbaNewForm.url.trim()} onClick={previewNewIbba}>
-                      {ibbaNewBusy ? 'Checking...' : 'Preview'}
+                      {ibbaNewBusy ? <Busy>Checking…</Busy> : 'Preview'}
                     </button>
                   </div>
                   {ibbaNewError && <p className="error">{ibbaNewError}</p>}
@@ -837,7 +852,7 @@ export default function PlayerProfile() {
           </div>
           <div className="flex gap-1">
             <button className="submit-btn" onClick={addPlayer} disabled={saving}>
-              {saving ? 'Saving...' : 'Save Player'}
+              {saving ? <Busy>Saving…</Busy> : 'Save Player'}
             </button>
             <button className="nav-btn" onClick={() => setShowAddForm(false)}>Cancel</button>
           </div>
@@ -913,11 +928,11 @@ function IbbaTeamChoiceModal({
   total: number
   candidates: TeamDto[]
   busy: boolean
-  onLink: (ibbaTeamId: number, teamId: number) => void
-  onCreate: (ibbaTeamId: number) => void
+  onLink: (ibbaTeamId: string, teamId: string) => void
+  onCreate: (ibbaTeamId: string) => void
   onClose: () => void
 }) {
-  const [picked, setPicked] = useState<Record<number, number>>({})
+  const [picked, setPicked] = useState<Record<string, string>>({})
 
   return (
     <div className="game-edit-modal-backdrop" onClick={onClose}>
@@ -938,7 +953,7 @@ function IbbaTeamChoiceModal({
         </div>
         <div className="modal-body ibba-choice-list">
           {busy && (
-            <p className="ibba-choice-busy" role="status">Linking and loading the team&apos;s games - this takes a few seconds...</p>
+            <p className="ibba-choice-busy"><Busy>Linking the team…</Busy></p>
           )}
           {pending.slice(0, 1).map((t) => {
             const teamId = picked[t.id] ?? candidates[0]?.id
@@ -953,7 +968,7 @@ function IbbaTeamChoiceModal({
                 </div>
                 {candidates.length > 0 && (
                   <div className="ibba-choice-option">
-                    <select value={teamId} onChange={(e) => setPicked((prev) => ({ ...prev, [t.id]: Number(e.target.value) }))} disabled={busy}>
+                    <select value={teamId} onChange={(e) => setPicked((prev) => ({ ...prev, [t.id]: e.target.value }))} disabled={busy}>
                       {candidates.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                     </select>
                     <button className="submit-btn" disabled={busy || !teamId} onClick={() => teamId && onLink(t.id, teamId)}>

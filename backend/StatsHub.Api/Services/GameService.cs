@@ -7,20 +7,20 @@ namespace StatsHub.Api.Services
 {
     public interface IGameService
     {
-        Task<List<GameDto>> GetGamesByTeamAsync(int teamId, int requestingUserId);
+        Task<List<GameDto>> GetGamesByTeamAsync(Guid teamId, Guid requestingUserId);
         // viewingPlayerId: the player whose page the game is shown on - see
         // FindAccessibleOwnTeamAsync.
-        Task<GameDto?> GetGameByIdAsync(int id, int requestingUserId, int? viewingPlayerId = null);
-        Task<List<GameDto>> GetGamesByPlayerAsync(int playerId, int requestingUserId);
-        Task<GameDto> CreateGameAsync(CreateGameDto dto, int requestingUserId);
-        Task<GameDto?> UpdateGameAsync(int id, UpdateGameDto dto, int requestingUserId, int? viewingPlayerId = null);
-        Task<bool> DeleteGameAsync(int id, int requestingUserId);
+        Task<GameDto?> GetGameByIdAsync(Guid id, Guid requestingUserId, Guid? viewingPlayerId = null);
+        Task<List<GameDto>> GetGamesByPlayerAsync(Guid playerId, Guid requestingUserId);
+        Task<GameDto> CreateGameAsync(CreateGameDto dto, Guid requestingUserId);
+        Task<GameDto?> UpdateGameAsync(Guid id, UpdateGameDto dto, Guid requestingUserId, Guid? viewingPlayerId = null);
+        Task<bool> DeleteGameAsync(Guid id, Guid requestingUserId);
 
         // Called right before a Team is deleted (player removal, or a direct
         // team delete) - removes only the games that are exclusively this
         // team's; a shared IBBA game with another still-linked Team on either
         // side (same real team, or the opponent) is left alone.
-        Task DeleteGamesExclusiveToTeamAsync(int teamId);
+        Task DeleteGamesExclusiveToTeamAsync(Guid teamId);
     }
 
     public class GameService : IGameService
@@ -37,7 +37,7 @@ namespace StatsHub.Api.Services
         // A team is manageable by its season owner, or by any parent of a player
         // on that team's roster - so a second parent who was invited onto one of
         // their kid's teams can also create/edit games for that team.
-        private async Task<bool> OwnsTeamAsync(int teamId, int requestingUserId) =>
+        private async Task<bool> OwnsTeamAsync(Guid teamId, Guid requestingUserId) =>
             await _context.Teams.AnyAsync(t =>
                 t.Id == teamId && (
                     t.Season.UserId == requestingUserId ||
@@ -59,7 +59,7 @@ namespace StatsHub.Api.Services
         // could be read from the wrong side. When the caller says which
         // player's page it's on, that player's own team wins; otherwise the
         // lowest id, so the pick is at least stable.
-        private async Task<Team?> FindAccessibleOwnTeamAsync(Game game, int requestingUserId, int? viewingPlayerId = null)
+        private async Task<Team?> FindAccessibleOwnTeamAsync(Game game, Guid requestingUserId, Guid? viewingPlayerId = null)
         {
             if (game.IbbaGameCode == null)
             {
@@ -88,7 +88,7 @@ namespace StatsHub.Api.Services
                 .FirstOrDefaultAsync();
         }
 
-        public async Task<List<GameDto>> GetGamesByTeamAsync(int teamId, int requestingUserId)
+        public async Task<List<GameDto>> GetGamesByTeamAsync(Guid teamId, Guid requestingUserId)
         {
             if (!await OwnsTeamAsync(teamId, requestingUserId)) return new List<GameDto>();
 
@@ -109,7 +109,7 @@ namespace StatsHub.Api.Services
             return await MapGamesToDtoAsync(games, _ => team, requestingUserId);
         }
 
-        public async Task<GameDto?> GetGameByIdAsync(int id, int requestingUserId, int? viewingPlayerId = null)
+        public async Task<GameDto?> GetGameByIdAsync(Guid id, Guid requestingUserId, Guid? viewingPlayerId = null)
         {
             var game = await _context.Games
                 .Include(g => g.GameStats)
@@ -146,7 +146,7 @@ namespace StatsHub.Api.Services
             return dtos[0];
         }
 
-        public async Task<List<GameDto>> GetGamesByPlayerAsync(int playerId, int requestingUserId)
+        public async Task<List<GameDto>> GetGamesByPlayerAsync(Guid playerId, Guid requestingUserId)
         {
             // A player's games are every game for a team they're currently rostered
             // on - not just games they already have stats for. That distinction used
@@ -208,7 +208,7 @@ namespace StatsHub.Api.Services
             return await MapGamesToDtoAsync(games, ResolveViewTeam, requestingUserId);
         }
 
-        public async Task<GameDto> CreateGameAsync(CreateGameDto dto, int requestingUserId)
+        public async Task<GameDto> CreateGameAsync(CreateGameDto dto, Guid requestingUserId)
         {
             if (!await OwnsTeamAsync(dto.TeamId, requestingUserId))
                 throw new UnauthorizedAccessException("Team not found or not owned by user");
@@ -246,7 +246,7 @@ namespace StatsHub.Api.Services
             return await GetGameByIdAsync(game.Id, requestingUserId) ?? throw new InvalidOperationException("Game was not created");
         }
 
-        public async Task<GameDto?> UpdateGameAsync(int id, UpdateGameDto dto, int requestingUserId, int? viewingPlayerId = null)
+        public async Task<GameDto?> UpdateGameAsync(Guid id, UpdateGameDto dto, Guid requestingUserId, Guid? viewingPlayerId = null)
         {
             var game = await _context.Games.FindAsync(id);
             if (game == null) return null;
@@ -328,7 +328,7 @@ namespace StatsHub.Api.Services
         // game notifies every app Team linked to its shared IbbaTeam on the
         // acting side (everyone tracking a kid on that real team); a
         // manually-created game is always single-team, so ownTeam is right there.
-        private async Task NotifyOnStatusChangeAsync(Game game, Team ownTeam, string previousStatus, int actingUserId)
+        private async Task NotifyOnStatusChangeAsync(Game game, Team ownTeam, string previousStatus, Guid actingUserId)
         {
             if (previousStatus == game.Status) return;
 
@@ -372,7 +372,7 @@ namespace StatsHub.Api.Services
                 : (game.AwayScore, game.HomeScore);
         }
 
-        public async Task<bool> DeleteGameAsync(int id, int requestingUserId)
+        public async Task<bool> DeleteGameAsync(Guid id, Guid requestingUserId)
         {
             var game = await _context.Games.FindAsync(id);
             if (game == null) return false;
@@ -383,7 +383,7 @@ namespace StatsHub.Api.Services
             return true;
         }
 
-        public async Task DeleteGamesExclusiveToTeamAsync(int teamId)
+        public async Task DeleteGamesExclusiveToTeamAsync(Guid teamId)
         {
             var team = await _context.Teams.FindAsync(teamId);
             if (team == null) return;
@@ -429,7 +429,7 @@ namespace StatsHub.Api.Services
         // derived per-game from comparing the fixture's objective Home/Away ids
         // against the viewing team's own - nothing on the Game row itself
         // privileges one side.
-        private async Task<List<GameDto>> MapGamesToDtoAsync(List<Game> games, Func<Game, Team?> resolveViewTeam, int requestingUserId)
+        private async Task<List<GameDto>> MapGamesToDtoAsync(List<Game> games, Func<Game, Team?> resolveViewTeam, Guid requestingUserId)
         {
             var ibbaTeamIds = games
                 .Where(g => g.IbbaGameCode != null)
@@ -439,12 +439,12 @@ namespace StatsHub.Api.Services
 
             var ibbaTeams = ibbaTeamIds.Count > 0
                 ? await _context.IbbaTeams.Where(t => ibbaTeamIds.Contains(t.Id)).ToDictionaryAsync(t => t.Id)
-                : new Dictionary<int, IbbaTeam>();
+                : new Dictionary<Guid, IbbaTeam>();
 
             return games.Select(g => MapToDto(g, resolveViewTeam(g), ibbaTeams, requestingUserId)).ToList();
         }
 
-        private static GameDto MapToDto(Game game, Team? viewTeam, Dictionary<int, IbbaTeam> ibbaTeams, int requestingUserId)
+        private static GameDto MapToDto(Game game, Team? viewTeam, Dictionary<Guid, IbbaTeam> ibbaTeams, Guid requestingUserId)
         {
             var isIbba = game.IbbaGameCode != null;
             string opponentName;
@@ -454,7 +454,7 @@ namespace StatsHub.Api.Services
 
             if (isIbba)
             {
-                bool? viewerIsHome = viewTeam?.IbbaTeamId is int viewIbbaId
+                bool? viewerIsHome = viewTeam?.IbbaTeamId is Guid viewIbbaId
                     ? (game.HomeTeamId == viewIbbaId ? true : game.AwayTeamId == viewIbbaId ? false : (bool?)null)
                     : null;
 
@@ -484,7 +484,7 @@ namespace StatsHub.Api.Services
             return new GameDto
             {
                 Id = game.Id,
-                TeamId = viewTeam?.Id ?? 0,
+                TeamId = viewTeam?.Id ?? Guid.Empty,
                 TeamName = viewTeam?.Name ?? string.Empty,
                 TeamLogoUrl = viewTeam?.IbbaTeam?.LogoUrl,
                 GameType = game.GameType,

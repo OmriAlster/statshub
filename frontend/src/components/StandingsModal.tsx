@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api/client'
 import type { IbbaStandingRowDto } from '../api/types'
+import BouncingBall from './BouncingBall'
 
 interface StandingsModalProps {
   leagueUrl: string
@@ -40,7 +41,7 @@ export default function StandingsModal({ leagueUrl, leagueName, highlightTeamUrl
         </div>
         <div className="modal-body">
           {loading ? (
-            <p style={{ padding: '1rem 1.5rem' }}>Loading...</p>
+            <BouncingBall label="Loading standings…" />
           ) : rows.length === 0 ? (
             <p style={{ padding: '1rem 1.5rem' }}>No standings synced yet.</p>
           ) : (

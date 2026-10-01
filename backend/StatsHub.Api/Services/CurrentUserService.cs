@@ -4,7 +4,7 @@ namespace StatsHub.Api.Services
 {
     public interface ICurrentUserService
     {
-        int UserId { get; }
+        Guid UserId { get; }
         bool IsAuthenticated { get; }
     }
 
@@ -20,12 +20,12 @@ namespace StatsHub.Api.Services
         public bool IsAuthenticated =>
             _httpContextAccessor.HttpContext?.User?.Identity?.IsAuthenticated ?? false;
 
-        public int UserId
+        public Guid UserId
         {
             get
             {
                 var claim = _httpContextAccessor.HttpContext?.User?.FindFirst(ClaimTypes.NameIdentifier);
-                if (claim == null || !int.TryParse(claim.Value, out var id))
+                if (claim == null || !Guid.TryParse(claim.Value, out var id))
                     throw new UnauthorizedAccessException("No authenticated user found");
                 return id;
             }

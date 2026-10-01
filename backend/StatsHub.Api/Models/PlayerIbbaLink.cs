@@ -2,8 +2,8 @@ namespace StatsHub.Api.Models
 {
     public class PlayerIbbaLink
     {
-        public int Id { get; set; }
-        public int PlayerId { get; set; }
+        public Guid Id { get; set; } = Guid.CreateVersion7();
+        public Guid PlayerId { get; set; }
         public string IbbaPlayerUrl { get; set; } = string.Empty;
         public DateTime? LastSyncedAt { get; set; }
         public string? LastSyncError { get; set; }
