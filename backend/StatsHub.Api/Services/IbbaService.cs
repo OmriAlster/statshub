@@ -931,7 +931,7 @@ namespace StatsHub.Api.Services
             }));
         }
 
-        private async Task UpsertGamesAsync(IbbaTeam ownTeam, List<IbbaGameRow> rows)
+        internal async Task UpsertGamesAsync(IbbaTeam ownTeam, List<IbbaGameRow> rows)
         {
             // Collected as (Game, OpponentName) so pushes fire only after
             // SaveChangesAsync assigns real IDs, only once per game regardless
@@ -941,6 +941,7 @@ namespace StatsHub.Api.Services
             var newlyUpcoming = new List<(Game Game, string OpponentName)>();
             var newlyCompleted = new List<(Game Game, string OpponentName)>();
             var rescheduled = new List<(Game Game, string OpponentName)>();
+            var cancelled = new List<(Game Game, string OpponentName)>();
 
             // Resolve every team code seen in this batch to an IbbaTeam, by id,
             // globally - never by name. IbbaTeamId is the site's own team id, so
@@ -1047,6 +1048,36 @@ namespace StatsHub.Api.Services
                 }
             }
 
+            // IBBA's export lists every game of the team's season, so a game
+            // that hasn't been played yet and is no longer in it was cancelled
+            // there - it goes here too. Never one that was played, is being
+            // tracked live or already has stats, and never on an empty export
+            // (a failed or not-yet-published one isn't "every game deleted").
+            if (rowCodes.Count > 0)
+            {
+                var now = DateTime.UtcNow;
+                var removed = await _timings.MeasureAsync("db-games-find-removed", () => _context.Games
+                    .Where(g => g.IbbaGameCode != null && !rowCodes.Contains(g.IbbaGameCode)
+                        && (g.HomeTeamId == ownTeam.Id || g.AwayTeamId == ownTeam.Id)
+                        && g.Status == "Upcoming" && g.GameDate > now
+                        && g.LiveTrackedByUserId == null && !g.GameStats.Any())
+                    .ToListAsync());
+                _context.Games.RemoveRange(removed);
+
+                // Named in the "cancelled" push - the export no longer has the
+                // game, so the opponent's name comes from its stored team.
+                var opponentIds = removed.Select(g => g.HomeTeamId == ownTeam.Id ? g.AwayTeamId : g.HomeTeamId)
+                    .OfType<Guid>().Distinct().ToList();
+                var opponentNames = opponentIds.Count == 0 ? new Dictionary<Guid, string>() : await _context.IbbaTeams
+                    .Where(t => opponentIds.Contains(t.Id))
+                    .ToDictionaryAsync(t => t.Id, t => t.Name);
+                foreach (var game in removed)
+                {
+                    var opponentId = game.HomeTeamId == ownTeam.Id ? game.AwayTeamId : game.HomeTeamId;
+                    cancelled.Add((game, opponentId is { } id && opponentNames.TryGetValue(id, out var name) ? name : "the opponent"));
+                }
+            }
+
             try
             {
                 await _timings.MeasureAsync("db-games-save", () => _context.SaveChangesAsync());
@@ -1066,7 +1097,7 @@ namespace StatsHub.Api.Services
             }
 
             EnqueueOpponentBackfill(unresolvedCodes, rows);
-            EnqueueGameNotifications(ownTeam.Id, newlyUpcoming, newlyCompleted, rescheduled);
+            EnqueueGameNotifications(ownTeam.Id, newlyUpcoming, newlyCompleted, rescheduled, cancelled);
         }
 
         // A first-ever sync of a team can easily mean dozens of "new game"
@@ -1080,11 +1111,12 @@ namespace StatsHub.Api.Services
             Guid ownIbbaTeamId,
             List<(Game Game, string OpponentName)> newlyUpcoming,
             List<(Game Game, string OpponentName)> newlyCompleted,
-            List<(Game Game, string OpponentName)> rescheduled)
+            List<(Game Game, string OpponentName)> rescheduled,
+            List<(Game Game, string OpponentName)> cancelled)
         {
-            if (newlyUpcoming.Count == 0 && newlyCompleted.Count == 0 && rescheduled.Count == 0) return;
+            if (newlyUpcoming.Count == 0 && newlyCompleted.Count == 0 && rescheduled.Count == 0 && cancelled.Count == 0) return;
 
-            var job = $"game-notifications ({newlyUpcoming.Count} new, {newlyCompleted.Count} final, {rescheduled.Count} rescheduled)";
+            var job = $"game-notifications ({newlyUpcoming.Count} new, {newlyCompleted.Count} final, {rescheduled.Count} rescheduled, {cancelled.Count} cancelled)";
             _ = Task.Run(() => RequestTimings.RunBackgroundAsync(job, _logger, async timings =>
             {
                 try
@@ -1123,6 +1155,17 @@ namespace StatsHub.Api.Services
                             "📅 Game rescheduled",
                             $"vs {opponentName} moved to {{datetime}}",
                             $"/games/{game.Id}",
+                            gameDate: game.GameDate);
+                    }
+
+                    // The game is gone, so the push opens the schedule instead.
+                    foreach (var (game, opponentName) in cancelled)
+                    {
+                        await push.NotifyIbbaTeamAsync(
+                            ownIbbaTeamId,
+                            "❌ Game cancelled",
+                            $"vs {opponentName} on {{datetime}} was removed from IBBA",
+                            "/",
                             gameDate: game.GameDate);
                     }
                 }
