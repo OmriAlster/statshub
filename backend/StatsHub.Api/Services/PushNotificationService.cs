@@ -37,6 +37,10 @@ namespace StatsHub.Api.Services
         private readonly ILogger<PushNotificationService> _logger;
         private readonly VapidDetails? _vapidDetails;
 
+        // One connection pool for every push, for the app's lifetime - a new
+        // client per send opened (and kept) fresh connections and memory each time.
+        private static readonly HttpClient PushHttp = new();
+
         public PushNotificationService(AppDbContext context, IConfiguration configuration, ILogger<PushNotificationService> logger)
         {
             _context = context;
@@ -106,7 +110,7 @@ namespace StatsHub.Api.Services
             if (subscriptions.Count == 0) return;
 
             var payload = JsonSerializer.Serialize(new { title, body, url, gameDateIso = gameDate?.ToString("O") });
-            var client = new WebPushClient();
+            var client = new WebPushClient(PushHttp);
             var expired = new List<Models.PushSubscription>();
 
             foreach (var sub in subscriptions)
@@ -132,8 +136,12 @@ namespace StatsHub.Api.Services
 
             if (expired.Count > 0)
             {
-                _context.PushSubscriptions.RemoveRange(expired);
-                await _context.SaveChangesAsync();
+                // Deleted straight in the database: two notifications sent at
+                // once (e.g. two teams' new games) both find the same dead
+                // subscription, and whichever removes it second must not fail
+                // the rest of its batch.
+                var expiredIds = expired.Select(s => s.Id).ToList();
+                await _context.PushSubscriptions.Where(ps => expiredIds.Contains(ps.Id)).ExecuteDeleteAsync();
             }
         }
     }
