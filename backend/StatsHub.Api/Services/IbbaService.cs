@@ -309,8 +309,11 @@ namespace StatsHub.Api.Services
 
         public async Task<List<IbbaStandingDto>> GetStandingsAsync(string leagueUrl)
         {
+            // Only teams in the league's current table - one that withdrew
+            // keeps its LeagueUrl (its games and app teams still use it) but
+            // loses its position (UpsertStandingsAsync).
             var teams = await _context.IbbaTeams
-                .Where(t => t.LeagueUrl == leagueUrl)
+                .Where(t => t.LeagueUrl == leagueUrl && t.LeaguePosition != null)
                 .OrderBy(t => t.LeaguePosition)
                 .ToListAsync();
 
@@ -710,7 +713,7 @@ namespace StatsHub.Api.Services
         // one the player is on - this is what lets an opponent be resolved by id
         // and get a logo, the same as your own team. Returns every touched
         // team's id, so the caller can queue a crest backfill for them.
-        private async Task<List<Guid>> UpsertStandingsAsync(string leagueUrl, string leagueName, List<IbbaStandingRow> rows)
+        internal async Task<List<Guid>> UpsertStandingsAsync(string leagueUrl, string leagueName, List<IbbaStandingRow> rows)
         {
             var urls = rows.Where(r => !string.IsNullOrEmpty(r.TeamUrl)).Select(r => r.TeamUrl).Distinct().ToList();
             if (urls.Count == 0) return new List<Guid>();
@@ -749,6 +752,19 @@ namespace StatsHub.Api.Services
                 // overwrites a crest, whether it's already set or still missing
                 // (EnqueueCrestBackfill is the only thing that sets it, and does
                 // so in the background - see below).
+            }
+
+            // A team of this league that's no longer in its table withdrew (or
+            // was removed) - it leaves the table. Its row stays: its games and
+            // any app team linked to it still point at it.
+            var gone = await _context.IbbaTeams
+                .Where(t => t.LeagueUrl == leagueUrl && t.LeaguePosition != null && !urls.Contains(t.TeamUrl))
+                .ToListAsync();
+            foreach (var team in gone)
+            {
+                team.LeaguePosition = null;
+                team.LeagueTotalTeams = null;
+                team.SyncedAt = DateTime.UtcNow;
             }
 
             await _context.SaveChangesAsync();
