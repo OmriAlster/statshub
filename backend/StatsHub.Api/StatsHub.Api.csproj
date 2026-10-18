@@ -7,6 +7,21 @@
     <UserSecretsId>5a785826-9518-46ff-b714-56978da2ea55</UserSecretsId>
   </PropertyGroup>
 
+  <!-- Memory: the host bills RAM by the minute and sees 8 cores / 8 GB, so
+       .NET's defaults (a heap per core, collecting only under pressure) kept
+       ~3x what this app needs. One heap, no background-collection thread,
+       memory handed back eagerly; no culture data (all dates and text here
+       are culture-free); no profiling of hot code for re-optimizing. -->
+  <PropertyGroup>
+    <ServerGarbageCollection>false</ServerGarbageCollection>
+    <ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <TieredPGO>false</TieredPGO>
+  </PropertyGroup>
+  <ItemGroup>
+    <RuntimeHostConfigurationOption Include="System.GC.ConserveMemory" Value="7" />
+  </ItemGroup>
+
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.1" />
     <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.4" />

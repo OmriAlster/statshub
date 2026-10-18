@@ -27,6 +27,9 @@ RUN apt-get update \
 COPY --from=build /app .
 
 ENV ASPNETCORE_ENVIRONMENT=Production
+# Fewer native memory pools (glibc makes one per core by default) - each
+# holds on to freed memory, and RAM is what the host bills.
+ENV MALLOC_ARENA_MAX=2
 EXPOSE 8080
 
 # Railway (and similar hosts) inject $PORT at runtime; bind to it if set,

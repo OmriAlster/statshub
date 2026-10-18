@@ -93,6 +93,7 @@ namespace StatsHub.Api.Services
             }
 
             _logger.LogInformation("Nightly IBBA sync finished: {Count} players, {Failed} failed", linkIds.Count, failed);
+            MemoryRelief.ReleaseSoon();
         }
 
         private TimeSpan TimeUntilNextMidnight()

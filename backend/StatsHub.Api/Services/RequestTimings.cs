@@ -60,7 +60,8 @@ namespace StatsHub.Api.Services
         // end of the enclosing block, on whatever is current.
         public static IDisposable Time(string name) => new Scope(Current, name);
 
-        // Runs a background job with timings of its own, logged at the end.
+        // Runs a background job with timings of its own, logged at the end -
+        // and gives back the memory it used shortly after (MemoryRelief).
         public static async Task RunBackgroundAsync(string job, ILogger logger, Func<RequestTimings, Task> work)
         {
             var timings = new RequestTimings();
@@ -70,6 +71,7 @@ namespace StatsHub.Api.Services
             finally
             {
                 logger.LogInformation("Background {Job} took {Total:F0}ms: {Breakdown}", job, stopwatch.Elapsed.TotalMilliseconds, timings);
+                MemoryRelief.ReleaseSoon();
             }
         }
 
