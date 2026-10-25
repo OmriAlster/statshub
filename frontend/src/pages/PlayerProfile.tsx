@@ -88,7 +88,7 @@ export default function PlayerProfile() {
     if (players.length > 0) loadLiveGames(players.map((p) => p.id))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [players.map((p) => p.id).join(',')])
-  useLiveRefresh(Object.values(liveGames).some(Boolean), () => loadLiveGames(players.map((p) => p.id)))
+  useLiveRefresh(Object.values(liveGames).some(Boolean), () => loadLiveGames(players.map((p) => p.id)), undefined, players.map((p) => p.id))
 
   const load = async () => {
     try {

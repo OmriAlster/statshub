@@ -9,6 +9,7 @@ import { computeStatsFromEvents, EVENT_ICONS, EVENT_LABELS, seedEventsFromStats,
 import { courtSeconds, endOfGame, formatClock, formatClockInput, isOnCourt, minutesFromSeconds, parseClock, periodLabel, QUARTERS, substitutionProblem, type Substitution } from './courtTime'
 import { useLiveGameOverlay } from './LiveGameContext'
 import BouncingBall, { Busy } from '../components/BouncingBall'
+import { useLiveGames } from './liveUpdates'
 
 function isToday(iso: string) {
   const d = new Date(iso)
@@ -308,6 +309,20 @@ export default function LiveGameWidget() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [overlayOpen])
 
+  // The live connection (live/liveUpdates): a change to any of these
+  // players' games reaches this widget at once - a watched game reloads, and
+  // a game someone else starts is picked up. The polls below run only while
+  // it's down.
+  const liveCheckRef = useRef<(() => void) | undefined>(undefined)
+  const watcherRefreshRef = useRef<(() => void) | undefined>(undefined)
+  const liveConnected = useLiveGames(storageKey ? players.map((p) => ({ player: p.id })) : [], (gameId) => {
+    if (active && !active.canRecord) {
+      if (gameId === active.gameId) watcherRefreshRef.current?.()
+    } else if (!active) {
+      liveCheckRef.current?.()
+    }
+  })
+
   // Picks up a game someone else just started - a co-parent with access to
   // the same player, or this same account on another tab/device - without
   // requiring a manual refresh. Only runs while nothing is already live here
@@ -334,10 +349,15 @@ export default function LiveGameWidget() {
       }
     }
 
+    liveCheckRef.current = checkForLiveGame
+    if (liveConnected) return () => { liveCheckRef.current = undefined }
     const interval = window.setInterval(checkForLiveGame, 30000)
-    return () => window.clearInterval(interval)
+    return () => {
+      window.clearInterval(interval)
+      liveCheckRef.current = undefined
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [storageKey, active, players])
+  }, [storageKey, active, players, liveConnected])
 
   // A watcher has no writes of their own to trigger a refresh from, so
   // periodically re-pull the game and shots the actual tracker is recording -
@@ -376,11 +396,16 @@ export default function LiveGameWidget() {
       }
     }
 
-    refresh()
+    refresh() // also catches up on anything missed while reconnecting
+    watcherRefreshRef.current = refresh
+    if (liveConnected) return () => { watcherRefreshRef.current = undefined }
     const interval = window.setInterval(refresh, 8000)
-    return () => window.clearInterval(interval)
+    return () => {
+      window.clearInterval(interval)
+      watcherRefreshRef.current = undefined
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active?.gameId, active?.canRecord])
+  }, [active?.gameId, active?.canRecord, liveConnected])
 
   const selectedPlayer = players.find((p) => p.id === selectedPlayerId)
   const playerTeams = selectedPlayer?.teams ?? []

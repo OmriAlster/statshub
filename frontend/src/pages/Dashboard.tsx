@@ -55,7 +55,7 @@ export default function Dashboard() {
   }, [liveGameVersion])
 
   // A game tracked live on another phone: keep it (and on court / on bench) current.
-  useLiveRefresh(upcomingGames.some(({ game }) => game.status === 'In Progress'), () => load(true))
+  useLiveRefresh(upcomingGames.some(({ game }) => game.status === 'In Progress'), () => load(true), undefined, players.map((p) => p.player.id))
 
   // quiet: no "Loading..." flash over what's already shown.
   const load = async (quiet = false) => {

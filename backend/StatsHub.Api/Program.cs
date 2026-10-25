@@ -75,8 +75,10 @@ var usingPostgres = !string.IsNullOrEmpty(databaseUrl);
 
 // One model, a context per database so each has its own migrations
 // (Data/ProviderContexts.cs); the app itself only ever asks for AppDbContext.
-void ConfigureDb(DbContextOptionsBuilder options)
+void ConfigureDb(IServiceProvider services, DbContextOptionsBuilder options)
 {
+    // Screens watching a game hear about every change to it - see LiveHub.
+    options.AddInterceptors(services.GetRequiredService<StatsHub.Api.Live.LiveUpdatesInterceptor>());
     // Round trips per request, in Server-Timing. Locally, optionally with a
     // production-like delay per query (Diagnostics:SimulatedDbLatencyMs).
     var simulatedDbLatencyMs = builder.Environment.IsDevelopment() ? builder.Configuration.GetValue("Diagnostics:SimulatedDbLatencyMs", 0) : 0;
@@ -84,18 +86,18 @@ void ConfigureDb(DbContextOptionsBuilder options)
 }
 if (usingPostgres)
 {
-    builder.Services.AddDbContext<AppDbContext, PostgresAppDbContext>(options =>
+    builder.Services.AddDbContext<AppDbContext, PostgresAppDbContext>((services, options) =>
     {
-        ConfigureDb(options);
+        ConfigureDb(services, options);
         options.UseNpgsql(ToNpgsqlConnectionString(databaseUrl!));
     });
 }
 else
 {
     var connectionString = builder.Configuration.GetConnectionString("Default") ?? "Data Source=statshub.db";
-    builder.Services.AddDbContext<AppDbContext, SqliteAppDbContext>(options =>
+    builder.Services.AddDbContext<AppDbContext, SqliteAppDbContext>((services, options) =>
     {
-        ConfigureDb(options);
+        ConfigureDb(services, options);
         options.UseSqlite(connectionString);
     });
 }
@@ -134,6 +136,15 @@ builder.Services.AddAuthentication(options =>
     // 30 seconds so it isn't a query on every request.
     options.Events = new JwtBearerEvents
     {
+        // A browser can't put headers on a WebSocket, so the live hub's
+        // connection carries the token in the address instead.
+        OnMessageReceived = context =>
+        {
+            var token = context.Request.Query["access_token"];
+            if (!string.IsNullOrEmpty(token) && context.HttpContext.Request.Path.StartsWithSegments(StatsHub.Api.Live.LiveHub.Path))
+                context.Token = token;
+            return Task.CompletedTask;
+        },
         OnTokenValidated = async context =>
         {
             if (!Guid.TryParse(context.Principal?.FindFirstValue(ClaimTypes.NameIdentifier), out var userId))
@@ -157,6 +168,10 @@ builder.Services.AddAuthentication(options =>
 });
 
 builder.Services.AddAuthorization();
+
+// Live game updates (see Live/LiveHub.cs).
+builder.Services.AddSignalR();
+builder.Services.AddSingleton<StatsHub.Api.Live.LiveUpdatesInterceptor>();
 
 // Add Services (Dependency Injection)
 builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
@@ -275,6 +290,7 @@ app.UseRateLimiter(); // after authentication, so limits are per signed-in accou
 app.UseAuthorization();
 
 app.MapControllers();
+app.MapHub<StatsHub.Api.Live.LiveHub>(StatsHub.Api.Live.LiveHub.Path);
 
 app.Run();
 

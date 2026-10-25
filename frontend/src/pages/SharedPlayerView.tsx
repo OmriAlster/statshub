@@ -14,6 +14,7 @@ import { useElementVisible } from '../hooks/useElementVisible'
 import { formatGameDateOnly } from '../utils/formatGameDate'
 import BouncingBall from '../components/BouncingBall'
 import { GameTypeBadge, HomeAway } from '../components/GameBadges'
+import { useLiveGames } from '../live/liveUpdates'
 
 export default function SharedPlayerView() {
   const { token, gameId } = useParams<{ token: string; gameId?: string }>()
@@ -48,11 +49,14 @@ export default function SharedPlayerView() {
   // being viewed from inside a full profile share (`gameId` route param).
   const viewedGameStatus = gameId ? data?.games.find((g) => String(g.id) === gameId)?.status : undefined
   const gameStatus = data?.game?.status ?? viewedGameStatus
+  // Reloads the moment the shared player's games change (the live
+  // connection); polls only while that's down.
+  const connected = useLiveGames(token ? [{ share: token }] : [], () => load())
   useEffect(() => {
-    if (gameStatus !== 'In Progress') return
+    if (gameStatus !== 'In Progress' || connected) return
     const interval = setInterval(load, 5000)
     return () => clearInterval(interval)
-  }, [gameStatus, load])
+  }, [gameStatus, load, connected])
 
   if (loading) {
     return (
