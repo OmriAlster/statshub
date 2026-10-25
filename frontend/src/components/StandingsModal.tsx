@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { api } from '../api/client'
 import type { IbbaStandingRowDto } from '../api/types'
 import BouncingBall from './BouncingBall'
+import Modal from './Modal'
 
 interface StandingsModalProps {
   leagueUrl: string
@@ -26,19 +27,15 @@ export default function StandingsModal({ leagueUrl, leagueName, highlightTeamUrl
   }, [leagueUrl])
 
   return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal-panel" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-head">
-          <div className="modal-head-title">
-            <div>
-              <h3 dir="rtl">{leagueName}</h3>
-              <p>{rows.length > 0 ? `${rows.length} teams · from IBBA` : 'From IBBA'}</p>
-            </div>
-          </div>
-          <button className="modal-close" onClick={onClose} aria-label="Close">
-            <svg className="icon"><use href="#i-x" /></svg>
-          </button>
+    <Modal
+      head={
+        <div>
+          <h3 dir="rtl">{leagueName}</h3>
+          <p>{rows.length > 0 ? `${rows.length} teams · from IBBA` : 'From IBBA'}</p>
         </div>
+      }
+      onClose={onClose}
+    >
         <div className="modal-body">
           {loading ? (
             <BouncingBall label="Loading standings…" />
@@ -82,7 +79,6 @@ export default function StandingsModal({ leagueUrl, leagueName, highlightTeamUrl
             </table>
           )}
         </div>
-      </div>
-    </div>
+    </Modal>
   )
 }

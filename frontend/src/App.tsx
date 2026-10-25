@@ -23,6 +23,9 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>
 }
 
+// A page for signed-in users, inside the app's header and navigation.
+const signedIn = (page: React.ReactNode) => <ProtectedRoute><Layout>{page}</Layout></ProtectedRoute>
+
 function App() {
   const { loading } = useAuth()
 
@@ -44,69 +47,15 @@ function App() {
       <Route path="/share/:token" element={<SharedPlayerView />} />
       <Route path="/share/:token/games/:gameId" element={<SharedPlayerView />} />
 
-      <Route
-        path="/join"
-        element={
-          <ProtectedRoute>
-            <Layout>
-              <JoinAsPlayer />
-            </Layout>
-          </ProtectedRoute>
-        }
-      />
+      <Route path="/join" element={signedIn(<JoinAsPlayer />)} />
 
-      <Route
-        path="/"
-        element={
-          <ProtectedRoute>
-            <Layout>
-              <Dashboard />
-            </Layout>
-          </ProtectedRoute>
-        }
-      />
+      <Route path="/" element={signedIn(<Dashboard />)} />
       <Route path="/games" element={<Navigate to="/stats" replace />} />
       <Route path="/live-game" element={<Navigate to="/" replace />} />
-      <Route
-        path="/games/:id"
-        element={
-          <ProtectedRoute>
-            <Layout>
-              <GameDetail />
-            </Layout>
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/stats"
-        element={
-          <ProtectedRoute>
-            <Layout>
-              <Stats />
-            </Layout>
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/stats/:playerId"
-        element={
-          <ProtectedRoute>
-            <Layout>
-              <Stats />
-            </Layout>
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/players"
-        element={
-          <ProtectedRoute>
-            <Layout>
-              <PlayerProfile />
-            </Layout>
-          </ProtectedRoute>
-        }
-      />
+      <Route path="/games/:id" element={signedIn(<GameDetail />)} />
+      <Route path="/stats" element={signedIn(<Stats />)} />
+      <Route path="/stats/:playerId" element={signedIn(<Stats />)} />
+      <Route path="/players" element={signedIn(<PlayerProfile />)} />
 
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

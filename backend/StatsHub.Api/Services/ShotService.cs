@@ -22,12 +22,9 @@ namespace StatsHub.Api.Services
             _context = context;
         }
 
-        private async Task<bool> CanReadPlayerAsync(Guid playerId, Guid userId) =>
-            await _context.Players.AnyAsync(p =>
-                p.Id == playerId && (p.LinkedUserId == userId || p.Parents.Any(pp => pp.UserId == userId)));
-
-        private Task<bool> CanWritePlayerAsync(Guid playerId, Guid userId) =>
-            _context.PlayerParents.AnyAsync(pp => pp.PlayerId == playerId && pp.UserId == userId);
+        // See AccessRules.
+        private Task<bool> CanReadPlayerAsync(Guid playerId, Guid userId) => _context.CanReadPlayerAsync(playerId, userId);
+        private Task<bool> CanWritePlayerAsync(Guid playerId, Guid userId) => _context.CanWritePlayerAsync(playerId, userId);
 
         public async Task<ShotDto?> CreateShotAsync(CreateShotDto dto, Guid requestingUserId)
         {
@@ -82,7 +79,7 @@ namespace StatsHub.Api.Services
                 .OrderBy(s => s.CreatedAt)
                 .ToListAsync();
 
-            return shots.Select(s => MapToDto(s, gameStats)).ToList();
+            return shots.Select(s => s.ToDto(gameStats)).ToList();
         }
 
         public async Task<List<ShotDto>> GetShotsByPlayerAndTeamAsync(Guid playerId, Guid teamId, Guid requestingUserId)
@@ -104,7 +101,7 @@ namespace StatsHub.Api.Services
                 .OrderBy(s => s.CreatedAt)
                 .ToListAsync();
 
-            return shots.Select(s => MapToDto(s, s.GameStats)).ToList();
+            return shots.Select(s => s.ToDto(s.GameStats)).ToList();
         }
 
         // Same live-recording lock as box-score and game edits: while a game
@@ -135,20 +132,7 @@ namespace StatsHub.Api.Services
         private async Task<ShotDto> MapToDtoAsync(Shot shot)
         {
             var gameStats = await _context.GameStats.FindAsync(shot.GameStatsId);
-            return MapToDto(shot, gameStats!);
+            return shot.ToDto(gameStats!);
         }
-
-        private static ShotDto MapToDto(Shot shot, GameStats gameStats) => new ShotDto
-        {
-            Id = shot.Id,
-            GameStatsId = shot.GameStatsId,
-            GameId = gameStats.GameId,
-            PlayerId = gameStats.PlayerId,
-            Quarter = shot.Quarter,
-            X = shot.X,
-            Y = shot.Y,
-            Made = shot.Made,
-            Value = shot.Value
-        };
     }
 }

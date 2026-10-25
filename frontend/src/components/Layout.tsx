@@ -8,10 +8,22 @@ import { Busy } from './BouncingBall'
 
 const LiveGameWidget = lazy(() => import('../live/LiveGameWidget'))
 
+const navClass = ({ isActive }: { isActive: boolean }) => `nav-btn ${isActive ? 'active' : ''}`
+
+function Brand() {
+  return (
+    <>
+      <span className="brand-mark"><svg className="icon" style={{ stroke: '#2b1400' }}><use href="#i-ball" /></svg></span>
+      StatsHub
+    </>
+  )
+}
+
 export default function Layout({ children }: { children: ReactNode }) {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
   const isPlayerRole = user?.role === 'Player'
+  const initials = `${user?.firstName?.[0] ?? ''}${user?.lastName?.[0] ?? ''}`
 
   const handleLogout = () => {
     logout()
@@ -21,13 +33,10 @@ export default function Layout({ children }: { children: ReactNode }) {
   return (
     <div className="app-container">
       <header className="app-header">
-        <div className="brand">
-          <span className="brand-mark"><svg className="icon" style={{ stroke: '#2b1400' }}><use href="#i-ball" /></svg></span>
-          StatsHub
-        </div>
+        <div className="brand"><Brand /></div>
         {user && (
           <div className="user-info">
-            <UserAvatar url={user.profilePictureUrl} initials={`${user.firstName?.[0] ?? ''}${user.lastName?.[0] ?? ''}`} />
+            <UserAvatar url={user.profilePictureUrl} initials={initials} />
             <span>{user.firstName} {user.lastName}</span> {isPlayerRole && <span className="role-badge">Player</span>}
             <NotificationBell />
             <LogoutMenu onLogout={handleLogout} />
@@ -36,27 +45,24 @@ export default function Layout({ children }: { children: ReactNode }) {
       </header>
 
       <nav className="app-nav">
-        <div className="app-nav-brand">
-          <span className="brand-mark"><svg className="icon" style={{ stroke: '#2b1400' }}><use href="#i-ball" /></svg></span>
-          StatsHub
-        </div>
+        <div className="app-nav-brand"><Brand /></div>
 
-        <NavLink to="/" end className={({ isActive }) => `nav-btn ${isActive ? 'active' : ''}`}>
+        <NavLink to="/" end className={navClass}>
           <svg className="icon"><use href="#i-home" /></svg>
           <span>Dashboard</span>
         </NavLink>
-        <NavLink to="/stats" className={({ isActive }) => `nav-btn ${isActive ? 'active' : ''}`}>
+        <NavLink to="/stats" className={navClass}>
           <svg className="icon"><use href="#i-chart" /></svg>
           <span>Profiles</span>
         </NavLink>
-        <NavLink to="/players" className={({ isActive }) => `nav-btn ${isActive ? 'active' : ''}`}>
+        <NavLink to="/players" className={navClass}>
           <svg className="icon"><use href={isPlayerRole ? '#i-user' : '#i-users'} /></svg>
           <span>{isPlayerRole ? 'My Profile' : 'Players'}</span>
         </NavLink>
 
         {user && (
           <div className="app-nav-user">
-            <UserAvatar url={user.profilePictureUrl} initials={`${user.firstName?.[0] ?? ''}${user.lastName?.[0] ?? ''}`} />
+            <UserAvatar url={user.profilePictureUrl} initials={initials} />
             <div className="app-nav-user-text">
               <span className="u-name">{user.firstName} {user.lastName}</span>
               {isPlayerRole && <span className="role-badge">Player</span>}

@@ -1,19 +1,13 @@
-import { useState } from 'react'
 import { useAuth } from '../auth/AuthContext'
 import { usePushNotifications } from '../hooks/usePushNotifications'
 import { Busy } from './BouncingBall'
-
-const DISMISSED_KEY = 'statshub_notification_banner_dismissed'
+import DismissibleBanner from './DismissibleBanner'
+import { useDismissed } from '../hooks/useDismissed'
 
 export default function NotificationBanner() {
   const { user } = useAuth()
   const { supported, permission, subscribed, busy, subscribe } = usePushNotifications(user?.id)
-  const [dismissed, setDismissed] = useState(() => localStorage.getItem(DISMISSED_KEY) === '1')
-
-  const dismiss = () => {
-    localStorage.setItem(DISMISSED_KEY, '1')
-    setDismissed(true)
-  }
+  const [dismissed, dismiss] = useDismissed('statshub_notification_banner_dismissed')
 
   if (!supported || permission !== 'default' || subscribed || dismissed) return null
 
@@ -25,18 +19,17 @@ export default function NotificationBanner() {
   }
 
   return (
-    <div className="install-banner">
-      <span className="install-banner-icon">🔔</span>
-      <div className="install-banner-text">
-        <strong>Get game notifications</strong>
-        <span>New games, live starts, and final scores - straight to your phone.</span>
-      </div>
-      <button className="install-banner-btn" onClick={enable} disabled={busy}>
-        {busy ? <Busy>Enabling…</Busy> : 'Enable'}
-      </button>
-      <button className="install-banner-close" onClick={dismiss} aria-label="Dismiss">
-        <svg className="icon"><use href="#i-x" /></svg>
-      </button>
-    </div>
+    <DismissibleBanner
+      icon="🔔"
+      title="Get game notifications"
+      onDismiss={dismiss}
+      action={
+        <button className="install-banner-btn" onClick={enable} disabled={busy}>
+          {busy ? <Busy>Enabling…</Busy> : 'Enable'}
+        </button>
+      }
+    >
+      New games, live starts, and final scores - straight to your phone.
+    </DismissibleBanner>
   )
 }

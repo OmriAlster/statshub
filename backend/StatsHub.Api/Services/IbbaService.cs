@@ -50,12 +50,7 @@ namespace StatsHub.Api.Services
 
         private HttpClient CreateIbbaHttpClient() => _httpClientFactory.CreateClient("Ibba");
 
-        private async Task<bool> OwnsTeamAsync(Guid teamId, Guid requestingUserId) =>
-            await _context.Teams.AnyAsync(t =>
-                t.Id == teamId && (
-                    t.Season.UserId == requestingUserId ||
-                    t.PlayerTeams.Any(pt => pt.Player.Parents.Any(pp => pp.UserId == requestingUserId))
-                ));
+        private Task<bool> OwnsTeamAsync(Guid teamId, Guid requestingUserId) => _context.CanManageTeamAsync(teamId, requestingUserId);
 
         // The existing teams (not linked to IBBA) the pop-up offers to add the
         // player's IBBA teams to - one IBBA team at a time, for as long as any
@@ -73,9 +68,8 @@ namespace StatsHub.Api.Services
 
             var familyUserId = await _context.Players.Where(p => p.Id == playerId).Select(p => p.UserId).FirstAsync();
             return await _context.Teams
-                .Where(t => t.IbbaTeamId == null && (
-                    t.Season.UserId == familyUserId ||
-                    t.PlayerTeams.Any(pt => pt.Player.Parents.Any(pp => pp.UserId == familyUserId))))
+                .Where(t => t.IbbaTeamId == null)
+                .Where(AccessRules.TeamManagedBy(familyUserId))
                 .OrderBy(t => t.Name)
                 .ToListAsync();
         }

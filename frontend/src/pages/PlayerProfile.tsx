@@ -10,6 +10,7 @@ import IbbaBadge from '../components/IbbaBadge'
 import StandingsModal from '../components/StandingsModal'
 import TeamCrest from '../components/TeamCrest'
 import BouncingBall, { Busy } from '../components/BouncingBall'
+import Modal from '../components/Modal'
 
 const emptyForm = {
   firstName: '',
@@ -935,22 +936,23 @@ function IbbaTeamChoiceModal({
   const [picked, setPicked] = useState<Record<string, string>>({})
 
   return (
-    <div className="game-edit-modal-backdrop" onClick={onClose}>
-      <div className="game-edit-modal-panel ibba-choice-panel" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Link IBBA teams">
-        <div className="modal-head">
-          <div className="modal-head-title">
-            <h3>Add {playerName}&apos;s IBBA team to your team?</h3>
-            {total > 1 && <p className="ibba-choice-step">IBBA team {total - pending.length + 1} of {total}</p>}
-            <p>
-              {candidates.length > 0
-                ? `Pick the existing team this IBBA team is - its games go there. A new team is made only if you say no.`
-                : `All your teams are linked to IBBA now - create a team for this one.`}
-            </p>
-          </div>
-          <button className="modal-close" onClick={onClose} aria-label="Close">
-            <svg className="icon"><use href="#i-x" /></svg>
-          </button>
-        </div>
+    <Modal
+      kind="editor"
+      panelClassName="ibba-choice-panel"
+      label="Link IBBA teams"
+      onClose={onClose}
+      head={
+        <>
+          <h3>Add {playerName}&apos;s IBBA team to your team?</h3>
+          {total > 1 && <p className="ibba-choice-step">IBBA team {total - pending.length + 1} of {total}</p>}
+          <p>
+            {candidates.length > 0
+              ? `Pick the existing team this IBBA team is - its games go there. A new team is made only if you say no.`
+              : `All your teams are linked to IBBA now - create a team for this one.`}
+          </p>
+        </>
+      }
+    >
         <div className="modal-body ibba-choice-list">
           {busy && (
             <p className="ibba-choice-busy"><Busy>Linking the team…</Busy></p>
@@ -983,7 +985,6 @@ function IbbaTeamChoiceModal({
             )
           })}
         </div>
-      </div>
-    </div>
+    </Modal>
   )
 }

@@ -27,6 +27,8 @@ import { useElementVisible } from '../hooks/useElementVisible'
 import { countsTowardStats } from '../utils/countedGames'
 import { formatGameDateOnly } from '../utils/formatGameDate'
 import BouncingBall, { Busy } from '../components/BouncingBall'
+import { GameTypeBadge, HomeAway } from '../components/GameBadges'
+import Modal from '../components/Modal'
 
 export default function Stats() {
   const { user } = useAuth()
@@ -467,11 +469,8 @@ function StatsPanel({ games, playerId }: { games: GameDto[]; playerId: string })
                     </td>
                     <td>
                       <span className="type-cell">
-                        {game.isHomeGame != null && <span className="type-cell-icon" title={game.isHomeGame ? 'Home' : 'Away'}>{game.isHomeGame ? '🏠' : '✈️'}</span>}
-                        <span className={`game-type-badge ${game.gameType.toLowerCase()}`}>
-                          {game.gameType}
-                          {game.isFromIbba && <img className="type-chip-ibba" src="/icons/ibba-logo.png" alt="" title="Synced from IBBA" />}
-                        </span>
+                        <HomeAway game={game} iconOnly />
+                        <GameTypeBadge game={game} />
                         {!counted && <span className="not-counted-note">not counted</span>}
                       </span>
                     </td>
@@ -633,11 +632,8 @@ function SchedulePanel({
                   <td>{formatGameDateOnly(game.gameDate)}</td>
                   <td>
                     <span className="type-cell">
-                      {game.isHomeGame != null && <span className="type-cell-icon" title={game.isHomeGame ? 'Home' : 'Away'}>{game.isHomeGame ? '🏠' : '✈️'}</span>}
-                      <span className={`game-type-badge ${game.gameType.toLowerCase()}`}>
-                        {game.gameType}
-                        {game.isFromIbba && <img className="type-chip-ibba" src="/icons/ibba-logo.png" alt="" title="Synced from IBBA" />}
-                      </span>
+                      <HomeAway game={game} iconOnly />
+                      <GameTypeBadge game={game} />
                     </span>
                   </td>
                   {game.status === 'Completed' ? (
@@ -912,20 +908,19 @@ function ScheduleEditPanel({
   }
 
   return (
-    <div className="game-edit-modal-backdrop" onClick={onClose}>
-      <div className="game-edit-modal-panel" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-head">
-          <div className="modal-head-title">
-            <h3>Edit Game</h3>
-            <p className="opponent-cell">
-              {game.opponentLogoUrl && <img className="opponent-logo-md" src={game.opponentLogoUrl} alt="" />}
-              <span>vs {game.opponentName}</span>
-            </p>
-          </div>
-          <button className="modal-close" onClick={onClose} aria-label="Close">
-            <svg className="icon"><use href="#i-x" /></svg>
-          </button>
-        </div>
+    <Modal
+      kind="editor"
+      onClose={onClose}
+      head={
+        <>
+          <h3>Edit Game</h3>
+          <p className="opponent-cell">
+            {game.opponentLogoUrl && <img className="opponent-logo-md" src={game.opponentLogoUrl} alt="" />}
+            <span>vs {game.opponentName}</span>
+          </p>
+        </>
+      }
+    >
         <div className="modal-body">
     <div className="edit-panel">
       {game.isFromIbba ? (
@@ -1026,8 +1021,7 @@ function ScheduleEditPanel({
       </div>
     </div>
         </div>
-      </div>
-    </div>
+    </Modal>
   )
 }
 

@@ -4,6 +4,7 @@ import type { GameDto } from '../api/types'
 import { countsTowardStats } from '../utils/countedGames'
 import { formatGameTime } from '../utils/formatGameDate'
 import GameStatusBadge, { onCourtIn } from './GameStatusBadge'
+import { GameTypeBadge, HomeAway } from './GameBadges'
 
 // Phone layout for the Stats and Schedule tables: a 5-13 column table can't
 // fit a phone screen (only Opponent and Date were visible, everything else
@@ -45,11 +46,8 @@ function Matchup({ game }: { game: GameDto }) {
         <span>{game.opponentName}</span>
       </div>
       <div className="game-card-meta">
-        {game.isHomeGame != null && <span>{game.isHomeGame ? '🏠 Home' : '✈️ Away'}</span>}
-        <span className={`game-type-badge ${game.gameType.toLowerCase()}`}>
-          {game.gameType}
-          {game.isFromIbba && <img className="type-chip-ibba" src="/icons/ibba-logo.png" alt="" title="Synced from IBBA" />}
-        </span>
+        <HomeAway game={game} />
+        <GameTypeBadge game={game} />
         {game.status === 'Completed' && !countsTowardStats(game) && <span className="not-counted-note">not counted</span>}
       </div>
     </>

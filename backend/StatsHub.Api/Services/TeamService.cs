@@ -94,21 +94,14 @@ namespace StatsHub.Api.Services
         // A parent can add their player onto a team they own the season for, or
         // onto a team another one of their linked players is already rostered on
         // (covers a second parent who doesn't own the season).
-        private async Task<bool> CanManageTeamAsync(Guid teamId, Guid userId)
-        {
-            return await _context.Teams.AnyAsync(t =>
-                t.Id == teamId && (
-                    t.Season.UserId == userId ||
-                    t.PlayerTeams.Any(pt => pt.Player.Parents.Any(pp => pp.UserId == userId))
-                ));
-        }
+        private Task<bool> CanManageTeamAsync(Guid teamId, Guid userId) => _context.CanManageTeamAsync(teamId, userId);
 
         public async Task<bool> AddPlayerToTeamAsync(Guid teamId, Guid playerId, Guid userId, int? jerseyNumber)
         {
             if (!await CanManageTeamAsync(teamId, userId)) return false;
 
             var player = await _context.Players.FindAsync(playerId);
-            if (player == null || !await _context.PlayerParents.AnyAsync(pp => pp.PlayerId == playerId && pp.UserId == userId)) return false;
+            if (player == null || !await _context.CanWritePlayerAsync(playerId, userId)) return false;
 
             var existing = await _context.PlayerTeams.FirstOrDefaultAsync(pt => pt.TeamId == teamId && pt.PlayerId == playerId);
             if (existing != null) return true;

@@ -13,6 +13,7 @@ import TeamCrest from '../components/TeamCrest'
 import { useElementVisible } from '../hooks/useElementVisible'
 import { formatGameDateOnly } from '../utils/formatGameDate'
 import BouncingBall from '../components/BouncingBall'
+import { GameTypeBadge, HomeAway } from '../components/GameBadges'
 
 export default function SharedPlayerView() {
   const { token, gameId } = useParams<{ token: string; gameId?: string }>()
@@ -371,11 +372,8 @@ function GameRow({ game, token, children }: { game: GameDto; token?: string; chi
       <td>{formatGameDateOnly(game.gameDate)}</td>
       <td>
         <span className="type-cell">
-          {game.isHomeGame != null && <span className="type-cell-icon" title={game.isHomeGame ? 'Home' : 'Away'}>{game.isHomeGame ? '🏠' : '✈️'}</span>}
-          <span className={`game-type-badge ${game.gameType.toLowerCase()}`}>
-            {game.gameType}
-            {game.isFromIbba && <img className="type-chip-ibba" src="/icons/ibba-logo.png" alt="" title="Synced from IBBA" />}
-          </span>
+          <HomeAway game={game} iconOnly />
+          <GameTypeBadge game={game} />
           {game.status === 'Completed' && !countsTowardStats(game) && <span className="not-counted-note">not counted</span>}
         </span>
       </td>

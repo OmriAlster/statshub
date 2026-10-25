@@ -25,32 +25,10 @@ namespace StatsHub.Api.Services
             _context = context;
         }
 
-        private async Task<bool> CanReadPlayerAsync(Guid playerId, Guid userId) =>
-            await _context.Players.AnyAsync(p =>
-                p.Id == playerId && (p.LinkedUserId == userId || p.Parents.Any(pp => pp.UserId == userId)));
-
-        // Any linked parent (not just the one who created the player) can record stats.
-        private Task<bool> CanWritePlayerAsync(Guid playerId, Guid userId) =>
-            _context.PlayerParents.AnyAsync(pp => pp.PlayerId == playerId && pp.UserId == userId);
-
-        // Same rule as GameService: a manual game via its own team, an IBBA
-        // game via any team linked to either side - owned by this user's
-        // season, or with one of their players on the roster.
-        private async Task<bool> CanAccessGameAsync(Game game, Guid userId)
-        {
-            if (game.IbbaGameCode == null)
-            {
-                var teamId = game.HomeTeamId ?? game.AwayTeamId;
-                return teamId.HasValue && await _context.Teams.AnyAsync(t =>
-                    t.Id == teamId.Value &&
-                    (t.Season.UserId == userId || t.PlayerTeams.Any(pt => pt.Player.Parents.Any(pp => pp.UserId == userId))));
-            }
-
-            var sideIds = new[] { game.HomeTeamId, game.AwayTeamId }.Where(id => id.HasValue).Select(id => id!.Value).ToList();
-            return sideIds.Count > 0 && await _context.Teams.AnyAsync(t =>
-                t.IbbaTeamId != null && sideIds.Contains(t.IbbaTeamId.Value) &&
-                (t.Season.UserId == userId || t.PlayerTeams.Any(pt => pt.Player.Parents.Any(pp => pp.UserId == userId))));
-        }
+        // See AccessRules.
+        private Task<bool> CanReadPlayerAsync(Guid playerId, Guid userId) => _context.CanReadPlayerAsync(playerId, userId);
+        private Task<bool> CanWritePlayerAsync(Guid playerId, Guid userId) => _context.CanWritePlayerAsync(playerId, userId);
+        private Task<bool> CanAccessGameAsync(Game game, Guid userId) => _context.CanAccessGameAsync(game, userId);
 
         public async Task<GameStatsDto?> GetGameStatsByIdAsync(Guid id, Guid requestingUserId)
         {
@@ -60,7 +38,7 @@ namespace StatsHub.Api.Services
 
             if (stats == null || !await CanReadPlayerAsync(stats.PlayerId, requestingUserId)) return null;
 
-            return MapToDto(stats);
+            return stats.ToDto();
         }
 
         public async Task<GameStatsDto> CreateGameStatsAsync(CreateGameStatsDto dto, Guid requestingUserId)
@@ -288,33 +266,5 @@ namespace StatsHub.Api.Services
                 FreeThrowPercentage = totalFTA > 0 ? Math.Round((double)gameStats.Sum(gs => gs.FreeThrowsMade) / totalFTA * 100, 2) : 0
             };
         }
-
-        private static GameStatsDto MapToDto(GameStats gs) => new GameStatsDto
-        {
-            Id = gs.Id,
-            GameId = gs.GameId,
-            PlayerId = gs.PlayerId,
-            PlayerName = $"{gs.Player.FirstName} {gs.Player.LastName}",
-            FieldGoalsMade = gs.FieldGoalsMade,
-            FieldGoalsAttempted = gs.FieldGoalsAttempted,
-            FieldGoalPercentage = gs.FieldGoalPercentage,
-            ThreePointersMade = gs.ThreePointersMade,
-            ThreePointersAttempted = gs.ThreePointersAttempted,
-            ThreePointPercentage = gs.ThreePointPercentage,
-            FreeThrowsMade = gs.FreeThrowsMade,
-            FreeThrowsAttempted = gs.FreeThrowsAttempted,
-            FreeThrowPercentage = gs.FreeThrowPercentage,
-            OffensiveRebounds = gs.OffensiveRebounds,
-            DefensiveRebounds = gs.DefensiveRebounds,
-            TotalRebounds = gs.TotalRebounds,
-            Assists = gs.Assists,
-            Steals = gs.Steals,
-            Blocks = gs.Blocks,
-            Turnovers = gs.Turnovers,
-            Fouls = gs.Fouls,
-            MinutesPlayed = gs.MinutesPlayed,
-            OnCourt = gs.OnCourt,
-            TotalPoints = gs.TotalPoints
-        };
     }
 }

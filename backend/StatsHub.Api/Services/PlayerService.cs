@@ -36,8 +36,7 @@ namespace StatsHub.Api.Services
                 .Include(p => p.PlayerTeams).ThenInclude(pt => pt.Team)
                 .Include(p => p.Parents).ThenInclude(pp => pp.User);
 
-        private Task<bool> IsParentAsync(Guid playerId, Guid userId) =>
-            _context.PlayerParents.AnyAsync(pp => pp.PlayerId == playerId && pp.UserId == userId);
+        private Task<bool> IsParentAsync(Guid playerId, Guid userId) => _context.CanWritePlayerAsync(playerId, userId);
 
         public async Task<List<PlayerDto>> GetPlayersOwnedByAsync(Guid userId)
         {
@@ -53,17 +52,13 @@ namespace StatsHub.Api.Services
             return player == null ? null : MapToDto(player);
         }
 
-        public async Task<bool> CanAccessPlayerAsync(Guid playerId, Guid userId)
-        {
-            return await _context.Players.AnyAsync(p =>
-                p.Id == playerId && (p.LinkedUserId == userId || p.Parents.Any(pp => pp.UserId == userId)));
-        }
+        public Task<bool> CanAccessPlayerAsync(Guid playerId, Guid userId) => _context.CanReadPlayerAsync(playerId, userId);
 
         public async Task<PlayerDto?> GetPlayerByIdAsync(Guid id, Guid requestingUserId)
         {
             var player = await PlayersWithTeams().FirstOrDefaultAsync(p => p.Id == id);
             if (player == null) return null;
-            if (player.LinkedUserId != requestingUserId && !player.Parents.Any(pp => pp.UserId == requestingUserId)) return null;
+            if (!player.IsVisibleTo(requestingUserId)) return null;
 
             return MapToDto(player);
         }
