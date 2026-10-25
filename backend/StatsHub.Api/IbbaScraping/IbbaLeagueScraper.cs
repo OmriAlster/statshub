@@ -39,35 +39,57 @@ public class IbbaLeagueScraper
             }
         }
 
-        if (standingsTable == null) return standings;
+        if (standingsTable == null) return standings; // no table yet (e.g. before the season starts)
+
+        // Columns found by their header (מש׳ / מש' alike), so a reordered table
+        // still reads right and a renamed one stops the sync instead of
+        // filling the table with another column's numbers.
+        var headerCells = standingsTable.SelectSingleNode(".//tr")!.SelectNodes("./th|./td")?.ToList() ?? [];
+        var column = headerCells
+            .Select((cell, index) => (Name: Normalize(cell.InnerText), index))
+            .GroupBy(c => c.Name).ToDictionary(g => g.Key, g => g.First().index);
+        var missing = StandingColumns.Where(name => !column.ContainsKey(name)).ToList();
+        if (missing.Count > 0)
+            throw new IbbaLayoutException($"standings table at {leagueUrl} is missing column(s) {string.Join(", ", missing)}");
 
         var bodyRows = standingsTable.SelectNodes(".//tr").Skip(1); // skip header
         foreach (var tr in bodyRows)
         {
             var cells = tr.SelectNodes("./td");
-            if (cells == null || cells.Count < 10) continue;
+            if (cells == null || cells.Count < headerCells.Count) continue;
+            string Cell(string name) => cells[column[name]].InnerText;
 
-            var teamLink = cells[1].SelectSingleNode(".//a");
+            var teamCell = cells[column["קבוצה"]];
+            var teamLink = teamCell.SelectSingleNode(".//a");
             var rawTeamHref = teamLink?.GetAttributeValue("href", "") ?? "";
+            var position = ParseInt(Cell("מיקום"));
+            if (position <= 0 || string.IsNullOrEmpty(rawTeamHref))
+                throw new IbbaLayoutException($"standings row \"{Normalize(tr.InnerText)}\" at {leagueUrl} has no position or team link");
 
             standings.Add(new IbbaStandingRow
             {
-                Position = ParseInt(cells[0].InnerText),
-                TeamName = WebUtility.HtmlDecode((teamLink?.InnerText ?? cells[1].InnerText).Trim()),
-                TeamUrl = string.IsNullOrEmpty(rawTeamHref) ? "" : IbbaUrlHelper.Resolve(leagueUrl, rawTeamHref),
-                GamesPlayed = ParseInt(cells[2].InnerText),
-                Wins = ParseInt(cells[3].InnerText),
-                Losses = ParseInt(cells[4].InnerText),
-                Technical = ParseInt(cells[5].InnerText),
-                PointsFor = ParseInt(cells[6].InnerText),
-                PointsAgainst = ParseInt(cells[7].InnerText),
-                Diff = ParseInt(cells[8].InnerText, allowNegative: true),
-                LeaguePoints = ParseInt(cells[9].InnerText),
+                Position = position,
+                TeamName = WebUtility.HtmlDecode((teamLink?.InnerText ?? teamCell.InnerText).Trim()),
+                TeamUrl = IbbaUrlHelper.Resolve(leagueUrl, rawTeamHref),
+                GamesPlayed = ParseInt(Cell("מש")),
+                Wins = ParseInt(Cell("ניצ")),
+                Losses = ParseInt(Cell("הפ")),
+                Technical = ParseInt(Cell("טכני")),
+                PointsFor = ParseInt(Cell("קלעה")),
+                PointsAgainst = ParseInt(Cell("ספגה")),
+                Diff = ParseInt(Cell("הפרש"), allowNegative: true),
+                LeaguePoints = ParseInt(Cell("נק")),
             });
         }
 
         return standings;
     }
+
+    private static readonly string[] StandingColumns = ["מיקום", "קבוצה", "מש", "ניצ", "הפ", "טכני", "קלעה", "ספגה", "הפרש", "נק"];
+
+    // Header text without spacing or the abbreviation mark (׳ or ').
+    private static string Normalize(string text) =>
+        System.Text.RegularExpressions.Regex.Replace(WebUtility.HtmlDecode(text), @"[\s'׳""]+", " ").Trim().Replace(" ", "");
 
     private static int ParseInt(string text, bool allowNegative = false)
     {

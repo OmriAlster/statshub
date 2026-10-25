@@ -12,8 +12,11 @@ public static class IbbaUrlHelper
     {
         if (string.IsNullOrWhiteSpace(href)) return href;
 
-        // Already absolute (http:// or https://) -> use as-is
-        if (Uri.TryCreate(href, UriKind.Absolute, out var absolute))
+        // Already absolute (http:// or https://) -> use as-is. Only web
+        // addresses count: on Linux "/team/151-x/" is also an absolute *file*
+        // path (file:///team/151-x/), which must be resolved like any other
+        // root-relative link instead.
+        if (Uri.TryCreate(href, UriKind.Absolute, out var absolute) && (absolute.Scheme == Uri.UriSchemeHttp || absolute.Scheme == Uri.UriSchemeHttps))
             return absolute.ToString();
 
         // Relative (root-relative "/x", query-only "?x", or "x/y") -> resolve against page

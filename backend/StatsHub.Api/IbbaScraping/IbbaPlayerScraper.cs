@@ -31,6 +31,8 @@ public class IbbaPlayerScraper
         // Player name sits in the <h1> on the profile page, e.g. <h1>עידן אלסטר</h1>
         var nameNode = doc.DocumentNode.SelectSingleNode("//h1");
         info.PlayerName = HtmlEntity.DeEntitize(nameNode?.InnerText.Trim() ?? "");
+        if (string.IsNullOrWhiteSpace(info.PlayerName))
+            throw new IbbaLayoutException($"player page {playerUrl} has no name heading");
 
         // IMPORTANT: the page's top nav menu also contains lots of /team/ and /league/
         // links (mega-menu of every league/club on the site) BEFORE the player's own
@@ -39,7 +41,9 @@ public class IbbaPlayerScraper
         // original bug. Instead we find the link whose *label text* matches, wherever it
         // sits on the page.
 
-        var mainTeamNode = FindLabeledLink(doc, "קבוצה נוכחית", "/team/");
+        // No guessing when the label isn't found: "the first /team/ link on the
+        // page" is a menu link, and would add a team the player isn't on.
+        var mainTeamNode = FindLabeledLink(doc, "קבוצה נוכחית", "/team/", allowFallback: false);
         if (mainTeamNode != null)
         {
             var rawHref = mainTeamNode.GetAttributeValue("href", "");
@@ -148,12 +152,9 @@ public class IbbaPlayerScraper
             }
         }
 
-        // Strategy 3: last resort, old "first link" behavior. Only used when the label is
-        // expected to always be present (allowFallback: true) - e.g. "קבוצה נוכחית", which
-        // virtually every player has. For an OPTIONAL label like "רשאי" (only ~10% of
-        // players have one), this fallback must be skipped: most of the time it's genuinely
-        // absent, and guessing "first /team/ link on the page" would fabricate a phantom
-        // second team on every player who simply doesn't have one.
+        // Strategy 3: last resort, old "first link" behavior - only with allowFallback.
+        // Nothing uses it any more: when a label isn't found, "first /team/ link on the
+        // page" is a menu link, and it would fabricate a team the player isn't on.
         if (!allowFallback) return null;
 
         return candidates?.FirstOrDefault();

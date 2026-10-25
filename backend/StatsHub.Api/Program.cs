@@ -172,11 +172,12 @@ builder.Services.AddScoped<IIbbaService, IbbaService>();
 builder.Services.AddScoped<IPushNotificationService, PushNotificationService>();
 builder.Services.AddHostedService<GameReminderBackgroundService>();
 builder.Services.AddHostedService<IbbaNightlySyncBackgroundService>();
+builder.Services.AddHostedService<IbbaResultWatcherBackgroundService>();
 builder.Services.AddHttpClient("Ibba", client =>
 {
     client.DefaultRequestHeaders.UserAgent.ParseAdd(
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36");
-    client.Timeout = TimeSpan.FromSeconds(30);
+    client.Timeout = Timeout.InfiniteTimeSpan; // the resilience handler below times each attempt and the whole request
 }).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
 {
     AutomaticDecompression = System.Net.DecompressionMethods.All
@@ -184,7 +185,22 @@ builder.Services.AddHttpClient("Ibba", client =>
 // Times each IBBA page for the request's Server-Timing - see IbbaTimingHandler.
 .AddHttpMessageHandler<StatsHub.Api.IbbaScraping.IbbaTimingHandler>()
 // Always fetch fresh from IBBA, never a cached copy - see IbbaNoCacheHandler.
-.AddHttpMessageHandler(() => new StatsHub.Api.IbbaScraping.IbbaNoCacheHandler());
+.AddHttpMessageHandler(() => new StatsHub.Api.IbbaScraping.IbbaNoCacheHandler())
+// IBBA is slow and sometimes briefly down: a failed or timed-out request
+// (5xx, 408, 429, network error) is tried twice more with growing pauses;
+// at most 4 requests to IBBA at a time, the rest wait their turn, so a busy
+// night or many parents syncing never floods the site; and after many
+// failures in a row, requests stop for a while instead of piling on.
+.AddStandardResilienceHandler(options =>
+{
+    options.AttemptTimeout.Timeout = TimeSpan.FromSeconds(40); // an uncached IBBA page takes up to ~25 s
+    options.TotalRequestTimeout.Timeout = TimeSpan.FromSeconds(120);
+    options.CircuitBreaker.SamplingDuration = TimeSpan.FromSeconds(90); // at least twice the attempt timeout
+    options.Retry.MaxRetryAttempts = 2;
+    options.Retry.Delay = TimeSpan.FromSeconds(2);
+    options.RateLimiter.DefaultRateLimiterOptions.PermitLimit = 4;
+    options.RateLimiter.DefaultRateLimiterOptions.QueueLimit = 1000;
+});
 
 var app = builder.Build();
 
