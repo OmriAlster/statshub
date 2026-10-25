@@ -1,4 +1,4 @@
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using StatsHub.Api.Models;
 
@@ -7,6 +7,11 @@ namespace StatsHub.Api.Data
     public class AppDbContext : DbContext
     {
         public AppDbContext(DbContextOptions<AppDbContext> options) : base(options) { }
+
+        // For the per-database contexts below, which only exist so each
+        // database has its own migrations (SQLite locally, Postgres in
+        // production - their column types differ).
+        protected AppDbContext(DbContextOptions options) : base(options) { }
 
         public DbSet<User> Users { get; set; }
         public DbSet<Player> Players { get; set; }
