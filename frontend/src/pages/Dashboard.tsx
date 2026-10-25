@@ -12,6 +12,7 @@ import TeamCrest from '../components/TeamCrest'
 import { formatGameDateOnly, formatGameTime } from '../utils/formatGameDate'
 import { collectUpcomingGames, UPCOMING_PREVIEW_COUNT } from '../utils/upcomingGames'
 import BouncingBall from '../components/BouncingBall'
+import { GameTypeBadge, HomeAway } from '../components/GameBadges'
 
 interface PlayerCard {
   player: PlayerDto
@@ -83,7 +84,7 @@ export default function Dashboard() {
 
           const gamesByTeam: Record<string, GameDto[]> = {}
           for (const g of games) {
-            ;(gamesByTeam[g.teamId] ??= []).push(g)
+            (gamesByTeam[g.teamId] ??= []).push(g)
           }
 
           return { player, teamStats, ibba, gamesByTeam }
@@ -266,11 +267,8 @@ export default function Dashboard() {
                           <span className="dash-upcoming-opponent">{game.opponentName}</span>
                         </div>
                         <div className="dash-upcoming-meta">
-                          {game.isHomeGame != null && <span>{game.isHomeGame ? '🏠 Home' : '✈️ Away'}</span>}
-                          <span className={`game-type-badge ${game.gameType.toLowerCase()}`}>
-                            {game.gameType}
-                            {game.isFromIbba && <img className="type-chip-ibba" src="/icons/ibba-logo.png" alt="" title="Synced from IBBA" />}
-                          </span>
+                          <HomeAway game={game} />
+                          <GameTypeBadge game={game} />
                           <span className="dash-upcoming-team">
                             {game.teamName}
                             {players.length > 1 && ` · ${gamePlayers.map((p) => p.firstName).join(', ')}`}

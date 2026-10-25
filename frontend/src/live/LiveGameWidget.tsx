@@ -619,7 +619,7 @@ export default function LiveGameWidget() {
     const byQuarter: Record<number, ShotDto[]> = {}
     let made2 = 0, att2 = 0, made3 = 0, att3 = 0, points = 0
     for (const s of active?.shots ?? []) {
-      ;(byQuarter[s.quarter] ??= []).push(s)
+      (byQuarter[s.quarter] ??= []).push(s)
       if (s.value === 2) {
         att2++
         if (s.made) made2++

@@ -34,15 +34,8 @@ namespace StatsHub.Api.Services
             _push = push;
         }
 
-        // A team is manageable by its season owner, or by any parent of a player
-        // on that team's roster - so a second parent who was invited onto one of
-        // their kid's teams can also create/edit games for that team.
-        private async Task<bool> OwnsTeamAsync(Guid teamId, Guid requestingUserId) =>
-            await _context.Teams.AnyAsync(t =>
-                t.Id == teamId && (
-                    t.Season.UserId == requestingUserId ||
-                    t.PlayerTeams.Any(pt => pt.Player.Parents.Any(pp => pp.UserId == requestingUserId))
-                ));
+        // See AccessRules.TeamManagedBy.
+        private Task<bool> OwnsTeamAsync(Guid teamId, Guid requestingUserId) => _context.CanManageTeamAsync(teamId, requestingUserId);
 
         // HomeTeamId/AwayTeamId mean different tables depending on the game:
         // for a manual game (IbbaGameCode null) they're app Team ids, at most
@@ -66,11 +59,9 @@ namespace StatsHub.Api.Services
                 var teamId = game.HomeTeamId ?? game.AwayTeamId;
                 if (!teamId.HasValue) return null;
 
-                return await _context.Teams.Include(t => t.IbbaTeam).FirstOrDefaultAsync(t =>
-                    t.Id == teamId.Value && (
-                        t.Season.UserId == requestingUserId ||
-                        t.PlayerTeams.Any(pt => pt.Player.Parents.Any(pp => pp.UserId == requestingUserId))
-                    ));
+                return await _context.Teams.Include(t => t.IbbaTeam)
+                    .Where(t => t.Id == teamId.Value)
+                    .FirstOrDefaultAsync(AccessRules.TeamManagedBy(requestingUserId));
             }
 
             var sideIds = new[] { game.HomeTeamId, game.AwayTeamId }
@@ -78,11 +69,8 @@ namespace StatsHub.Api.Services
             if (sideIds.Count == 0) return null;
 
             return await _context.Teams.Include(t => t.IbbaTeam)
-                .Where(t =>
-                    t.IbbaTeamId != null && sideIds.Contains(t.IbbaTeamId.Value) && (
-                        t.Season.UserId == requestingUserId ||
-                        t.PlayerTeams.Any(pt => pt.Player.Parents.Any(pp => pp.UserId == requestingUserId))
-                    ))
+                .Where(t => t.IbbaTeamId != null && sideIds.Contains(t.IbbaTeamId.Value))
+                .Where(AccessRules.TeamManagedBy(requestingUserId))
                 .OrderByDescending(t => viewingPlayerId != null && t.PlayerTeams.Any(pt => pt.PlayerId == viewingPlayerId))
                 .ThenBy(t => t.Id)
                 .FirstOrDefaultAsync();
@@ -168,9 +156,7 @@ namespace StatsHub.Api.Services
 
             if (myTeams.Count == 0)
             {
-                var canAccess = await _context.Players.AnyAsync(p =>
-                    p.Id == playerId && (p.LinkedUserId == requestingUserId || p.Parents.Any(pp => pp.UserId == requestingUserId)));
-                if (!canAccess) return new List<GameDto>();
+                if (!await _context.CanReadPlayerAsync(playerId, requestingUserId)) return new List<GameDto>();
             }
             var teamIds = myTeams.Select(t => t.Id).ToList();
             // Maps a shared IbbaTeam back to whichever of THIS player's own teams
@@ -431,116 +417,9 @@ namespace StatsHub.Api.Services
         // privileges one side.
         private async Task<List<GameDto>> MapGamesToDtoAsync(List<Game> games, Func<Game, Team?> resolveViewTeam, Guid requestingUserId)
         {
-            var ibbaTeamIds = games
-                .Where(g => g.IbbaGameCode != null)
-                .SelectMany(g => new[] { g.HomeTeamId, g.AwayTeamId })
-                .Where(id => id.HasValue).Select(id => id!.Value)
-                .Distinct().ToList();
-
-            var ibbaTeams = ibbaTeamIds.Count > 0
-                ? await _context.IbbaTeams.Where(t => ibbaTeamIds.Contains(t.Id)).ToDictionaryAsync(t => t.Id)
-                : new Dictionary<Guid, IbbaTeam>();
-
-            return games.Select(g => MapToDto(g, resolveViewTeam(g), ibbaTeams, requestingUserId)).ToList();
+            var ibbaTeams = await _context.LoadIbbaTeamsAsync(games);
+            return games.Select(g => DtoMapping.ToGameDto(g, resolveViewTeam(g), ibbaTeams,
+                canRecordLive: !g.LiveTrackedByUserId.HasValue || g.LiveTrackedByUserId.Value == requestingUserId)).ToList();
         }
-
-        private static GameDto MapToDto(Game game, Team? viewTeam, Dictionary<Guid, IbbaTeam> ibbaTeams, Guid requestingUserId)
-        {
-            var isIbba = game.IbbaGameCode != null;
-            string opponentName;
-            string? opponentLogoUrl;
-            int? teamScore, opponentScore;
-            bool? isHomeGame;
-
-            if (isIbba)
-            {
-                bool? viewerIsHome = viewTeam?.IbbaTeamId is Guid viewIbbaId
-                    ? (game.HomeTeamId == viewIbbaId ? true : game.AwayTeamId == viewIbbaId ? false : (bool?)null)
-                    : null;
-
-                // Defaults to the "home" framing both when the viewer really is
-                // home, and when their side couldn't be determined at all (no
-                // better guess available for that rare fallback).
-                var opponentTeamId = viewerIsHome == false ? game.HomeTeamId : game.AwayTeamId;
-                var opponent = opponentTeamId.HasValue && ibbaTeams.TryGetValue(opponentTeamId.Value, out var opp) ? opp : null;
-
-                opponentName = opponent?.Name ?? string.Empty;
-                opponentLogoUrl = opponent?.LogoUrl;
-                teamScore = viewerIsHome == false ? game.AwayScore : game.HomeScore;
-                opponentScore = viewerIsHome == false ? game.HomeScore : game.AwayScore;
-                isHomeGame = viewerIsHome;
-            }
-            else
-            {
-                opponentName = game.OpponentName;
-                opponentLogoUrl = null; // manual games never had opponent logos
-                teamScore = game.TeamScore;
-                opponentScore = game.OpponentScore;
-                isHomeGame = viewTeam != null
-                    ? (game.HomeTeamId == viewTeam.Id ? true : game.AwayTeamId == viewTeam.Id ? false : (bool?)null)
-                    : null;
-            }
-
-            return new GameDto
-            {
-                Id = game.Id,
-                TeamId = viewTeam?.Id ?? Guid.Empty,
-                TeamName = viewTeam?.Name ?? string.Empty,
-                TeamLogoUrl = viewTeam?.IbbaTeam?.LogoUrl,
-                GameType = game.GameType,
-                OpponentName = opponentName,
-                OpponentLogoUrl = opponentLogoUrl,
-                GameDate = game.GameDate,
-                Location = game.Location,
-                Status = game.Status,
-                TeamScore = teamScore,
-                OpponentScore = opponentScore,
-                Notes = game.Notes,
-                IsHomeGame = isHomeGame,
-                IsFromIbba = isIbba,
-                CanRecordLive = !game.LiveTrackedByUserId.HasValue || game.LiveTrackedByUserId.Value == requestingUserId,
-                PlayerStats = game.GameStats.Select(MapGameStatsToDto).ToList()
-            };
-        }
-
-        private static GameStatsDto MapGameStatsToDto(GameStats gs) => new GameStatsDto
-        {
-            Id = gs.Id,
-            GameId = gs.GameId,
-            PlayerId = gs.PlayerId,
-            PlayerName = $"{gs.Player.FirstName} {gs.Player.LastName}",
-            FieldGoalsMade = gs.FieldGoalsMade,
-            FieldGoalsAttempted = gs.FieldGoalsAttempted,
-            FieldGoalPercentage = gs.FieldGoalPercentage,
-            ThreePointersMade = gs.ThreePointersMade,
-            ThreePointersAttempted = gs.ThreePointersAttempted,
-            ThreePointPercentage = gs.ThreePointPercentage,
-            FreeThrowsMade = gs.FreeThrowsMade,
-            FreeThrowsAttempted = gs.FreeThrowsAttempted,
-            FreeThrowPercentage = gs.FreeThrowPercentage,
-            OffensiveRebounds = gs.OffensiveRebounds,
-            DefensiveRebounds = gs.DefensiveRebounds,
-            TotalRebounds = gs.TotalRebounds,
-            Assists = gs.Assists,
-            Steals = gs.Steals,
-            Blocks = gs.Blocks,
-            Turnovers = gs.Turnovers,
-            Fouls = gs.Fouls,
-            MinutesPlayed = gs.MinutesPlayed,
-            OnCourt = gs.OnCourt,
-            TotalPoints = gs.TotalPoints,
-            Shots = gs.Shots.Select(s => new ShotDto
-            {
-                Id = s.Id,
-                GameStatsId = s.GameStatsId,
-                GameId = gs.GameId,
-                PlayerId = gs.PlayerId,
-                Quarter = s.Quarter,
-                X = s.X,
-                Y = s.Y,
-                Made = s.Made,
-                Value = s.Value
-            }).ToList()
-        };
     }
 }
