@@ -17,6 +17,8 @@ namespace StatsHub.Api.Services
         // For the nightly background sync only - no signed-in user, so no
         // access check. Never expose this through a controller.
         Task SyncLinkForScheduledJobAsync(Guid linkId);
+        Task<List<Guid>> TeamsAwaitingResultsAsync(DateTime now);
+        Task RefreshTeamGamesAsync(Guid ibbaTeamId);
         Task<IbbaLinkStatusDto?> GetLinkStatusAsync(Guid playerId, Guid requestingUserId);
         Task<IbbaLinkStatusDto?> LinkTeamAsync(Guid ibbaTeamId, Guid teamId, Guid requestingUserId, Guid? playerId = null);
         Task<IbbaLinkStatusDto?> CreateTeamForIbbaTeamAsync(Guid ibbaTeamId, Guid playerId, Guid requestingUserId);
@@ -184,6 +186,44 @@ namespace StatsHub.Api.Services
             return await _timings.MeasureAsync("db-link-status", () => GetLinkStatusAsync(playerId, requestingUserId));
         }
 
+        // ---- Results soon after a game ends ----
+
+        // A game counts as over this long after tip-off (four 10-minute
+        // quarters plus breaks), and is watched for a result until this late.
+        private static readonly TimeSpan GameLength = TimeSpan.FromMinutes(75);
+        private static readonly TimeSpan ResultWatchWindow = TimeSpan.FromHours(6);
+
+        // IBBA teams followed in the app (an app team is linked to them) with
+        // a game that should be over by now and has no result yet.
+        public async Task<List<Guid>> TeamsAwaitingResultsAsync(DateTime now)
+        {
+            var (from, to) = (now - ResultWatchWindow, now - GameLength);
+            var sides = await _context.Games
+                .Where(g => g.IbbaGameCode != null && g.Status == "Upcoming" && g.GameDate >= from && g.GameDate <= to)
+                .Select(g => new { g.HomeTeamId, g.AwayTeamId })
+                .ToListAsync();
+            var ids = sides.SelectMany(g => new[] { g.HomeTeamId, g.AwayTeamId }).OfType<Guid>().Distinct().ToList();
+            return await _context.Teams
+                .Where(t => t.IbbaTeamId != null && ids.Contains(t.IbbaTeamId.Value))
+                .Select(t => t.IbbaTeamId!.Value)
+                .Distinct()
+                .ToListAsync();
+        }
+
+        // One team's games, straight from its spreadsheet - the result (and
+        // its "Final score" push) without waiting for a whole player sync.
+        public async Task RefreshTeamGamesAsync(Guid ibbaTeamId)
+        {
+            var team = await _context.IbbaTeams.FindAsync(ibbaTeamId);
+            if (team == null || string.IsNullOrEmpty(team.TeamUrl)) return;
+
+            var scraper = new IbbaTeamScraper(CreateIbbaHttpClient());
+            var doc = await scraper.LoadTeamPageAsync(team.TeamUrl);
+            var excelUrl = scraper.FindExcelExportUrl(doc, team.TeamUrl)
+                ?? throw new IbbaLayoutException($"team page {team.TeamUrl} has no games spreadsheet link");
+            await UpsertGamesAsync(team, await scraper.DownloadAndParseGamesAsync(excelUrl));
+        }
+
         public async Task SyncLinkForScheduledJobAsync(Guid linkId)
         {
             var link = await _context.PlayerIbbaLinks.FirstOrDefaultAsync(l => l.Id == linkId);
@@ -346,7 +386,7 @@ namespace StatsHub.Api.Services
             }
             catch (Exception ex)
             {
-                link.LastSyncError = ex.Message;
+                link.LastSyncError = SyncErrorFor(ex);
             }
 
             await _context.SaveChangesAsync();
@@ -371,7 +411,7 @@ namespace StatsHub.Api.Services
                 }
                 catch (Exception ex)
                 {
-                    link.LastSyncError = ex.Message;
+                    link.LastSyncError = SyncErrorFor(ex);
                     await _context.SaveChangesAsync();
                     return;
                 }
@@ -417,7 +457,7 @@ namespace StatsHub.Api.Services
             }
             catch (Exception ex)
             {
-                link.LastSyncError = ex.Message;
+                link.LastSyncError = SyncErrorFor(ex);
             }
 
             await _context.SaveChangesAsync();
@@ -1054,7 +1094,11 @@ namespace StatsHub.Api.Services
                         newlyCompleted.Add((existing, opponentName));
                     }
 
-                    existing.UpdatedAt = DateTime.UtcNow;
+                    // Only a game IBBA actually changed is written back - an
+                    // unchanged schedule (most nights) costs no updates at all.
+                    var entry = _context.Entry(existing);
+                    entry.DetectChanges();
+                    if (entry.State == EntityState.Modified) existing.UpdatedAt = DateTime.UtcNow;
                 }
             }
 
@@ -1195,22 +1239,40 @@ namespace StatsHub.Api.Services
 
         private static TimeZoneInfo ResolveIsraelTimeZone()
         {
-            try { return TimeZoneInfo.FindSystemTimeZoneById("Asia/Jerusalem"); }
-            catch (TimeZoneNotFoundException) { }
-            catch (InvalidTimeZoneException) { }
+            // "Israel Standard Time" is Windows' name for it - and the only one
+            // Windows knows without culture data (InvariantGlobalization).
+            foreach (var id in new[] { "Asia/Jerusalem", "Israel Standard Time" })
+            {
+                try { return TimeZoneInfo.FindSystemTimeZoneById(id); }
+                catch (TimeZoneNotFoundException) { }
+                catch (InvalidTimeZoneException) { }
+            }
             return TimeZoneInfo.CreateCustomTimeZone("Israel-Fallback", TimeSpan.FromHours(2), "Israel (fallback, no DST)", "IST");
+        }
+
+        // What the parent sees for a failed sync. A changed IBBA layout is also
+        // logged as an error with what changed, so it's noticed and fixed.
+        private string SyncErrorFor(Exception ex)
+        {
+            if (ex is IbbaLayoutException layout)
+            {
+                _logger.LogError("IBBA layout changed: {Details}", layout.Details);
+                return IbbaLayoutException.UserMessage;
+            }
+            return ex.Message;
         }
 
         private static DateTime ParseGameDate(string date, string time)
         {
             var combined = string.IsNullOrWhiteSpace(time) ? date : $"{date} {time}";
-            var formats = new[] { "dd-MM-yyyy HH:mm", "dd-MM-yyyy" };
+            var formats = new[] { "d-M-yyyy H:mm", "d-M-yyyy" };
             if (DateTime.TryParseExact(combined, formats, CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsed))
             {
                 var israelLocal = DateTime.SpecifyKind(parsed, DateTimeKind.Unspecified);
                 return TimeZoneInfo.ConvertTimeToUtc(israelLocal, IsraelTimeZone);
             }
-            return DateTime.UtcNow;
+            // Never "now" - a game moved to today by a misread date is worse than no update.
+            throw new IbbaLayoutException($"game date \"{combined}\" isn't a real date");
         }
     }
 }

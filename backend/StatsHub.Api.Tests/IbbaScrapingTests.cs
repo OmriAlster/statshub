@@ -167,3 +167,140 @@ public class IbbaSyncTrackerTests
         Assert.False(tracker.Finish(link));       // nothing asked meanwhile -> done
     }
 }
+
+// When IBBA's pages or spreadsheet change shape, a sync stops with a clear
+// error instead of saving wrong data - and a column that only moved is still
+// read right.
+public class IbbaLayoutTests
+{
+    private sealed class FakeSite(Dictionary<string, HttpContent> pages) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
+            Task.FromResult(pages.TryGetValue(request.RequestUri!.ToString(), out var content)
+                ? new HttpResponseMessage(HttpStatusCode.OK) { Content = content }
+                : new HttpResponseMessage(HttpStatusCode.NotFound));
+    }
+
+    private static readonly string[] Header = ["ליגה", "Code", "Week Day", "תאריך", "מחזור", "Time", "Home Team", "Home Team Code", "Away Team", "Away Team Code", "Venue", "Home Score", "Away Score"];
+
+    internal static ByteArrayContent Sheet(string[] header, params string[][] rows)
+    {
+        using var workbook = new XLWorkbook();
+        var sheet = workbook.AddWorksheet("games");
+        for (var c = 0; c < header.Length; c++) sheet.Cell(1, c + 1).Value = header[c];
+        for (var r = 0; r < rows.Length; r++)
+            for (var c = 0; c < rows[r].Length; c++)
+                sheet.Cell(r + 2, c + 1).Value = rows[r][c];
+        using var stream = new MemoryStream();
+        workbook.SaveAs(stream);
+        return new ByteArrayContent(stream.ToArray());
+    }
+
+    private static Task<List<IbbaGameRow>> ParseAsync(ByteArrayContent sheet)
+    {
+        const string url = "https://ibba.test/export.xlsx";
+        return new IbbaTeamScraper(new HttpClient(new FakeSite(new() { [url] = sheet }))).DownloadAndParseGamesAsync(url);
+    }
+
+    private static readonly string[] Game = ["נערים א", "1001", "Sun", "18-10-2026", "2", "19:30", "Home", "10", "Away", "20", "Gym", "70", "64"];
+
+    [Fact]
+    public async Task A_moved_column_is_still_read_right()
+    {
+        // Venue and the scores moved to the front.
+        int[] order = [10, 11, 12, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+        var game = (await ParseAsync(Sheet(order.Select(i => Header[i]).ToArray(), order.Select(i => Game[i]).ToArray()))).Single();
+
+        Assert.Equal(("1001", "Gym", 70, 64, "Home"), (game.Code, game.Venue, game.HomeScore, game.AwayScore, game.HomeTeam));
+    }
+
+    [Fact]
+    public async Task A_renamed_column_stops_the_sync()
+    {
+        var header = Header.Select(h => h == "Home Score" ? "Score (home)" : h).ToArray();
+
+        var error = await Assert.ThrowsAsync<IbbaLayoutException>(() => ParseAsync(Sheet(header, Game)));
+        Assert.Contains("Home Score", error.Details);
+    }
+
+    [Theory]
+    [InlineData(3, "2026-10-18")]  // date in another format
+    [InlineData(5, "7:30 PM")]     // time in another format
+    [InlineData(11, "W 70-64")]    // a score that isn't a number
+    public async Task A_value_in_another_format_stops_the_sync(int column, string value)
+    {
+        var game = (string[])Game.Clone();
+        game[column] = value;
+
+        await Assert.ThrowsAsync<IbbaLayoutException>(() => ParseAsync(Sheet(Header, game)));
+    }
+
+    private static Task<List<IbbaStandingRow>> StandingsAsync(string tableHtml)
+    {
+        const string url = "https://ibasketball.co.il/league/2026-1/";
+        return new IbbaLeagueScraper(new HttpClient(new FakeSite(new() { [url] = new StringContent($"<html><body>{tableHtml}</body></html>") }))).GetStandingsAsync(url);
+    }
+
+    private static string Row(params string[] cells) => "<tr>" + string.Concat(cells.Select(c => $"<td>{c}</td>")) + "</tr>";
+    private const string Team = "<a href='/team/151-maccabi/'>מכבי</a>";
+
+    [Fact]
+    public async Task The_standings_table_is_read_by_its_headers()
+    {
+        // IBBA's real header uses the Hebrew geresh (מש׳); here the columns are also reordered.
+        var rows = await StandingsAsync("<table><tr><th>קבוצה</th><th>מיקום</th><th>נק׳</th><th>מש׳</th><th>ניצ׳</th><th>הפ׳</th><th>טכני</th><th>קלעה</th><th>ספגה</th><th>הפרש</th></tr>"
+            + Row(Team, "1", "14", "7", "7", "0", "0", "560", "480", "80") + "</table>");
+
+        var row = rows.Single();
+        Assert.Equal((1, "מכבי", 7, 7, 14, 560, 80), (row.Position, row.TeamName, row.GamesPlayed, row.Wins, row.LeaguePoints, row.PointsFor, row.Diff));
+        Assert.Equal("https://ibasketball.co.il/team/151-maccabi/", row.TeamUrl);
+    }
+
+    [Fact]
+    public async Task A_standings_table_with_a_renamed_column_stops_the_sync()
+    {
+        await Assert.ThrowsAsync<IbbaLayoutException>(() => StandingsAsync(
+            "<table><tr><th>מיקום</th><th>קבוצה</th><th>משחקים</th><th>ניצ'</th><th>הפ'</th><th>טכני</th><th>קלעה</th><th>ספגה</th><th>הפרש</th><th>נק'</th></tr>"
+            + Row("1", Team, "7", "7", "0", "0", "560", "480", "80", "14") + "</table>"));
+    }
+
+    [Fact]
+    public async Task A_standings_row_without_a_team_link_stops_the_sync()
+    {
+        await Assert.ThrowsAsync<IbbaLayoutException>(() => StandingsAsync(
+            "<table><tr><th>מיקום</th><th>קבוצה</th><th>מש'</th><th>ניצ'</th><th>הפ'</th><th>טכני</th><th>קלעה</th><th>ספגה</th><th>הפרש</th><th>נק'</th></tr>"
+            + Row("1", "מכבי", "7", "7", "0", "0", "560", "480", "80", "14") + "</table>"));
+    }
+
+    private static Task<IbbaPlayerInfo> PlayerAsync(string body)
+    {
+        const string url = "https://ibasketball.co.il/player/abc-123/";
+        return new IbbaPlayerScraper(new HttpClient(new FakeSite(new() { [url] = new StringContent($"<html><body>{body}</body></html>") }))).GetPlayerInfoAsync(url);
+    }
+
+    [Fact]
+    public async Task A_player_page_without_the_team_label_adds_no_team_from_the_menu()
+    {
+        // The site menu is full of /team/ links - guessing the first one used to add a team the player isn't on.
+        var player = await PlayerAsync("<nav><a href='/team/999-menu-team/'>Menu team</a></nav><h1>עידן</h1><div>no current team section</div>");
+
+        Assert.Equal("עידן", player.PlayerName);
+        Assert.Empty(player.Teams);
+    }
+
+    [Fact]
+    public async Task A_player_page_without_a_name_stops_the_sync()
+    {
+        await Assert.ThrowsAsync<IbbaLayoutException>(() => PlayerAsync("<div>קבוצה נוכחית <a href='/team/151-maccabi/'>מכבי</a></div>"));
+    }
+}
+
+public class IbbaUrlTests
+{
+    [Theory]
+    [InlineData("/team/151-maccabi/", "https://ibasketball.co.il/team/151-maccabi/")] // was file:///team/... on Linux
+    [InlineData("?feed=xlsx&team_id=7", "https://ibasketball.co.il/league/2026-1/?feed=xlsx&team_id=7")]
+    [InlineData("https://ibasketball.co.il/team/9-x/", "https://ibasketball.co.il/team/9-x/")]
+    public void Links_resolve_against_the_page_on_every_system(string href, string expected) =>
+        Assert.Equal(expected, IbbaUrlHelper.Resolve("https://ibasketball.co.il/league/2026-1/", href));
+}
