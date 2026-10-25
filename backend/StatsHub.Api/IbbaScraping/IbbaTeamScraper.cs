@@ -74,6 +74,15 @@ public class IbbaTeamScraper
         _ = reread.Worksheet(1).RangeUsed()?.RowsUsed().Count();
     }
 
+    // The export's columns, found by their header - so a reordered column is
+    // still read right, and a renamed or missing one stops the sync
+    // (IbbaLayoutException) instead of filling games with another column's data.
+    private static readonly string[] GameColumns =
+        ["ליגה", "Code", "Week Day", "תאריך", "מחזור", "Time", "Home Team", "Home Team Code", "Away Team", "Away Team Code", "Venue", "Home Score", "Away Score"];
+
+    private static readonly System.Text.RegularExpressions.Regex DateFormat = new(@"^\d{1,2}-\d{1,2}-\d{4}$");
+    private static readonly System.Text.RegularExpressions.Regex TimeFormat = new(@"^\d{1,2}:\d{2}$");
+
     public async Task<List<IbbaGameRow>> DownloadAndParseGamesAsync(string excelUrl)
     {
         var games = new List<IbbaGameRow>();
@@ -85,31 +94,42 @@ public class IbbaTeamScraper
         using var workbook = new XLWorkbook(stream);
         var worksheet = workbook.Worksheet(1);
 
-        var rows = worksheet.RangeUsed()?.RowsUsed().Skip(1); // skip header
-        if (rows == null) return games;
+        var used = worksheet.RangeUsed()?.RowsUsed().ToList();
+        if (used == null || used.Count == 0) return games; // a team with no games yet
 
-        foreach (var row in rows)
+        var header = used[0].Cells().ToDictionary(c => Decoded(c), c => c.Address.ColumnNumber);
+        var missing = GameColumns.Where(name => !header.ContainsKey(name)).ToList();
+        if (missing.Count > 0)
+            throw new IbbaLayoutException($"games spreadsheet is missing column(s) {string.Join(", ", missing)}; it has {string.Join(", ", header.Keys)}");
+        string Text(IXLRangeRow row, string column) => Decoded(row.Cell(header[column] - row.FirstCell().Address.ColumnNumber + 1));
+
+        foreach (var row in used.Skip(1))
         {
             // Skip fully blank rows
             if (row.Cells().All(c => string.IsNullOrWhiteSpace(c.GetString())))
                 continue;
 
-            games.Add(new IbbaGameRow
+            var game = new IbbaGameRow
             {
-                League = Decoded(row.Cell(1)),
-                Code = Decoded(row.Cell(2)),
-                WeekDay = Decoded(row.Cell(3)),
-                Date = Decoded(row.Cell(4)),
-                Round = Decoded(row.Cell(5)),
-                Time = Decoded(row.Cell(6)),
-                HomeTeam = Decoded(row.Cell(7)),
-                HomeTeamCode = Decoded(row.Cell(8)),
-                AwayTeam = Decoded(row.Cell(9)),
-                AwayTeamCode = Decoded(row.Cell(10)),
-                Venue = Decoded(row.Cell(11)),
-                HomeScore = ParseNullableInt(row.Cell(12).GetString()),
-                AwayScore = ParseNullableInt(row.Cell(13).GetString()),
-            });
+                League = Text(row, "ליגה"),
+                Code = Text(row, "Code"),
+                WeekDay = Text(row, "Week Day"),
+                Date = Text(row, "תאריך"),
+                Round = Text(row, "מחזור"),
+                Time = Text(row, "Time"),
+                HomeTeam = Text(row, "Home Team"),
+                HomeTeamCode = Text(row, "Home Team Code"),
+                AwayTeam = Text(row, "Away Team"),
+                AwayTeamCode = Text(row, "Away Team Code"),
+                Venue = Text(row, "Venue"),
+                HomeScore = ParseScore(Text(row, "Home Score"), row),
+                AwayScore = ParseScore(Text(row, "Away Score"), row),
+            };
+
+            // A date or time in another format would otherwise become "now".
+            if (!DateFormat.IsMatch(game.Date) || (game.Time.Length > 0 && !TimeFormat.IsMatch(game.Time)))
+                throw new IbbaLayoutException($"game {game.Code} has date \"{game.Date}\" / time \"{game.Time}\", expected dd-mm-yyyy and hh:mm");
+            games.Add(game);
         }
 
         // The export genuinely lists a large fraction of games twice (verified
@@ -133,10 +153,14 @@ public class IbbaTeamScraper
     // the real character - so every text cell needs HTML-decoding, not just trimming.
     private static string Decoded(IXLCell cell) => WebUtility.HtmlDecode(cell.GetString()).Trim();
 
-    private static int? ParseNullableInt(string text)
+    // Empty until the game is played; anything else that isn't a number means
+    // the column holds something new.
+    private static int? ParseScore(string text, IXLRangeRow row)
     {
-        text = text.Trim();
-        return int.TryParse(text, out var value) ? value : null;
+        if (text.Length == 0) return null;
+        return int.TryParse(text, out var value)
+            ? value
+            : throw new IbbaLayoutException($"row {row.RowNumber()} has score \"{text}\"");
     }
 
     /// <summary>

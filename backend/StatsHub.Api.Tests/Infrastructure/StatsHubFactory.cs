@@ -17,6 +17,9 @@ public class StatsHubFactory : WebApplicationFactory<Program>
     // Set before first use to test the sign-in attempt limit itself.
     public string? RateLimitOverride { get; init; }
 
+    // Stands in for ibasketball.co.il; offline (every page "not found") unless set.
+    public Func<HttpMessageHandler>? IbbaSite { get; init; }
+
     private readonly string _dbPath = Path.Combine(Path.GetTempPath(), $"statshub-test-{Guid.NewGuid():N}.db");
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
@@ -35,9 +38,9 @@ public class StatsHubFactory : WebApplicationFactory<Program>
             // Nothing in the tests may ever reach the real ibasketball.co.il -
             // every IBBA request gets "not found" (a sync then just records a
             // sync error, like a real site outage).
-            services.AddHttpClient("Ibba").ConfigurePrimaryHttpMessageHandler(() => new OfflineIbbaSite());
+            services.AddHttpClient("Ibba").ConfigurePrimaryHttpMessageHandler(IbbaSite ?? (() => new OfflineIbbaSite()));
 
-            foreach (var jobType in new[] { typeof(GameReminderBackgroundService), typeof(IbbaNightlySyncBackgroundService) })
+            foreach (var jobType in new[] { typeof(GameReminderBackgroundService), typeof(IbbaNightlySyncBackgroundService), typeof(IbbaResultWatcherBackgroundService) })
             {
                 var registration = services.FirstOrDefault(d => d.ServiceType == typeof(IHostedService) && d.ImplementationType == jobType);
                 if (registration != null) services.Remove(registration);
