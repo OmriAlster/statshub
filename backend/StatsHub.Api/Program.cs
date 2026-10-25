@@ -73,22 +73,32 @@ builder.Services.AddCors(options =>
 var databaseUrl = builder.Configuration["DATABASE_URL"];
 var usingPostgres = !string.IsNullOrEmpty(databaseUrl);
 
-builder.Services.AddDbContext<AppDbContext>(options =>
+// One model, a context per database so each has its own migrations
+// (Data/ProviderContexts.cs); the app itself only ever asks for AppDbContext.
+void ConfigureDb(DbContextOptionsBuilder options)
 {
     // Round trips per request, in Server-Timing. Locally, optionally with a
     // production-like delay per query (Diagnostics:SimulatedDbLatencyMs).
     var simulatedDbLatencyMs = builder.Environment.IsDevelopment() ? builder.Configuration.GetValue("Diagnostics:SimulatedDbLatencyMs", 0) : 0;
     options.AddInterceptors(new TimingDbInterceptor(simulatedDbLatencyMs));
-    if (usingPostgres)
+}
+if (usingPostgres)
+{
+    builder.Services.AddDbContext<AppDbContext, PostgresAppDbContext>(options =>
     {
+        ConfigureDb(options);
         options.UseNpgsql(ToNpgsqlConnectionString(databaseUrl!));
-    }
-    else
+    });
+}
+else
+{
+    var connectionString = builder.Configuration.GetConnectionString("Default") ?? "Data Source=statshub.db";
+    builder.Services.AddDbContext<AppDbContext, SqliteAppDbContext>(options =>
     {
-        var connectionString = builder.Configuration.GetConnectionString("Default") ?? "Data Source=statshub.db";
+        ConfigureDb(options);
         options.UseSqlite(connectionString);
-    }
-});
+    });
+}
 
 // JWT authentication
 var jwtKey = builder.Configuration["Jwt:Key"] ?? DevJwtKey;
@@ -178,29 +188,11 @@ builder.Services.AddHttpClient("Ibba", client =>
 
 var app = builder.Build();
 
-// Ensure the database and schema exist. EnsureCreated() builds the full
-// current schema on a brand-new database - all a fresh deploy needs - but is a
-// complete no-op on one that already exists, on any provider. So every model
-// change made since first deploy needs an explicit, idempotent upgrader:
-// SchemaUpgrader for the local SQLite file, PostgresSchemaUpgrader for
-// production. Both are safe to run on every startup.
+// The schema: migrations (Data/Migrations), applied at startup - see DatabaseSetup.
 using (var scope = app.Services.CreateScope())
 {
-    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-    db.Database.EnsureCreated();
-
-    // A database from before UUID ids: bring its (numeric-id) schema up to
-    // date with the old upgraders, then convert every id to a UUID - once.
-    // A database created since (or already converted) has the current schema
-    // from EnsureCreated, so the old upgraders - written for numeric ids -
-    // never run on it. A schema change from now on needs its own idempotent
-    // step here for UUID databases (EnsureCreated never alters an existing one).
-    if (UuidMigration.IsLegacy(db))
-    {
-        if (usingPostgres) PostgresSchemaUpgrader.Apply(db);
-        else SchemaUpgrader.Apply(db);
-        UuidMigration.Run(db, scope.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger("UuidMigration"));
-    }
+    DatabaseSetup.Apply(scope.ServiceProvider.GetRequiredService<AppDbContext>(),
+        scope.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger("DatabaseSetup"));
 }
 
 // Reports how long the server itself spent on each request, as a standard
