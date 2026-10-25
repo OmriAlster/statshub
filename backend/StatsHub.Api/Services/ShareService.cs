@@ -172,6 +172,7 @@ namespace StatsHub.Api.Services
                         FreeThrowPercentage = s.FreeThrowPercentage,
                         LogoUrl = ibba?.LogoUrl,
                         IsIbba = ibba != null,
+                        League = ibba?.Provider,
                         LeagueUrl = ibba?.LeagueUrl,
                         LeagueName = ibba?.LeagueName,
                         StandingPosition = ibba?.LeaguePosition,

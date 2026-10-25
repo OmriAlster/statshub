@@ -1,4 +1,5 @@
 using StatsHub.Api.IbbaScraping;
+using StatsHub.Api.Leagues;
 
 namespace StatsHub.Api.Services
 {
@@ -60,7 +61,7 @@ namespace StatsHub.Api.Services
                     using var scope = _scopeFactory.CreateScope();
                     await scope.ServiceProvider.GetRequiredService<IIbbaService>().RefreshTeamGamesAsync(teamId);
                 }
-                catch (IbbaLayoutException ex)
+                catch (LeagueLayoutException ex)
                 {
                     _logger.LogError("IBBA layout changed: {Details}", ex.Details);
                 }

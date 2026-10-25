@@ -6,11 +6,12 @@ import { useAuth } from '../auth/AuthContext'
 import ConfirmModal from '../components/ConfirmModal'
 import { OnCourtChip, onCourtIn } from '../components/GameStatusBadge'
 import { useLiveRefresh } from '../hooks/useLiveRefresh'
-import IbbaBadge from '../components/IbbaBadge'
 import StandingsModal from '../components/StandingsModal'
 import TeamCrest from '../components/TeamCrest'
 import BouncingBall, { Busy } from '../components/BouncingBall'
 import Modal from '../components/Modal'
+import LeagueBadge from '../components/LeagueBadge'
+import { leagueNames, useLeagues } from '../leagues'
 
 const emptyForm = {
   firstName: '',
@@ -24,6 +25,10 @@ const emptyIbbaNewForm = {
 }
 
 export default function PlayerProfile() {
+  // The supported leagues' names ("IBBA", "IBBA or ..."), for linking a player.
+  const supportedLeagues = useLeagues()
+  const leagues = leagueNames(supportedLeagues)
+  const urlExamples = supportedLeagues.map((l) => l.playerUrlExample).join(' or ')
   const { user } = useAuth()
   const isPlayerRole = user?.role === 'Player'
   const [players, setPlayers] = useState<PlayerDto[]>([])
@@ -58,7 +63,7 @@ export default function PlayerProfile() {
   const [ibbaPreview, setIbbaPreview] = useState<Record<string, IbbaPreviewDto | null>>({})
   const [ibbaBusy, setIbbaBusy] = useState<Record<string, boolean>>({})
   const [ibbaError, setIbbaError] = useState<Record<string, string | null>>({})
-  const [standingsFor, setStandingsFor] = useState<{ leagueUrl: string; leagueName: string; teamName: string; teamUrl: string } | null>(null)
+  const [standingsFor, setStandingsFor] = useState<{ league?: string | null; leagueUrl: string; leagueName: string; teamName: string; teamUrl: string } | null>(null)
 
   const [deletingPlayer, setDeletingPlayer] = useState<PlayerDto | null>(null)
   const [deletingBusy, setDeletingBusy] = useState(false)
@@ -153,7 +158,7 @@ export default function PlayerProfile() {
       setIbbaNewPreview(data)
     } catch (err) {
       const message = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
-      setIbbaNewError(message ?? 'Could not read that IBBA page.')
+      setIbbaNewError(message ?? 'Could not read that page.')
     } finally {
       setIbbaNewBusy(false)
     }
@@ -175,7 +180,7 @@ export default function PlayerProfile() {
       // You already have a team without IBBA - ask whether it's this one.
       if (data.ibba?.teams.some((t) => !t.linkedTeamId)) setChoiceFor(data.player.id)
     } catch {
-      setIbbaNewError('Could not create this player from IBBA.')
+      setIbbaNewError(`Could not create this player from ${leagues}.`)
     } finally {
       setIbbaNewBusy(false)
     }
@@ -368,7 +373,7 @@ export default function PlayerProfile() {
       setIbbaPreview((prev) => ({ ...prev, [playerId]: data }))
     } catch (err) {
       const message = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
-      setIbbaError((prev) => ({ ...prev, [playerId]: message ?? 'Could not read that IBBA page.' }))
+      setIbbaError((prev) => ({ ...prev, [playerId]: message ?? 'Could not read that page.' }))
     } finally {
       setIbbaBusy((prev) => ({ ...prev, [playerId]: false }))
     }
@@ -389,7 +394,7 @@ export default function PlayerProfile() {
       setIbbaUrlInput((prev) => ({ ...prev, [playerId]: '' }))
       setIbbaError((prev) => ({ ...prev, [playerId]: null }))
     } catch {
-      setIbbaError((prev) => ({ ...prev, [playerId]: 'Could not link this player to IBBA.' }))
+      setIbbaError((prev) => ({ ...prev, [playerId]: `Could not link this player to ${leagues}.` }))
     } finally {
       setIbbaBusy((prev) => ({ ...prev, [playerId]: false }))
     }
@@ -411,7 +416,7 @@ export default function PlayerProfile() {
   }
 
   const unlinkIbba = async (playerId: string) => {
-    if (!window.confirm('Disconnect this player from IBBA? Games already synced keep their stats - only the IBBA connection itself is removed.')) return
+    if (!window.confirm(`Disconnect this player from ${ibbaLinks[playerId]?.leagueName ?? 'the league'}? Games already synced keep their stats - only the connection itself is removed.`)) return
     setIbbaBusy((prev) => ({ ...prev, [playerId]: true }))
     try {
       await api.delete(`/players/${playerId}/ibba/link`)
@@ -506,9 +511,9 @@ export default function PlayerProfile() {
                       <TeamCrest
                         logoUrl={ibbaTeam?.teamLogoUrl}
                         jerseyNumber={t.jerseyNumber}
-                        showIbbaMark={!!ibbaTeam}
+                        league={ibbaTeam ? ibbaLinks[player.id]?.leagueKey : null}
                         size="sm"
-                        onClick={ibbaTeam?.ibbaLeagueUrl ? () => setStandingsFor({ leagueUrl: ibbaTeam.ibbaLeagueUrl!, leagueName: ibbaTeam.ibbaLeagueName ?? '', teamName: t.name, teamUrl: ibbaTeam.teamUrl }) : undefined}
+                        onClick={ibbaTeam?.ibbaLeagueUrl ? () => setStandingsFor({ league: ibbaLinks[player.id]?.leagueKey, leagueUrl: ibbaTeam.ibbaLeagueUrl!, leagueName: ibbaTeam.ibbaLeagueName ?? '', teamName: t.name, teamUrl: ibbaTeam.teamUrl }) : undefined}
                         title={ibbaTeam?.ibbaLeagueUrl ? 'View standings' : undefined}
                       />
                       <div className="tcv2-info">
@@ -556,7 +561,7 @@ export default function PlayerProfile() {
                         {ibbaTeam?.ibbaLeagueName && (
                           <button
                             className="league-chip tcv2-league"
-                            onClick={() => setStandingsFor({ leagueUrl: ibbaTeam.ibbaLeagueUrl!, leagueName: ibbaTeam.ibbaLeagueName ?? '', teamName: t.name, teamUrl: ibbaTeam.teamUrl })}
+                            onClick={() => setStandingsFor({ league: ibbaLinks[player.id]?.leagueKey, leagueUrl: ibbaTeam.ibbaLeagueUrl!, leagueName: ibbaTeam.ibbaLeagueName ?? '', teamName: t.name, teamUrl: ibbaTeam.teamUrl })}
                             title="View standings"
                           >
                             <svg className="icon"><use href="#i-trophy" /></svg>
@@ -642,7 +647,7 @@ export default function PlayerProfile() {
               {ibbaLinks[player.id] ? (
                 <>
                   <p className="profile-section-label" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <IbbaBadge />
+                    <LeagueBadge league={ibbaLinks[player.id]!.leagueKey} />
                     {ibbaLinks[player.id]!.lastSyncedAt && (
                       <span style={{ textTransform: 'none', letterSpacing: 0, fontWeight: 400 }}>
                         Last synced {new Date(ibbaLinks[player.id]!.lastSyncedAt!).toLocaleString()}
@@ -661,7 +666,7 @@ export default function PlayerProfile() {
                     const pending = ibbaLinks[player.id]!.teams.filter((t) => !t.linkedTeamId).length
                     return pending > 0 ? (
                       <div className="ibba-pending-row">
-                        <span>{pending === 1 ? '1 IBBA team needs your choice' : `${pending} IBBA teams need your choice`}</span>
+                        <span>{pending === 1 ? `1 ${ibbaLinks[player.id]!.leagueName} team needs your choice` : `${pending} ${ibbaLinks[player.id]!.leagueName} teams need your choice`}</span>
                         <button className="submit-btn" onClick={() => setChoiceFor(player.id)}>Choose</button>
                       </div>
                     ) : null
@@ -671,13 +676,13 @@ export default function PlayerProfile() {
                       {ibbaBusy[player.id] ? <Busy>Syncing…</Busy> : '🔄 Sync Now'}
                     </button>
                     <button className="add-team-btn" disabled={ibbaBusy[player.id]} onClick={() => unlinkIbba(player.id)}>
-                      Disconnect from IBBA
+                      Disconnect from {ibbaLinks[player.id]!.leagueName}
                     </button>
                   </div>
                 </>
               ) : (
                 <>
-                  <p className="profile-section-label">Connect to IBBA</p>
+                  <p className="profile-section-label">Connect to {leagues}</p>
                   {ibbaPreview[player.id] ? (
                     <div className="invite-box">
                       <p>
@@ -699,7 +704,7 @@ export default function PlayerProfile() {
                     <div className="ibba-connect-form">
                       <input
                         type="text"
-                        placeholder="Paste this player's ibasketball.co.il profile URL"
+                        placeholder={`Paste this player's profile address (${urlExamples})`}
                         value={ibbaUrlInput[player.id] ?? ''}
                         onChange={(e) => setIbbaUrlInput((prev) => ({ ...prev, [player.id]: e.target.value }))}
                       />
@@ -774,14 +779,14 @@ export default function PlayerProfile() {
             {showAddIbbaForm ? (
               ibbaNewPreview ? (
                 <>
-                  <h3>➕ New Player from IBBA</h3>
+                  <h3>➕ New Player from {leagues}</h3>
                   <p>
                     Found: <b>{ibbaNewPreview.playerName}</b>
                     {ibbaNewPreview.dateOfBirth && <> · born {new Date(ibbaNewPreview.dateOfBirth).toLocaleDateString()}</>}
                     {ibbaNewPreview.teams.length > 0 && <> · {ibbaNewPreview.teams.map((t) => t.teamName).join(', ')}</>}
                   </p>
                   {!ibbaNewPreview.dateOfBirth && (
-                    <p className="error">This IBBA profile doesn't list a birth date - add this player manually instead.</p>
+                    <p className="error">This profile doesn't list a birth date - add this player manually instead.</p>
                   )}
                   {ibbaNewError && <p className="error">{ibbaNewError}</p>}
                   <div className="flex gap-1" style={{ justifyContent: 'center', flexWrap: 'wrap' }}>
@@ -800,11 +805,11 @@ export default function PlayerProfile() {
                 </>
               ) : (
                 <>
-                  <h3>➕ New Player from IBBA</h3>
+                  <h3>➕ New Player from {leagues}</h3>
                   <div className="ibba-connect-form">
                     <input
                       type="text"
-                      placeholder="Paste this player's ibasketball.co.il profile URL"
+                      placeholder={`Paste this player's profile address (${urlExamples})`}
                       value={ibbaNewForm.url}
                       onChange={(e) => setIbbaNewForm({ ...ibbaNewForm, url: e.target.value })}
                     />
@@ -822,7 +827,7 @@ export default function PlayerProfile() {
                 <p>Manage multiple players</p>
                 <div className="flex gap-1" style={{ justifyContent: 'center', flexWrap: 'wrap' }}>
                   <button onClick={() => setShowAddForm(true)}>Add Manually</button>
-                  <button onClick={() => setShowAddIbbaForm(true)}>Add via IBBA Link</button>
+                  <button onClick={() => setShowAddIbbaForm(true)}>Add via {leagues} Link</button>
                 </div>
               </>
             )}
@@ -870,6 +875,8 @@ export default function PlayerProfile() {
         return (
           <IbbaTeamChoiceModal
             playerName={player.firstName}
+            league={link?.leagueKey}
+            leagueName={link?.leagueName ?? 'IBBA'}
             pending={pending}
             total={link?.teams.length ?? pending.length}
             candidates={candidates}
@@ -885,6 +892,7 @@ export default function PlayerProfile() {
         <StandingsModal
           leagueUrl={standingsFor.leagueUrl}
           leagueName={standingsFor.leagueName}
+          league={standingsFor.league}
           highlightTeamUrl={standingsFor.teamUrl}
           highlightTeamName={standingsFor.teamName}
           onClose={() => setStandingsFor(null)}
@@ -916,6 +924,8 @@ export default function PlayerProfile() {
 // team that isn't linked to IBBA (it might be the same team).
 function IbbaTeamChoiceModal({
   playerName,
+  league,
+  leagueName,
   pending,
   total,
   candidates,
@@ -925,6 +935,8 @@ function IbbaTeamChoiceModal({
   onClose,
 }: {
   playerName: string
+  league?: string | null
+  leagueName: string
   pending: IbbaLinkStatusDto['teams']
   total: number
   candidates: TeamDto[]
@@ -939,16 +951,16 @@ function IbbaTeamChoiceModal({
     <Modal
       kind="editor"
       panelClassName="ibba-choice-panel"
-      label="Link IBBA teams"
+      label={`Link ${leagueName} teams`}
       onClose={onClose}
       head={
         <>
-          <h3>Add {playerName}&apos;s IBBA team to your team?</h3>
-          {total > 1 && <p className="ibba-choice-step">IBBA team {total - pending.length + 1} of {total}</p>}
+          <h3>Add {playerName}&apos;s {leagueName} team to your team?</h3>
+          {total > 1 && <p className="ibba-choice-step">{leagueName} team {total - pending.length + 1} of {total}</p>}
           <p>
             {candidates.length > 0
-              ? `Pick the existing team this IBBA team is - its games go there. A new team is made only if you say no.`
-              : `All your teams are linked to IBBA now - create a team for this one.`}
+              ? `Pick the existing team this ${leagueName} team is - its games go there. A new team is made only if you say no.`
+              : `All your teams are linked to ${leagueName} now - create a team for this one.`}
           </p>
         </>
       }
@@ -962,7 +974,7 @@ function IbbaTeamChoiceModal({
             return (
               <div className="ibba-choice-item" key={t.id}>
                 <div className="ibba-choice-team">
-                  <TeamCrest logoUrl={t.teamLogoUrl} showIbbaMark size="sm" />
+                  <TeamCrest logoUrl={t.teamLogoUrl} league={league} size="sm" />
                   <div style={{ minWidth: 0 }}>
                     <div className="team-name-clamp ibba-choice-name" dir="auto" title={t.teamName}>{t.teamName}</div>
                     {t.ibbaLeagueName && <div className="ibba-choice-league" dir="rtl">{t.ibbaLeagueName}</div>}

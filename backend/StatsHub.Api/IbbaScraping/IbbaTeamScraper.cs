@@ -2,6 +2,7 @@ using System.Net;
 using ClosedXML.Excel;
 using HtmlAgilityPack;
 using StatsHub.Api.Services;
+using StatsHub.Api.Leagues;
 
 namespace StatsHub.Api.IbbaScraping;
 
@@ -50,7 +51,7 @@ public class IbbaTeamScraper
     }
 
     /// <summary>
-    /// Downloads the .xlsx bytes from the export URL and reads every row into IbbaGameRow
+    /// Downloads the .xlsx bytes from the export URL and reads every row into LeagueGame
     /// objects.
     ///
     /// Real header row (verified against a live export):
@@ -76,16 +77,16 @@ public class IbbaTeamScraper
 
     // The export's columns, found by their header - so a reordered column is
     // still read right, and a renamed or missing one stops the sync
-    // (IbbaLayoutException) instead of filling games with another column's data.
+    // (LeagueLayoutException) instead of filling games with another column's data.
     private static readonly string[] GameColumns =
         ["ליגה", "Code", "Week Day", "תאריך", "מחזור", "Time", "Home Team", "Home Team Code", "Away Team", "Away Team Code", "Venue", "Home Score", "Away Score"];
 
     private static readonly System.Text.RegularExpressions.Regex DateFormat = new(@"^\d{1,2}-\d{1,2}-\d{4}$");
     private static readonly System.Text.RegularExpressions.Regex TimeFormat = new(@"^\d{1,2}:\d{2}$");
 
-    public async Task<List<IbbaGameRow>> DownloadAndParseGamesAsync(string excelUrl)
+    public async Task<List<LeagueGame>> DownloadAndParseGamesAsync(string excelUrl)
     {
-        var games = new List<IbbaGameRow>();
+        var games = new List<LeagueGame>();
 
         byte[] fileBytes = await _http.GetByteArrayAsync(excelUrl);
         using var parsing = RequestTimings.Time("parse-games-xlsx");
@@ -100,7 +101,7 @@ public class IbbaTeamScraper
         var header = used[0].Cells().ToDictionary(c => Decoded(c), c => c.Address.ColumnNumber);
         var missing = GameColumns.Where(name => !header.ContainsKey(name)).ToList();
         if (missing.Count > 0)
-            throw new IbbaLayoutException($"games spreadsheet is missing column(s) {string.Join(", ", missing)}; it has {string.Join(", ", header.Keys)}");
+            throw new LeagueLayoutException($"games spreadsheet is missing column(s) {string.Join(", ", missing)}; it has {string.Join(", ", header.Keys)}");
         string Text(IXLRangeRow row, string column) => Decoded(row.Cell(header[column] - row.FirstCell().Address.ColumnNumber + 1));
 
         foreach (var row in used.Skip(1))
@@ -109,7 +110,7 @@ public class IbbaTeamScraper
             if (row.Cells().All(c => string.IsNullOrWhiteSpace(c.GetString())))
                 continue;
 
-            var game = new IbbaGameRow
+            var game = new LeagueGame
             {
                 League = Text(row, "ליגה"),
                 Code = Text(row, "Code"),
@@ -125,10 +126,11 @@ public class IbbaTeamScraper
                 HomeScore = ParseScore(Text(row, "Home Score"), row),
                 AwayScore = ParseScore(Text(row, "Away Score"), row),
             };
+            game.IsCup = game.League.Contains("גביע"); // "cup" - IBBA names its cup competitions so
 
             // A date or time in another format would otherwise become "now".
             if (!DateFormat.IsMatch(game.Date) || (game.Time.Length > 0 && !TimeFormat.IsMatch(game.Time)))
-                throw new IbbaLayoutException($"game {game.Code} has date \"{game.Date}\" / time \"{game.Time}\", expected dd-mm-yyyy and hh:mm");
+                throw new LeagueLayoutException($"game {game.Code} has date \"{game.Date}\" / time \"{game.Time}\", expected dd-mm-yyyy and hh:mm");
             games.Add(game);
         }
 
@@ -160,7 +162,7 @@ public class IbbaTeamScraper
         if (text.Length == 0) return null;
         return int.TryParse(text, out var value)
             ? value
-            : throw new IbbaLayoutException($"row {row.RowNumber()} has score \"{text}\"");
+            : throw new LeagueLayoutException($"row {row.RowNumber()} has score \"{text}\"");
     }
 
     /// <summary>

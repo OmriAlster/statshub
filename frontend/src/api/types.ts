@@ -93,6 +93,8 @@ export interface GameDto {
   notes?: string | null
   isHomeGame?: boolean | null
   isFromIbba: boolean
+  // Which league it was synced from (a key from GET /api/leagues).
+  league?: string | null
   canRecordLive: boolean
   playerStats: GameStatsDto[]
 }
@@ -159,6 +161,7 @@ export interface PlayerTeamStatsDto {
 export interface SharedTeamDto extends PlayerTeamStatsDto {
   logoUrl?: string | null
   isIbba: boolean
+  league?: string | null
   leagueUrl?: string | null
   leagueName?: string | null
   standingPosition?: number | null
@@ -205,6 +208,8 @@ export interface IbbaPreviewTeamDto {
 }
 
 export interface IbbaPreviewDto {
+  leagueKey: string
+  leagueName: string
   playerName: string
   dateOfBirth?: string | null
   teams: IbbaPreviewTeamDto[]
@@ -223,7 +228,11 @@ export interface IbbaTeamLinkDto {
   totalTeams?: number | null
 }
 
+// "Ibba" names are from when IBBA was the only league - these are for any.
 export interface IbbaLinkStatusDto {
+  leagueKey: string
+  leagueName: string
+  leagueLogoUrl: string
   playerId: string
   ibbaPlayerUrl: string
   lastSyncedAt?: string | null

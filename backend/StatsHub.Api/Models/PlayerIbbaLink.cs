@@ -5,6 +5,10 @@ namespace StatsHub.Api.Models
         public Guid Id { get; set; } = Guid.CreateVersion7();
         public Guid PlayerId { get; set; }
         public string IbbaPlayerUrl { get; set; } = string.Empty;
+
+        // Which league the player is linked to (ILeagueProvider.Key) - named
+        // Ibba* from when IBBA was the only one.
+        public string Provider { get; set; } = "ibba";
         public DateTime? LastSyncedAt { get; set; }
         public string? LastSyncError { get; set; }
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;

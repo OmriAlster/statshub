@@ -1,6 +1,7 @@
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.Logging.Abstractions;
 using Npgsql;
@@ -32,6 +33,8 @@ public abstract class DatabaseSetupTestsBase
 
     private static List<string> AppliedMigrations(AppDbContext db) => db.Database.GetAppliedMigrations().ToList();
 
+    // The migrations, all applied, build exactly the model's schema - so a
+    // model change can't ship without the migration that makes it.
     protected void TheFirstMigrationBuildsTheSameSchemaAsToday()
     {
         using var existing = NewContext("existing");
@@ -44,11 +47,14 @@ public abstract class DatabaseSetupTestsBase
 
     protected void ADatabaseFromBeforeMigrationsIsMarkedNotRebuilt()
     {
+        // A database as EnsureCreated left it before migrations existed: the
+        // first migration's schema, with no history.
         using (var db = NewContext("existing"))
         {
-            db.GetService<IRelationalDatabaseCreator>().CreateTables();
-            db.Users.Add(new Models.User { Email = "parent@example.test", FirstName = "Dana", LastName = "Levi" });
-            db.SaveChanges();
+            db.GetService<IMigrator>().Migrate(db.Database.GetMigrations().First());
+            db.Database.ExecuteSqlRaw("DROP TABLE \"__EFMigrationsHistory\"");
+            db.Database.ExecuteSqlRaw("INSERT INTO \"Users\" (\"Id\", \"Email\", \"FirstName\", \"LastName\", \"Role\", \"CreatedAt\", \"UpdatedAt\") VALUES ('11111111-1111-1111-1111-111111111111', 'parent@example.test', 'Dana', 'Levi', 'Parent', '2026-01-01', '2026-01-01')");
+            db.Database.ExecuteSqlRaw("INSERT INTO \"Games\" (\"Id\", \"GameType\", \"GameDate\", \"Location\", \"Status\", \"CreatedAt\", \"UpdatedAt\", \"OpponentName\", \"IbbaGameCode\") VALUES ('22222222-2222-2222-2222-222222222222', 'League', '2026-10-01', 'Gym', 'Completed', '2026-01-01', '2026-01-01', '', '783912')");
         }
 
         using (var db = NewContext("existing"))
@@ -59,6 +65,7 @@ public abstract class DatabaseSetupTestsBase
             DatabaseSetup.Apply(db, NullLogger.Instance);
             Assert.Equal(db.Database.GetMigrations(), AppliedMigrations(db));
             Assert.Equal("parent@example.test", db.Users.Single().Email);
+            Assert.Equal("ibba", db.Games.Single().Provider); // synced games so far all came from IBBA
         }
 
         using (var db = NewContext("existing"))
@@ -83,9 +90,20 @@ public sealed class SqliteDatabaseSetupTests : DatabaseSetupTestsBase, IDisposab
     protected override AppDbContext NewContext(string database) =>
         new SqliteAppDbContext(new DbContextOptionsBuilder<SqliteAppDbContext>().UseSqlite($"Data Source={_prefix}-{database}.db").Options);
 
-    // Every table and index, as SQLite stores its definition.
-    protected override List<string> Schema(AppDbContext db) =>
-        Query(db, "SELECT type, name, sql FROM sqlite_master WHERE name NOT LIKE 'sqlite_%' AND name NOT LIKE '__EFMigrations%' ORDER BY type, name");
+    // Every table's columns (type, nullability, default, key) and foreign
+    // keys, and every index. By column name, not the table's stored text - a
+    // column a migration adds goes at the end of its table.
+    protected override List<string> Schema(AppDbContext db)
+    {
+        var schema = new List<string>();
+        foreach (var table in Query(db, "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '__EFMigrations%' ORDER BY name"))
+        {
+            schema.AddRange(Query(db, $"SELECT '{table}', name, type, \"notnull\", dflt_value, pk FROM pragma_table_info('{table}') ORDER BY name"));
+            schema.AddRange(Query(db, $"SELECT '{table}', \"table\", \"from\", \"to\", on_delete FROM pragma_foreign_key_list('{table}') ORDER BY \"from\""));
+        }
+        schema.AddRange(Query(db, "SELECT name, sql FROM sqlite_master WHERE type = 'index' AND name NOT LIKE 'sqlite_%' AND tbl_name NOT LIKE '__EFMigrations%' ORDER BY name"));
+        return schema;
+    }
 
     [Fact] public void The_first_migration_builds_the_same_schema_as_today() => TheFirstMigrationBuildsTheSameSchemaAsToday();
     [Fact] public void A_database_from_before_migrations_is_marked_not_rebuilt() => ADatabaseFromBeforeMigrationsIsMarkedNotRebuilt();

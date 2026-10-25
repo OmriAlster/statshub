@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Net;
 using HtmlAgilityPack;
 using StatsHub.Api.Services;
+using StatsHub.Api.Leagues;
 
 namespace StatsHub.Api.IbbaScraping;
 
@@ -15,14 +16,14 @@ public class IbbaLeagueScraper
     /// Loads the league page and parses the "רגילה" (regular season) standings table:
     /// מיקום | קבוצה | מש' | ניצ' | הפ' | טכני | קלעה | ספגה | הפרש | נק'
     /// </summary>
-    public async Task<List<IbbaStandingRow>> GetStandingsAsync(string leagueUrl)
+    public async Task<List<LeagueStanding>> GetStandingsAsync(string leagueUrl)
     {
         var html = await _http.GetStringAsync(leagueUrl);
         using var parsing = RequestTimings.Time("parse-standings");
         var doc = new HtmlDocument();
         doc.LoadHtml(html);
 
-        var standings = new List<IbbaStandingRow>();
+        var standings = new List<LeagueStanding>();
 
         // The standings table is the one whose header row contains "מיקום" and "קבוצה"
         var tables = doc.DocumentNode.SelectNodes("//table");
@@ -50,7 +51,7 @@ public class IbbaLeagueScraper
             .GroupBy(c => c.Name).ToDictionary(g => g.Key, g => g.First().index);
         var missing = StandingColumns.Where(name => !column.ContainsKey(name)).ToList();
         if (missing.Count > 0)
-            throw new IbbaLayoutException($"standings table at {leagueUrl} is missing column(s) {string.Join(", ", missing)}");
+            throw new LeagueLayoutException($"standings table at {leagueUrl} is missing column(s) {string.Join(", ", missing)}");
 
         var bodyRows = standingsTable.SelectNodes(".//tr").Skip(1); // skip header
         foreach (var tr in bodyRows)
@@ -64,9 +65,9 @@ public class IbbaLeagueScraper
             var rawTeamHref = teamLink?.GetAttributeValue("href", "") ?? "";
             var position = ParseInt(Cell("מיקום"));
             if (position <= 0 || string.IsNullOrEmpty(rawTeamHref))
-                throw new IbbaLayoutException($"standings row \"{Normalize(tr.InnerText)}\" at {leagueUrl} has no position or team link");
+                throw new LeagueLayoutException($"standings row \"{Normalize(tr.InnerText)}\" at {leagueUrl} has no position or team link");
 
-            standings.Add(new IbbaStandingRow
+            standings.Add(new LeagueStanding
             {
                 Position = position,
                 TeamName = WebUtility.HtmlDecode((teamLink?.InnerText ?? teamCell.InnerText).Trim()),

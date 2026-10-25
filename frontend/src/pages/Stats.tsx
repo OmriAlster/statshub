@@ -29,6 +29,7 @@ import { formatGameDateOnly } from '../utils/formatGameDate'
 import BouncingBall, { Busy } from '../components/BouncingBall'
 import { GameTypeBadge, HomeAway } from '../components/GameBadges'
 import Modal from '../components/Modal'
+import { LeagueMark, LeagueName } from '../components/LeagueBadge'
 
 export default function Stats() {
   const { user } = useAuth()
@@ -117,6 +118,7 @@ interface TeamMeta {
   jerseyNumber?: number | null
   logoUrl?: string | null
   isIbba: boolean
+  league?: string | null
   leagueUrl?: string | null
   leagueName?: string | null
   position?: number | null
@@ -154,7 +156,7 @@ function PlayerProfilePanel({ player, prefetched }: { player: PlayerDto; prefetc
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [selectedTeamId, setSelectedTeamId] = useState<string | 'all' | null>(null)
-  const [standingsFor, setStandingsFor] = useState<{ leagueUrl: string; leagueName: string; teamName: string; teamUrl: string } | null>(null)
+  const [standingsFor, setStandingsFor] = useState<{ league?: string | null; leagueUrl: string; leagueName: string; teamName: string; teamUrl: string } | null>(null)
 
   useEffect(() => {
     load()
@@ -224,6 +226,7 @@ function PlayerProfilePanel({ player, prefetched }: { player: PlayerDto; prefetc
           name: meta[it.linkedTeamId]?.name ?? it.teamName,
           logoUrl: it.teamLogoUrl,
           isIbba: true,
+          league: ibba?.leagueKey,
           leagueUrl: it.ibbaLeagueUrl,
           leagueName: it.ibbaLeagueName,
           position: it.position,
@@ -303,8 +306,8 @@ function PlayerProfilePanel({ player, prefetched }: { player: PlayerDto; prefetc
           <TeamCrest
             logoUrl={selectedTeam.logoUrl}
             jerseyNumber={selectedTeam.jerseyNumber}
-            showIbbaMark={selectedTeam.isIbba}
-            onClick={selectedTeam.leagueUrl ? () => setStandingsFor({ leagueUrl: selectedTeam.leagueUrl!, leagueName: selectedTeam.leagueName ?? '', teamName: selectedTeam.name, teamUrl: selectedTeam.teamUrl ?? '' }) : undefined}
+            league={selectedTeam.isIbba ? selectedTeam.league : null}
+            onClick={selectedTeam.leagueUrl ? () => setStandingsFor({ league: selectedTeam.league, leagueUrl: selectedTeam.leagueUrl!, leagueName: selectedTeam.leagueName ?? '', teamName: selectedTeam.name, teamUrl: selectedTeam.teamUrl ?? '' }) : undefined}
             title={selectedTeam.leagueUrl ? 'View standings' : undefined}
           />
           <div>
@@ -313,7 +316,7 @@ function PlayerProfilePanel({ player, prefetched }: { player: PlayerDto; prefetc
               <button
                 className="league-chip"
                 style={{ marginTop: '0.3rem' }}
-                onClick={() => setStandingsFor({ leagueUrl: selectedTeam.leagueUrl!, leagueName: selectedTeam.leagueName ?? '', teamName: selectedTeam.name, teamUrl: selectedTeam.teamUrl ?? '' })}
+                onClick={() => setStandingsFor({ league: selectedTeam.league, leagueUrl: selectedTeam.leagueUrl!, leagueName: selectedTeam.leagueName ?? '', teamName: selectedTeam.name, teamUrl: selectedTeam.teamUrl ?? '' })}
               >
                 <svg className="icon"><use href="#i-trophy" /></svg>
                 <span dir="rtl">{selectedTeam.leagueName}</span>
@@ -354,6 +357,7 @@ function PlayerProfilePanel({ player, prefetched }: { player: PlayerDto; prefetc
         <StandingsModal
           leagueUrl={standingsFor.leagueUrl}
           leagueName={standingsFor.leagueName}
+          league={standingsFor.league}
           highlightTeamUrl={standingsFor.teamUrl}
           highlightTeamName={standingsFor.teamName}
           onClose={() => setStandingsFor(null)}
@@ -925,13 +929,13 @@ function ScheduleEditPanel({
     <div className="edit-panel">
       {game.isFromIbba ? (
         <div className="ibba-locked-info">
-          <img src="/icons/ibba-logo.png" alt="" style={{ width: 14, height: 14, borderRadius: 2 }} />
+          <LeagueMark league={game.league} className="ibba-locked-mark" />
           <span>
             {game.isHomeGame != null && <>{game.isHomeGame ? '🏠' : '✈️'} </>}
             vs {game.opponentName} · {game.gameType}
             {game.teamScore != null && game.opponentScore != null && <> · {game.teamScore}–{game.opponentScore}</>}
           </span>
-          <span className="ibba-locked-note">Synced from IBBA - game info can't be edited here.</span>
+          <span className="ibba-locked-note">Synced from <LeagueName league={game.league} /> - game info can't be edited here.</span>
         </div>
       ) : (
         <>

@@ -65,6 +65,9 @@ namespace StatsHub.Api.Data.Migrations.Sqlite
                     b.Property<int?>("OpponentScore")
                         .HasColumnType("INTEGER");
 
+                    b.Property<string>("Provider")
+                        .HasColumnType("TEXT");
+
                     b.Property<DateTime?>("ReminderSentAt")
                         .HasColumnType("TEXT");
 
@@ -84,7 +87,7 @@ namespace StatsHub.Api.Data.Migrations.Sqlite
 
                     b.HasIndex("HomeTeamId");
 
-                    b.HasIndex("IbbaGameCode")
+                    b.HasIndex("Provider", "IbbaGameCode")
                         .IsUnique()
                         .HasFilter("\"IbbaGameCode\" IS NOT NULL");
 
@@ -213,6 +216,12 @@ namespace StatsHub.Api.Data.Migrations.Sqlite
                     b.Property<int>("PointsFor")
                         .HasColumnType("INTEGER");
 
+                    b.Property<string>("Provider")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("ibba");
+
                     b.Property<DateTime>("SyncedAt")
                         .HasColumnType("TEXT");
 
@@ -232,6 +241,8 @@ namespace StatsHub.Api.Data.Migrations.Sqlite
 
                     b.HasIndex("TeamUrl")
                         .IsUnique();
+
+                    b.HasIndex("Provider", "IbbaTeamId");
 
                     b.ToTable("IbbaTeams");
                 });
@@ -332,6 +343,12 @@ namespace StatsHub.Api.Data.Migrations.Sqlite
 
                     b.Property<Guid>("PlayerId")
                         .HasColumnType("TEXT");
+
+                    b.Property<string>("Provider")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("ibba");
 
                     b.HasKey("Id");
 

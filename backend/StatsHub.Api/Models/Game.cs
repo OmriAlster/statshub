@@ -35,6 +35,10 @@ namespace StatsHub.Api.Models
         // formal EF relationship.
         public string? IbbaGameCode { get; set; }
 
+        // The league the game was synced from (ILeagueProvider.Key) - null for
+        // a manual game. IbbaGameCode is the league's own id, unique per league.
+        public string? Provider { get; set; }
+
         // The two sides of the fixture. For an IBBA-synced game, both are real
         // IbbaTeam ids - objective facts (home/away exactly as IBBA's own
         // export labels them), resolved by id at sync time, never by name.

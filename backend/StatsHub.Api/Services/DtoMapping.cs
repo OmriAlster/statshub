@@ -79,6 +79,7 @@ namespace StatsHub.Api.Services
                 Notes = game.Notes,
                 IsHomeGame = isHomeGame,
                 IsFromIbba = isIbba,
+                League = game.Provider,
                 CanRecordLive = canRecordLive,
                 PlayerStats = game.GameStats.Select(ToDto).ToList()
             };

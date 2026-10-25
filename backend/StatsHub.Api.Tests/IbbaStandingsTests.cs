@@ -2,6 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 using StatsHub.Api.IbbaScraping;
 using StatsHub.Api.Services;
 using StatsHub.Api.Tests.Infrastructure;
+using StatsHub.Api.Leagues;
 
 namespace StatsHub.Api.Tests;
 
@@ -12,10 +13,10 @@ public class IbbaStandingsTests : IClassFixture<StatsHubFactory>
     private readonly StatsHubFactory _factory;
     public IbbaStandingsTests(StatsHubFactory factory) => _factory = factory;
 
-    private static IbbaStandingRow Row(int position, string name, string url) =>
+    private static LeagueStanding Row(int position, string name, string url) =>
         new() { Position = position, TeamName = name, TeamUrl = url, GamesPlayed = 5, Wins = 6 - position, Losses = position - 1 };
 
-    private async Task<List<string>> SyncAndReadAsync(string leagueUrl, params IbbaStandingRow[] rows)
+    private async Task<List<string>> SyncAndReadAsync(string leagueUrl, params LeagueStanding[] rows)
     {
         using var scope = _factory.Services.CreateScope();
         var service = (IbbaService)scope.ServiceProvider.GetRequiredService<IIbbaService>();

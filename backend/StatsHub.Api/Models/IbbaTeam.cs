@@ -14,6 +14,11 @@ namespace StatsHub.Api.Models
         // /team/151-.../) - the same id space as a game row's
         // HomeTeamCode/AwayTeamCode, so an opponent resolves by id, never by name.
         public string IbbaTeamId { get; set; } = string.Empty;
+
+        // Which league this team is from (ILeagueProvider.Key) - IbbaTeamId and
+        // the games' codes are only unique within one league. The table is
+        // named for IBBA, the first league; it holds every league's teams.
+        public string Provider { get; set; } = "ibba";
         public string TeamUrl { get; set; } = string.Empty;
         public string Name { get; set; } = string.Empty;
         public string? LogoUrl { get; set; }
