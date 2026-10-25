@@ -294,3 +294,13 @@ public class IbbaLayoutTests
         await Assert.ThrowsAsync<IbbaLayoutException>(() => PlayerAsync("<div>קבוצה נוכחית <a href='/team/151-maccabi/'>מכבי</a></div>"));
     }
 }
+
+public class IbbaUrlTests
+{
+    [Theory]
+    [InlineData("/team/151-maccabi/", "https://ibasketball.co.il/team/151-maccabi/")] // was file:///team/... on Linux
+    [InlineData("?feed=xlsx&team_id=7", "https://ibasketball.co.il/league/2026-1/?feed=xlsx&team_id=7")]
+    [InlineData("https://ibasketball.co.il/team/9-x/", "https://ibasketball.co.il/team/9-x/")]
+    public void Links_resolve_against_the_page_on_every_system(string href, string expected) =>
+        Assert.Equal(expected, IbbaUrlHelper.Resolve("https://ibasketball.co.il/league/2026-1/", href));
+}
