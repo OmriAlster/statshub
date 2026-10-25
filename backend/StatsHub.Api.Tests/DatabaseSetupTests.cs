@@ -53,6 +53,9 @@ public abstract class DatabaseSetupTestsBase
 
         using (var db = NewContext("existing"))
         {
+            var creator = db.GetService<IRelationalDatabaseCreator>();
+            Assert.True(creator.Exists(), "database exists");
+            Assert.True(creator.HasTables(), "database has tables");
             DatabaseSetup.Apply(db, NullLogger.Instance);
             Assert.Equal(db.Database.GetMigrations(), AppliedMigrations(db));
             Assert.Equal("parent@example.test", db.Users.Single().Email);

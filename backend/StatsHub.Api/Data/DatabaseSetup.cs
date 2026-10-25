@@ -26,7 +26,7 @@ namespace StatsHub.Api.Data
             var creator = db.GetService<IRelationalDatabaseCreator>();
             var history = db.GetService<IHistoryRepository>();
 
-            if (creator.Exists() && creator.HasTables() && !history.Exists())
+            if (creator.Exists() && creator.HasTables() && !HistoryTableExists(db))
             {
                 var migrations = db.Database.GetMigrations().ToList();
                 var applied = new List<string>();
@@ -52,6 +52,18 @@ namespace StatsHub.Api.Data
             }
 
             db.Database.Migrate();
+        }
+
+        // Asked of the database directly, not through EF's history repository:
+        // Npgsql's remembers the first answer for the context's lifetime, so
+        // asking it here ("no") made the Migrate() above skip the history
+        // just written and try to create every table again.
+        private static bool HistoryTableExists(AppDbContext db)
+        {
+            var sql = db.Database.IsNpgsql()
+                ? "SELECT count(*)::int AS \"Value\" FROM information_schema.tables WHERE table_schema = current_schema() AND table_name = '__EFMigrationsHistory'"
+                : "SELECT count(*) AS \"Value\" FROM sqlite_master WHERE type = 'table' AND name = '__EFMigrationsHistory'";
+            return db.Database.SqlQueryRaw<int>(sql).AsEnumerable().Single() > 0;
         }
     }
 }
