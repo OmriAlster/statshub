@@ -6221,6 +6221,13 @@ a.game-card:active {
   min-width: 0;
 }
 
+.found-name-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
 .found-name {
   font-family: var(--font-display);
   font-weight: 700;
@@ -6251,39 +6258,13 @@ a.game-card:active {
 
 .found-team {
   display: grid;
-  grid-template-columns: 36px minmax(0, 1fr) auto;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
   align-items: center;
   column-gap: 0.7rem;
   row-gap: 0.35rem;
   background: var(--color-surface-alt);
   border-radius: var(--radius-sm);
   padding: 0.6rem 0.75rem;
-}
-
-.found-crest {
-  position: relative;
-  width: 36px;
-  height: 36px;
-  flex-shrink: 0;
-  border-radius: 50%;
-  background: var(--color-border-strong);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 0.7rem;
-  font-weight: 700;
-}
-
-.found-crest > img { width: 100%; height: 100%; border-radius: 50%; object-fit: contain; background: #fff; }
-
-.found-crest-mark {
-  position: absolute;
-  right: -4px;
-  top: -4px;
-  width: 16px;
-  height: 16px;
-  border-radius: 4px;
-  border: 2px solid var(--color-surface-alt);
 }
 
 .found-team-text {
@@ -6415,7 +6396,7 @@ a.game-card:active {
 
 /* Narrow (the player card on a computer): the position goes under the team name. */
 @container (max-width: 300px) {
-  .found-team { grid-template-columns: 36px minmax(0, 1fr); }
-  .found-crest { grid-row: span 2; align-self: start; }
+  .found-team { grid-template-columns: 34px minmax(0, 1fr); }
+  .found-team > .crest-cluster { grid-row: span 2; align-self: start; }
   .found-position { grid-column: 2; justify-self: start; }
 }

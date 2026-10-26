@@ -1,7 +1,8 @@
 import type { ReactNode } from 'react'
 import type { IbbaPreviewDto } from '../api/types'
 import { Busy } from './BouncingBall'
-import { LeagueMark } from './LeagueBadge'
+import LeagueBadge from './LeagueBadge'
+import TeamCrest from './TeamCrest'
 
 // What a pasted league link turned out to be, before anything is linked or
 // created: the player (photo, name, birth date - checked against the one in
@@ -50,7 +51,10 @@ export default function LeagueFoundCard({
           <span className="found-avatar">{initials}</span>
         )}
         <div className="found-player-text">
-          <span className="found-name" dir="auto">{preview.playerName}</span>
+          <span className="found-name-row">
+            <span className="found-name" dir="auto">{preview.playerName}</span>
+            <LeagueBadge league={preview.leagueKey} />
+          </span>
           {born && (
             <span className="found-born">
               Born {born.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })}
@@ -68,10 +72,7 @@ export default function LeagueFoundCard({
       <ul className="found-teams">
         {preview.teams.map((t) => (
           <li key={t.teamUrl || t.teamName} className="found-team">
-            <span className="found-crest">
-              {t.logoUrl ? <img src={t.logoUrl} alt="" /> : <span>{t.teamName.slice(0, 2)}</span>}
-              <LeagueMark league={preview.leagueKey} className="found-crest-mark" />
-            </span>
+            <TeamCrest logoUrl={t.logoUrl} league={preview.leagueKey} size="sm" />
             <span className="found-team-text">
               <span className="found-team-name" dir="auto">{t.teamName}</span>
               <span className="found-team-meta">
