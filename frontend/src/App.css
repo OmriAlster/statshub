@@ -2065,7 +2065,6 @@ select:focus {
 
 .game-score {
   grid-column: 1 / -1;
-  align-self: start; /* only as tall as what it shows, not the player card beside it */
   background: var(--color-surface);
   padding: 1.4rem;
   border-radius: var(--radius-md);
@@ -2145,7 +2144,6 @@ select:focus {
 
 .player-stats {
   grid-column: 1 / -1;
-  align-self: start; /* only as tall as what it shows, not the player card beside it */
   background: var(--color-surface);
   padding: 1.4rem;
   border-radius: var(--radius-md);
@@ -2195,7 +2193,6 @@ select:focus {
 
 .game-upcoming {
   grid-column: 1 / -1;
-  align-self: start; /* only as tall as what it shows, not the player card beside it */
   text-align: center;
   padding: 1.4rem;
   background: var(--color-surface);
