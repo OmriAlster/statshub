@@ -789,14 +789,23 @@ export default function PlayerProfile() {
         ))}
 
         {!isPlayerRole && !showAddForm && (
-          <div className="add-player-card">
+          <div className={showAddIbbaForm ? 'add-player-card add-player-card--open' : 'add-player-card'}>
             {showAddIbbaForm ? (
-              ibbaNewPreview ? (
-                <>
-                  <h3>➕ New Player from {leagues}</h3>
+              <>
+                <div className="add-card-head">
+                  <h3>New player from {leagues}</h3>
+                  <button
+                    className="add-card-close"
+                    aria-label="Close"
+                    onClick={() => { setShowAddIbbaForm(false); setIbbaNewPreview(null); setIbbaNewForm(emptyIbbaNewForm); setIbbaNewError(null) }}
+                  >
+                    <svg className="icon" aria-hidden="true"><use href="#i-x" /></svg>
+                  </button>
+                </div>
+                {ibbaNewPreview ? (
                   <LeagueFoundCard
                     preview={ibbaNewPreview}
-                    confirmLabel={`Yes, add ${ibbaNewPreview.playerName}`}
+                    confirmLabel={`Yes, add ${ibbaNewPreview.playerName.split(' ')[0]}`}
                     busy={ibbaNewBusy}
                     busyLabel="Adding…"
                     canConfirm={!!ibbaNewPreview.dateOfBirth}
@@ -808,39 +817,34 @@ export default function PlayerProfile() {
                     )}
                     {ibbaNewError && <p className="error">{ibbaNewError}</p>}
                   </LeagueFoundCard>
-                  <button
-                    onClick={() => { setShowAddIbbaForm(false); setIbbaNewPreview(null); setIbbaNewForm(emptyIbbaNewForm); setIbbaNewError(null) }}
-                  >
-                    Cancel
-                  </button>
-                </>
-              ) : (
-                <>
-                  <h3>➕ New Player from {leagues}</h3>
-                  <div className="ibba-connect-form">
-                    <input
-                      type="text"
-                      aria-label="Player link"
-                      className={ibbaNewForm.url.includes('/player/') ? 'looks-like-link' : undefined}
-                      placeholder={`Paste this player's profile address (${urlExamples})`}
-                      value={ibbaNewForm.url}
-                      onChange={(e) => setIbbaNewForm({ ...ibbaNewForm, url: e.target.value })}
-                      onPaste={(e) => {
-                        const pasted = e.clipboardData.getData('text').trim()
-                        if (!pasted) return
-                        e.preventDefault()
-                        setIbbaNewForm({ ...ibbaNewForm, url: pasted })
-                        previewNewIbba(pasted) // a pasted link is checked right away
-                      }}
-                    />
-                    <button className="submit-btn" disabled={ibbaNewBusy || !ibbaNewForm.url.trim()} onClick={() => previewNewIbba()}>
-                      {ibbaNewBusy ? <Busy>Checking…</Busy> : 'Find'}
-                    </button>
-                  </div>
-                  {ibbaNewError && <p className="error">{ibbaNewError}</p>}
-                  <button onClick={() => setShowAddIbbaForm(false)}>Cancel</button>
-                </>
-              )
+                ) : (
+                  <>
+                    <label className="found-label" htmlFor="new-player-link">The player&apos;s {leagues} link</label>
+                    <div className="ibba-connect-form">
+                      <input
+                        id="new-player-link"
+                        type="text"
+                        className={ibbaNewForm.url.includes('/player/') ? 'looks-like-link' : undefined}
+                        placeholder={`Paste this player's profile address (${urlExamples})`}
+                        value={ibbaNewForm.url}
+                        onChange={(e) => setIbbaNewForm({ ...ibbaNewForm, url: e.target.value })}
+                        onPaste={(e) => {
+                          const pasted = e.clipboardData.getData('text').trim()
+                          if (!pasted) return
+                          e.preventDefault()
+                          setIbbaNewForm({ ...ibbaNewForm, url: pasted })
+                          previewNewIbba(pasted) // a pasted link is checked right away
+                        }}
+                      />
+                      <button className="submit-btn" disabled={ibbaNewBusy || !ibbaNewForm.url.trim()} onClick={() => previewNewIbba()}>
+                        {ibbaNewBusy ? <Busy>Checking…</Busy> : 'Find'}
+                      </button>
+                    </div>
+                    <p className="found-hint">Open the player on the league&apos;s site and copy the address from the browser.</p>
+                    {ibbaNewError && <p className="error">{ibbaNewError}</p>}
+                  </>
+                )}
+              </>
             ) : (
               <>
                 <h3>➕ Add New Player</h3>

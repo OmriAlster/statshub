@@ -37,6 +37,7 @@ export default function LeagueFoundCard({
 
   return (
     <div className="found-card">
+      <div className="found-who">
       <p className="found-status">
         <svg className="icon" aria-hidden="true"><use href="#i-check" /></svg>
         Found on {preview.leagueName}
@@ -60,6 +61,9 @@ export default function LeagueFoundCard({
         </div>
       </div>
 
+      </div>
+
+      <div className="found-details">
       <p className="found-label">Current teams on {preview.leagueName}</p>
       <ul className="found-teams">
         {preview.teams.map((t) => (
@@ -92,6 +96,7 @@ export default function LeagueFoundCard({
           </button>
         )}
         <button className="found-back" onClick={onBack} disabled={busy}>No, use another link</button>
+      </div>
       </div>
     </div>
   )

@@ -2065,6 +2065,7 @@ select:focus {
 
 .game-score {
   grid-column: 1 / -1;
+  align-self: start; /* only as tall as what it shows, not the player card beside it */
   background: var(--color-surface);
   padding: 1.4rem;
   border-radius: var(--radius-md);
@@ -2144,6 +2145,7 @@ select:focus {
 
 .player-stats {
   grid-column: 1 / -1;
+  align-self: start; /* only as tall as what it shows, not the player card beside it */
   background: var(--color-surface);
   padding: 1.4rem;
   border-radius: var(--radius-md);
@@ -2193,6 +2195,7 @@ select:focus {
 
 .game-upcoming {
   grid-column: 1 / -1;
+  align-self: start; /* only as tall as what it shows, not the player card beside it */
   text-align: center;
   padding: 1.4rem;
   background: var(--color-surface);
@@ -6170,7 +6173,6 @@ a.game-card:active {
 
 /* ---- "Found on <league>": what a pasted player link turned out to be ---- */
 .found-card {
-  container-type: inline-size;
   display: flex;
   flex-direction: column;
   gap: 0.85rem;
@@ -6315,8 +6317,10 @@ a.game-card:active {
   gap: 0.5rem;
 }
 
-.found-confirm,
-.found-back {
+.found-actions button { white-space: nowrap; }
+
+.found-card .found-confirm,
+.found-card .found-back {
   min-height: 46px;
   border-radius: var(--radius-sm);
   font-weight: 700;
@@ -6324,13 +6328,17 @@ a.game-card:active {
   cursor: pointer;
 }
 
-.found-confirm {
+.found-card .found-confirm {
+  padding: 0 1.25rem;
+  box-shadow: none;
   background: var(--gradient-accent);
   color: #2b1400;
   border: none;
 }
 
-.found-back {
+.found-card .found-back {
+  padding: 0 1.25rem;
+  box-shadow: none;
   background: transparent;
   color: var(--color-text);
   border: 1px solid var(--color-border-strong);
@@ -6340,7 +6348,75 @@ a.game-card:active {
 .ibba-connect-form input.looks-like-link { border-color: var(--color-success); }
 .found-hint { margin: 0.35rem 0 0; font-size: 0.8rem; color: var(--color-text-muted); }
 
-/* In a narrow column (the player card on a computer) the position goes under the team name. */
+.found-who,
+.found-details {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  min-width: 0;
+}
+
+.found-card .found-confirm:hover,
+.found-card .found-back:hover { transform: none; }
+
+/* The add card, once it's open: as wide as two columns on a computer (the
+   found card needs the room), its own header, content left-aligned. */
+.add-player-card--open {
+  container-type: inline-size;
+  align-items: stretch;
+  justify-content: flex-start;
+  text-align: left;
+  gap: 0.85rem;
+  grid-column: 1 / -1;
+  align-self: start; /* only as tall as what it shows, not the player card beside it */
+}
+
+@media (min-width: 900px) {
+  .add-player-card--open { grid-column: span 2; }
+}
+
+.add-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.add-player-card .add-card-head h3 { margin: 0; }
+
+.add-player-card .add-card-close {
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  color: var(--color-text);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  box-shadow: none;
+}
+
+.add-player-card .add-card-close:hover { transform: none; border-color: var(--color-text-muted); }
+
+.ibba-connect-box { container-type: inline-size; }
+
+/* Wide (the open add card on a computer): the player on the left, their teams and the answer on the right. */
+@container (min-width: 560px) {
+  .found-card {
+    display: grid;
+    grid-template-columns: minmax(180px, 220px) minmax(0, 1fr);
+    gap: 1.5rem;
+    padding: 1.25rem;
+  }
+  .found-who { border-right: 1px solid var(--color-border); padding-right: 1.25rem; }
+  .found-player { flex-direction: column; align-items: flex-start; }
+  .found-avatar { width: 72px; height: 72px; font-size: 1.3rem; }
+  .found-actions { flex-direction: row; flex-wrap: wrap; }
+}
+
+/* Narrow (the player card on a computer): the position goes under the team name. */
 @container (max-width: 300px) {
   .found-team { grid-template-columns: 36px minmax(0, 1fr); }
   .found-crest { grid-row: span 2; align-self: start; }
