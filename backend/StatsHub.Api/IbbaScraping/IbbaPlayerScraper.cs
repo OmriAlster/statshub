@@ -74,6 +74,7 @@ public class IbbaPlayerScraper
                     TeamUrl = teamUrl,
                     TeamName = HtmlEntity.DeEntitize(additionalTeamNode.InnerText.Trim()),
                     TeamSlugId = ExtractTeamSlugId(teamUrl),
+                    IsAdditional = true,
                 });
             }
         }

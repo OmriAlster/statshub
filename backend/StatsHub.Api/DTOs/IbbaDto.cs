@@ -8,12 +8,22 @@ namespace StatsHub.Api.DTOs
         public string LeagueName { get; set; } = string.Empty;
         public string PlayerName { get; set; } = string.Empty;
         public DateTime? DateOfBirth { get; set; }
+        public string? PhotoUrl { get; set; }
         public List<IbbaPreviewTeamDto> Teams { get; set; } = new();
     }
 
+    // A team on the player's league page. League, table position and crest
+    // come from what the app already knows of that team (null when it doesn't
+    // yet - they arrive with the first sync).
     public class IbbaPreviewTeamDto
     {
         public string TeamName { get; set; } = string.Empty;
+        public string TeamUrl { get; set; } = string.Empty;
+        public bool IsAdditional { get; set; }
+        public string? LogoUrl { get; set; }
+        public string? LeagueName { get; set; }
+        public int? Position { get; set; }
+        public int? TotalTeams { get; set; }
     }
 
     public class LinkIbbaPlayerDto

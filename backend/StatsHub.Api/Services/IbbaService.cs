@@ -83,13 +83,31 @@ namespace StatsHub.Api.Services
             if (info.Teams.Count == 0)
                 throw new InvalidOperationException($"Could not find any current team for this player on the {league.Name} page. Check the URL is a player profile page.");
 
+            // What the app already knows of these teams - no extra trips to the site.
+            var urls = info.Teams.Select(t => t.TeamUrl).ToList();
+            var known = await _context.IbbaTeams.AsNoTracking().Where(t => urls.Contains(t.TeamUrl)).ToDictionaryAsync(t => t.TeamUrl);
+
             return new IbbaPreviewDto
             {
                 LeagueKey = league.Key,
                 LeagueName = league.Name,
                 PlayerName = info.PlayerName,
                 DateOfBirth = info.DateOfBirth,
-                Teams = info.Teams.Select(t => new IbbaPreviewTeamDto { TeamName = t.TeamName }).ToList()
+                PhotoUrl = string.IsNullOrEmpty(info.PhotoUrl) ? null : info.PhotoUrl,
+                Teams = info.Teams.Select(t =>
+                {
+                    known.TryGetValue(t.TeamUrl, out var team);
+                    return new IbbaPreviewTeamDto
+                    {
+                        TeamName = team?.Name ?? t.TeamName,
+                        TeamUrl = t.TeamUrl,
+                        IsAdditional = t.IsAdditional,
+                        LogoUrl = team?.LogoUrl,
+                        LeagueName = string.IsNullOrEmpty(team?.LeagueName) ? null : team.LeagueName,
+                        Position = team?.LeaguePosition,
+                        TotalTeams = team?.LeagueTotalTeams,
+                    };
+                }).ToList()
             };
         }
 

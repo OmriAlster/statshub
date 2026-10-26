@@ -6167,3 +6167,182 @@ a.game-card:active {
   .bouncing-ball-inline { animation: ball-pulse 1.4s ease-in-out infinite; }
   @keyframes ball-pulse { 50% { opacity: 0.45; } }
 }
+
+/* ---- "Found on <league>": what a pasted player link turned out to be ---- */
+.found-card {
+  container-type: inline-size;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 1rem;
+  margin-top: 0.5rem;
+  text-align: left;
+}
+
+.found-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0;
+  color: var(--color-success);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.found-status .icon { width: 16px; height: 16px; stroke-width: 2.5; }
+
+.found-player {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+}
+
+.found-avatar {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+  background: var(--color-surface-alt);
+  border: 1px solid var(--color-border-strong);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-display);
+  font-weight: 700;
+}
+
+.found-player-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.found-name {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 1.1rem;
+}
+
+.found-born { font-size: 0.82rem; color: var(--color-text-muted); }
+.found-ok { color: var(--color-success); }
+.found-warn { color: var(--color-gold); }
+
+.found-label {
+  margin: 0.2rem 0 0;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.found-teams {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.found-team {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 0.7rem;
+  row-gap: 0.35rem;
+  background: var(--color-surface-alt);
+  border-radius: var(--radius-sm);
+  padding: 0.6rem 0.75rem;
+}
+
+.found-crest {
+  position: relative;
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--color-border-strong);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.found-crest > img { width: 100%; height: 100%; border-radius: 50%; object-fit: contain; background: #fff; }
+
+.found-crest-mark {
+  position: absolute;
+  right: -4px;
+  top: -4px;
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  border: 2px solid var(--color-surface-alt);
+}
+
+.found-team-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+.found-team-name { font-weight: 600; font-size: 0.92rem; }
+.found-team-meta { font-size: 0.78rem; color: var(--color-text-muted); }
+
+.found-position {
+  justify-self: end;
+  background: var(--color-gold-soft);
+  color: var(--color-gold);
+  border-radius: var(--radius-pill);
+  padding: 0.2rem 0.55rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.found-note { margin: 0; font-size: 0.82rem; color: var(--color-text-muted); line-height: 1.5; }
+
+.found-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.found-confirm,
+.found-back {
+  min-height: 46px;
+  border-radius: var(--radius-sm);
+  font-weight: 700;
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+
+.found-confirm {
+  background: var(--gradient-accent);
+  color: #2b1400;
+  border: none;
+}
+
+.found-back {
+  background: transparent;
+  color: var(--color-text);
+  border: 1px solid var(--color-border-strong);
+  font-weight: 600;
+}
+
+.ibba-connect-form input.looks-like-link { border-color: var(--color-success); }
+.found-hint { margin: 0.35rem 0 0; font-size: 0.8rem; color: var(--color-text-muted); }
+
+/* In a narrow column (the player card on a computer) the position goes under the team name. */
+@container (max-width: 300px) {
+  .found-team { grid-template-columns: 36px minmax(0, 1fr); }
+  .found-crest { grid-row: span 2; align-self: start; }
+  .found-position { grid-column: 2; justify-self: start; }
+}
