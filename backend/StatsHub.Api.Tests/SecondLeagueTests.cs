@@ -112,11 +112,13 @@ public class SecondLeagueTests : IClassFixture<SecondLeagueTests.Factory>
 
         // The games load in the background.
         IbbaLinkStatusDto status = created.Ibba;
-        for (var i = 0; i < 50 && status.GamesLoading; i++)
+        // Up to 30 s - a busy CI machine can take several seconds.
+        for (var i = 0; i < 300 && status.GamesLoading; i++)
         {
             await Task.Delay(100);
             status = await parent.GetAsync<IbbaLinkStatusDto>($"/api/players/{created.Player.Id}/ibba");
         }
+        Assert.False(status.GamesLoading, "games still loading after 30 s");
         Assert.Null(status.LastSyncError);
         var team = status.Teams.Single();
         Assert.Equal(("Demo Lions", 1, 2), (team.TeamName, team.Position, team.TotalTeams));
