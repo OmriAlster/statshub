@@ -33,6 +33,7 @@ namespace StatsHub.Api.DTOs
     {
         public string? LogoUrl { get; set; }
         public bool IsIbba { get; set; }
+        public string? League { get; set; } // the league's key, when IsIbba
         public string? LeagueUrl { get; set; }
         public string? LeagueName { get; set; }
         public int? StandingPosition { get; set; }

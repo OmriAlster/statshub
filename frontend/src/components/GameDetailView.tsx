@@ -3,7 +3,7 @@ import type { GameDto } from '../api/types'
 import { formatGameDateTimeFull } from '../utils/formatGameDate'
 import CourtShotChart from './CourtShotChart'
 import GameStatusBadge, { onCourtIn } from './GameStatusBadge'
-import IbbaBadge from './IbbaBadge'
+import LeagueBadge from './LeagueBadge'
 
 interface GameDetailViewProps {
   game: GameDto
@@ -23,7 +23,7 @@ export default function GameDetailView({ game, headerActions }: GameDetailViewPr
         <div>
           <div className="game-meta-row">
             <span className={`game-type-badge ${game.gameType.toLowerCase()}`}>{game.gameType}</span>
-            {game.isFromIbba && <IbbaBadge />}
+            {game.isFromIbba && <LeagueBadge league={game.league} />}
           </div>
           <p>{formatGameDateTimeFull(game.gameDate)} · {game.isHomeGame != null && (
                 <span className="score-home-icon" title={game.isHomeGame ? 'Home' : 'Away'}>{game.isHomeGame ? '🏠' : '✈️'}</span>

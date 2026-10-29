@@ -3,16 +3,20 @@ import { api } from '../api/client'
 import type { IbbaStandingRowDto } from '../api/types'
 import BouncingBall from './BouncingBall'
 import Modal from './Modal'
+import { useLeague } from '../leagues'
 
 interface StandingsModalProps {
   leagueUrl: string
   leagueName: string
+  // Which league the table is from (its key).
+  league?: string | null
   highlightTeamUrl?: string
   highlightTeamName?: string
   onClose: () => void
 }
 
-export default function StandingsModal({ leagueUrl, leagueName, highlightTeamUrl, highlightTeamName, onClose }: StandingsModalProps) {
+export default function StandingsModal({ leagueUrl, leagueName, league, highlightTeamUrl, highlightTeamName, onClose }: StandingsModalProps) {
+  const source = useLeague(league).name
   const [rows, setRows] = useState<IbbaStandingRowDto[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -31,7 +35,7 @@ export default function StandingsModal({ leagueUrl, leagueName, highlightTeamUrl
       head={
         <div>
           <h3 dir="rtl">{leagueName}</h3>
-          <p>{rows.length > 0 ? `${rows.length} teams · from IBBA` : 'From IBBA'}</p>
+          <p>{rows.length > 0 ? `${rows.length} teams · from ${source}` : `From ${source}`}</p>
         </div>
       }
       onClose={onClose}

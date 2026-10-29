@@ -1,0 +1,118 @@
+using HtmlAgilityPack;
+using StatsHub.Api.Leagues;
+using StatsHub.Api.Services;
+
+namespace StatsHub.Api.IbbaScraping;
+
+/// <summary>
+/// The Israel Basketball Association (ibasketball.co.il): ties IbbaPlayerScraper,
+/// IbbaTeamScraper and IbbaLeagueScraper together. Player -> every current team
+/// (main + any רשאי), and per team - logo, league, games (from the team's Excel
+/// export) and the league table. Reads the site only; saving is the shared sync's.
+/// </summary>
+public class IbbaLeagueProvider : ILeagueProvider
+{
+    private readonly IHttpClientFactory _httpClientFactory;
+
+    public IbbaLeagueProvider(IHttpClientFactory httpClientFactory) => _httpClientFactory = httpClientFactory;
+
+    public string Key => "ibba";
+    public string Name => "IBBA";
+    public string LogoUrl => "/icons/ibba-logo.png";
+    public string PlayerUrlExample => "https://ibasketball.co.il/player/…";
+
+    public bool IsPlayerUrl(string url) =>
+        Uri.TryCreate(url, UriKind.Absolute, out var uri)
+        && uri.Host.EndsWith("ibasketball.co.il", StringComparison.OrdinalIgnoreCase)
+        && uri.AbsolutePath.StartsWith("/player/", StringComparison.OrdinalIgnoreCase);
+
+    // Through the "Ibba" client: retries, a request limit, cache rules (Program.cs).
+    private HttpClient Http() => _httpClientFactory.CreateClient("Ibba");
+
+    // What stage 1 keeps of a team's page for stage 2.
+    private sealed record PageState(HtmlDocument Doc, string? ExcelUrl);
+
+    public Task<LeaguePlayer> GetPlayerAsync(string playerUrl) => new IbbaPlayerScraper(Http()).GetPlayerInfoAsync(playerUrl);
+
+    // prefetchedPlayer lets a caller that already fetched the player's own
+    // page (e.g. previewing it before creating the player) hand that result
+    // straight in, instead of fetching it again a moment later.
+    //
+    // Two stages, so a link can answer as soon as the teams are known: this
+    // (player page + each team's own page - quick, usually cached by IBBA),
+    // then LoadGamesAndStandingsAsync (the games spreadsheet, always fetched
+    // fresh and IBBA's slowest page, then the league table).
+    public async Task<(LeaguePlayer Player, List<LeagueTeamPage> Teams)> LoadTeamsAsync(string playerUrl, LeaguePlayer? prefetchedPlayer = null)
+    {
+        var player = prefetchedPlayer ?? await GetPlayerAsync(playerUrl);
+        if (player.Teams.Count == 0)
+            throw new InvalidOperationException("Could not find any current team for this player on the page.");
+
+        var teamScraper = new IbbaTeamScraper(Http());
+        var pages = (await Task.WhenAll(player.Teams.Select(team => LoadTeamPageAsync(teamScraper, team)))).ToList();
+        return (player, pages);
+    }
+
+    private static async Task<LeagueTeamPage> LoadTeamPageAsync(IbbaTeamScraper teamScraper, LeagueTeam team)
+    {
+        // One fetch of the team's own page covers name, crest, and the Excel
+        // export link (and later the league link).
+        var doc = await teamScraper.LoadTeamPageAsync(team.TeamUrl);
+
+        using (RequestTimings.Time("find-name-crest-export-link"))
+        {
+            // The team's own page is the source of truth for its name - the player
+            // page's link text isn't always just the plain name (רשאי links append
+            // " - LeagueName"), which would break exact-match lookups later.
+            team.TeamName = teamScraper.GetTeamName(doc) ?? team.TeamName;
+            team.TeamLogoUrl = teamScraper.FindTeamLogo(doc, team.TeamUrl, team.TeamName) ?? "";
+            return new LeagueTeamPage { Team = team, State = new PageState(doc, teamScraper.FindExcelExportUrl(doc, team.TeamUrl)) };
+        }
+    }
+
+    // A team's games (its Excel export) and, from those, its league and the
+    // league's standings.
+    public async Task<LeagueTeamReport> LoadGamesAndStandingsAsync(LeagueTeamPage page)
+    {
+        using var whole = RequestTimings.Time("team-games-and-standings");
+        var state = (PageState)page.State!;
+        var team = page.Team;
+        var report = new LeagueTeamReport { Team = team };
+        var teamScraper = new IbbaTeamScraper(Http());
+
+        if (state.ExcelUrl != null)
+            report.Games = await teamScraper.DownloadAndParseGamesAsync(state.ExcelUrl);
+
+        // Resolve the league from the regular-season (non-cup) games just parsed -
+        // the team page's league directory lets us find ANY team's league this way,
+        // not just the main team's (unlike the player page's "ליגה" label, which only
+        // labels the main team).
+        var leagueName = report.Games.FirstOrDefault(g => !g.IsCup)?.League;
+        if (!string.IsNullOrEmpty(leagueName))
+        {
+            team.LeagueName = leagueName;
+            team.LeagueUrl = teamScraper.FindLeagueUrl(state.Doc, team.TeamUrl, leagueName) ?? "";
+            if (!string.IsNullOrEmpty(team.LeagueUrl))
+                report.Standings = await new IbbaLeagueScraper(Http()).GetStandingsAsync(team.LeagueUrl);
+        }
+
+        return report;
+    }
+
+    public async Task<List<LeagueGame>> LoadTeamGamesAsync(string teamUrl)
+    {
+        var scraper = new IbbaTeamScraper(Http());
+        var doc = await scraper.LoadTeamPageAsync(teamUrl);
+        var excelUrl = scraper.FindExcelExportUrl(doc, teamUrl)
+            ?? throw new LeagueLayoutException($"team page {teamUrl} has no games spreadsheet link");
+        return await scraper.DownloadAndParseGamesAsync(excelUrl);
+    }
+
+    public Task<(string CanonicalUrl, string Name, string? LogoUrl)?> ResolveTeamByIdAsync(string teamId) =>
+        new IbbaTeamScraper(Http()).ResolveTeamByIdAsync(teamId);
+
+    public Task<string?> FindTeamLogoUrlAsync(string teamUrl, string teamName) =>
+        new IbbaTeamScraper(Http()).FindTeamLogoUrlAsync(teamUrl, teamName);
+
+    public string TeamIdFromUrl(string teamUrl) => IbbaPlayerScraper.ExtractTeamSlugId(teamUrl);
+}

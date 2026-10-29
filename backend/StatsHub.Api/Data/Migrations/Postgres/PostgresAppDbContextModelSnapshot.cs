@@ -70,6 +70,9 @@ namespace StatsHub.Api.Data.Migrations.Postgres
                     b.Property<int?>("OpponentScore")
                         .HasColumnType("integer");
 
+                    b.Property<string>("Provider")
+                        .HasColumnType("text");
+
                     b.Property<DateTime?>("ReminderSentAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -89,7 +92,7 @@ namespace StatsHub.Api.Data.Migrations.Postgres
 
                     b.HasIndex("HomeTeamId");
 
-                    b.HasIndex("IbbaGameCode")
+                    b.HasIndex("Provider", "IbbaGameCode")
                         .IsUnique()
                         .HasFilter("\"IbbaGameCode\" IS NOT NULL");
 
@@ -218,6 +221,12 @@ namespace StatsHub.Api.Data.Migrations.Postgres
                     b.Property<int>("PointsFor")
                         .HasColumnType("integer");
 
+                    b.Property<string>("Provider")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("ibba");
+
                     b.Property<DateTime>("SyncedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -237,6 +246,8 @@ namespace StatsHub.Api.Data.Migrations.Postgres
 
                     b.HasIndex("TeamUrl")
                         .IsUnique();
+
+                    b.HasIndex("Provider", "IbbaTeamId");
 
                     b.ToTable("IbbaTeams");
                 });
@@ -337,6 +348,12 @@ namespace StatsHub.Api.Data.Migrations.Postgres
 
                     b.Property<Guid>("PlayerId")
                         .HasColumnType("uuid");
+
+                    b.Property<string>("Provider")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("ibba");
 
                     b.HasKey("Id");
 

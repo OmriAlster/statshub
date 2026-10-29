@@ -1,6 +1,7 @@
 using System.Text.RegularExpressions;
 using HtmlAgilityPack;
 using StatsHub.Api.Services;
+using StatsHub.Api.Leagues;
 
 namespace StatsHub.Api.IbbaScraping;
 
@@ -18,7 +19,7 @@ public class IbbaPlayerScraper
     /// League URL/name per team is resolved separately by IbbaTeamScraper (from that
     /// team's own page), since רשאי teams don't get a league link here on the player page.
     /// </summary>
-    public async Task<IbbaPlayerInfo> GetPlayerInfoAsync(string playerUrl)
+    public async Task<LeaguePlayer> GetPlayerInfoAsync(string playerUrl)
     {
         var html = await _http.GetStringAsync(playerUrl);
         using var parsing = RequestTimings.Time("parse-player-page");
@@ -26,13 +27,13 @@ public class IbbaPlayerScraper
         var doc = new HtmlDocument();
         doc.LoadHtml(html);
 
-        var info = new IbbaPlayerInfo { PlayerUrl = playerUrl };
+        var info = new LeaguePlayer { PlayerUrl = playerUrl };
 
         // Player name sits in the <h1> on the profile page, e.g. <h1>עידן אלסטר</h1>
         var nameNode = doc.DocumentNode.SelectSingleNode("//h1");
         info.PlayerName = HtmlEntity.DeEntitize(nameNode?.InnerText.Trim() ?? "");
         if (string.IsNullOrWhiteSpace(info.PlayerName))
-            throw new IbbaLayoutException($"player page {playerUrl} has no name heading");
+            throw new LeagueLayoutException($"player page {playerUrl} has no name heading");
 
         // IMPORTANT: the page's top nav menu also contains lots of /team/ and /league/
         // links (mega-menu of every league/club on the site) BEFORE the player's own
@@ -48,7 +49,7 @@ public class IbbaPlayerScraper
         {
             var rawHref = mainTeamNode.GetAttributeValue("href", "");
             var teamUrl = IbbaUrlHelper.Resolve(playerUrl, rawHref);
-            info.Teams.Add(new IbbaPlayerTeamInfo
+            info.Teams.Add(new LeagueTeam
             {
                 TeamUrl = teamUrl,
                 TeamName = HtmlEntity.DeEntitize(mainTeamNode.InnerText.Trim()),
@@ -68,7 +69,7 @@ public class IbbaPlayerScraper
             // labeled-link fallback strategy degrades to "first team link on page").
             if (!info.Teams.Any(t => t.TeamUrl == teamUrl))
             {
-                info.Teams.Add(new IbbaPlayerTeamInfo
+                info.Teams.Add(new LeagueTeam
                 {
                     TeamUrl = teamUrl,
                     TeamName = HtmlEntity.DeEntitize(additionalTeamNode.InnerText.Trim()),

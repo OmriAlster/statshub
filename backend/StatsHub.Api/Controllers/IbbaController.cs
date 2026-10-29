@@ -36,7 +36,7 @@ namespace StatsHub.Api.Controllers
             }
             catch (Exception)
             {
-                return BadRequest(new { message = "Could not read that IBBA page. Double-check the URL is a player profile page." });
+                return BadRequest(new { message = "Could not read that page. Double-check the URL is a player profile page." });
             }
         }
 
@@ -66,7 +66,7 @@ namespace StatsHub.Api.Controllers
             }
             catch (Exception)
             {
-                return BadRequest(new { message = "Could not read that IBBA page. Double-check the URL is a player profile page." });
+                return BadRequest(new { message = "Could not read that page. Double-check the URL is a player profile page." });
             }
         }
 
@@ -76,9 +76,16 @@ namespace StatsHub.Api.Controllers
             if (string.IsNullOrWhiteSpace(dto.IbbaPlayerUrl))
                 return BadRequest(new { message = "ibbaPlayerUrl is required" });
 
-            var status = await _ibbaService.LinkPlayerAsync(playerId, dto.IbbaPlayerUrl, _currentUser.UserId);
-            if (status == null) return NotFound(new { message = "Player not found" });
-            return Ok(status);
+            try
+            {
+                var status = await _ibbaService.LinkPlayerAsync(playerId, dto.IbbaPlayerUrl, _currentUser.UserId);
+                if (status == null) return NotFound(new { message = "Player not found" });
+                return Ok(status);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message }); // not a supported league's player page
+            }
         }
 
         [HttpDelete("players/{playerId}/ibba/link")]

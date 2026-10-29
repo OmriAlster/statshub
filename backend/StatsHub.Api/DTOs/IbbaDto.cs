@@ -1,7 +1,11 @@
 namespace StatsHub.Api.DTOs
 {
+    // The "Ibba" names date from when IBBA was the only league; these carry
+    // whichever league (ILeagueProvider) the player is on.
     public class IbbaPreviewDto
     {
+        public string LeagueKey { get; set; } = string.Empty;
+        public string LeagueName { get; set; } = string.Empty;
         public string PlayerName { get; set; } = string.Empty;
         public DateTime? DateOfBirth { get; set; }
         public List<IbbaPreviewTeamDto> Teams { get; set; } = new();
@@ -42,6 +46,9 @@ namespace StatsHub.Api.DTOs
 
     public class IbbaLinkStatusDto
     {
+        public string LeagueKey { get; set; } = string.Empty;
+        public string LeagueName { get; set; } = string.Empty;
+        public string LeagueLogoUrl { get; set; } = string.Empty;
         public Guid PlayerId { get; set; }
         public string IbbaPlayerUrl { get; set; } = string.Empty;
         public DateTime? LastSyncedAt { get; set; }

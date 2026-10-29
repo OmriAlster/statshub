@@ -59,7 +59,7 @@ public class IbbaResultWatcherTests : IClassFixture<IbbaResultWatcherTests.Facto
 
     private async Task<Game> AddGameAsync(IbbaTeam own, IbbaTeam opponent, DateTime when, string status = "Upcoming")
     {
-        var game = new Game { IbbaGameCode = $"g{Guid.NewGuid():N}", HomeTeamId = own.Id, AwayTeamId = opponent.Id, GameDate = when, Status = status };
+        var game = new Game { IbbaGameCode = $"g{Guid.NewGuid():N}", Provider = "ibba", HomeTeamId = own.Id, AwayTeamId = opponent.Id, GameDate = when, Status = status };
         await _factory.WithDbAsync(async db => { db.Games.Add(game); await db.SaveChangesAsync(); });
         return game;
     }

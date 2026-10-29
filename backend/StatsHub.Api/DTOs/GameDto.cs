@@ -23,7 +23,10 @@ namespace StatsHub.Api.DTOs
         public int? OpponentScore { get; set; }
         public string? Notes { get; set; }
         public bool? IsHomeGame { get; set; }
+        // Synced from an external league - which one is League (a league key,
+        // see GET /api/leagues).
         public bool IsFromIbba { get; set; }
+        public string? League { get; set; }
         // True unless someone else is already live-tracking this game -
         // whoever's live-tracking it is the only one who can keep recording
         // (Game and GameStats writes both enforce this server-side too, this

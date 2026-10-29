@@ -184,6 +184,9 @@ builder.Services.AddScoped<IGameStatsService, GameStatsService>();
 builder.Services.AddScoped<IShotService, ShotService>();
 builder.Services.AddScoped<IShareService, ShareService>();
 builder.Services.AddScoped<IIbbaService, IbbaService>();
+// The external leagues players can be linked to - add one here (see Leagues/ILeagueProvider.cs).
+builder.Services.AddSingleton<StatsHub.Api.Leagues.ILeagueProvider, StatsHub.Api.IbbaScraping.IbbaLeagueProvider>();
+builder.Services.AddSingleton<StatsHub.Api.Leagues.LeagueProviders>();
 builder.Services.AddScoped<IPushNotificationService, PushNotificationService>();
 builder.Services.AddHostedService<GameReminderBackgroundService>();
 builder.Services.AddHostedService<IbbaNightlySyncBackgroundService>();

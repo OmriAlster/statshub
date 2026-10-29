@@ -5074,6 +5074,12 @@ button.crest-cluster:hover .crest-main {
   background: var(--color-surface-hover);
 }
 
+.ibba-locked-mark {
+  width: 14px;
+  height: 14px;
+  border-radius: 2px;
+}
+
 .ibba-locked-info {
   display: flex;
   align-items: center;

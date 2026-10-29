@@ -6,13 +6,13 @@ import { api } from '../api/client'
 import { useLiveGameOverlay } from '../live/LiveGameContext'
 import type { GameDto, IbbaLinkStatusDto, PlayerDto, PlayerTeamStatsDto, SeasonDto } from '../api/types'
 import { useAuth } from '../auth/AuthContext'
-import IbbaBadge from '../components/IbbaBadge'
 import StandingsModal from '../components/StandingsModal'
 import TeamCrest from '../components/TeamCrest'
 import { formatGameDateOnly, formatGameTime } from '../utils/formatGameDate'
 import { collectUpcomingGames, UPCOMING_PREVIEW_COUNT } from '../utils/upcomingGames'
 import BouncingBall from '../components/BouncingBall'
 import { GameTypeBadge, HomeAway } from '../components/GameBadges'
+import LeagueBadge from '../components/LeagueBadge'
 
 interface PlayerCard {
   player: PlayerDto
@@ -34,7 +34,7 @@ export default function Dashboard() {
   const [currentSeason, setCurrentSeason] = useState<SeasonDto | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [standingsFor, setStandingsFor] = useState<{ leagueUrl: string; leagueName: string; teamName: string; teamUrl: string } | null>(null)
+  const [standingsFor, setStandingsFor] = useState<{ league?: string | null; leagueUrl: string; leagueName: string; teamName: string; teamUrl: string } | null>(null)
   const [showAllUpcoming, setShowAllUpcoming] = useState(false)
   const upcomingGames = useMemo(() => collectUpcomingGames(players), [players])
 
@@ -155,7 +155,7 @@ export default function Dashboard() {
               <div>
                 <h3>
                   {player.firstName} {player.lastName}
-                  {ibba && <IbbaBadge />}
+                  {ibba && <LeagueBadge league={ibba.leagueKey} />}
                 </h3>
                 <p className="player-card-role">{player.position || 'Player'}</p>
               </div>
@@ -172,9 +172,9 @@ export default function Dashboard() {
                           <TeamCrest
                             logoUrl={ibbaTeam?.teamLogoUrl}
                             jerseyNumber={s.jerseyNumber}
-                            showIbbaMark={!!ibbaTeam}
+                            league={ibbaTeam ? ibba?.leagueKey : null}
                             size="sm"
-                            onClick={ibbaTeam?.ibbaLeagueUrl ? () => setStandingsFor({ leagueUrl: ibbaTeam.ibbaLeagueUrl!, leagueName: ibbaTeam.ibbaLeagueName ?? '', teamName: s.teamName, teamUrl: ibbaTeam.teamUrl }) : undefined}
+                            onClick={ibbaTeam?.ibbaLeagueUrl ? () => setStandingsFor({ league: ibba?.leagueKey, leagueUrl: ibbaTeam.ibbaLeagueUrl!, leagueName: ibbaTeam.ibbaLeagueName ?? '', teamName: s.teamName, teamUrl: ibbaTeam.teamUrl }) : undefined}
                             title={ibbaTeam?.ibbaLeagueUrl ? 'View standings' : undefined}
                           />
                           <div style={{ minWidth: 0 }}>
@@ -183,7 +183,7 @@ export default function Dashboard() {
                           </div>
                         </div>
                         {!!ibbaTeam?.position && ibbaTeam.position > 0 && (
-                          <label className="pos-pill" onClick={() => setStandingsFor({ leagueUrl: ibbaTeam.ibbaLeagueUrl!, leagueName: ibbaTeam.ibbaLeagueName ?? '', teamName: s.teamName, teamUrl: ibbaTeam.teamUrl })}>
+                          <label className="pos-pill" onClick={() => setStandingsFor({ league: ibba?.leagueKey, leagueUrl: ibbaTeam.ibbaLeagueUrl!, leagueName: ibbaTeam.ibbaLeagueName ?? '', teamName: s.teamName, teamUrl: ibbaTeam.teamUrl })}>
                             <svg className="icon"><use href="#i-trophy" /></svg>
                             {ibbaTeam.position}{ibbaTeam.position === 1 ? 'st' : ibbaTeam.position === 2 ? 'nd' : ibbaTeam.position === 3 ? 'rd' : 'th'} of {ibbaTeam.totalTeams}
                           </label>
@@ -307,6 +307,7 @@ export default function Dashboard() {
         <StandingsModal
           leagueUrl={standingsFor.leagueUrl}
           leagueName={standingsFor.leagueName}
+          league={standingsFor.league}
           highlightTeamUrl={standingsFor.teamUrl}
           highlightTeamName={standingsFor.teamName}
           onClose={() => setStandingsFor(null)}

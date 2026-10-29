@@ -1,6 +1,7 @@
 using System.Net;
 using ClosedXML.Excel;
 using StatsHub.Api.IbbaScraping;
+using StatsHub.Api.Leagues;
 
 namespace StatsHub.Api.Tests;
 
@@ -143,7 +144,7 @@ public class IbbaScrapingTests
     [Fact]
     public void A_standing_row_matches_a_team_exactly_not_by_prefix()
     {
-        var row = new IbbaStandingRow { TeamName = "מכבי בקה גת" };
+        var row = new LeagueStanding { TeamName = "מכבי בקה גת" };
         Assert.False(row.IsTeam(null, "מכבי בקה"));
         Assert.True(row.IsTeam(null, "מכבי בקה גת"));
     }
@@ -196,7 +197,7 @@ public class IbbaLayoutTests
         return new ByteArrayContent(stream.ToArray());
     }
 
-    private static Task<List<IbbaGameRow>> ParseAsync(ByteArrayContent sheet)
+    private static Task<List<LeagueGame>> ParseAsync(ByteArrayContent sheet)
     {
         const string url = "https://ibba.test/export.xlsx";
         return new IbbaTeamScraper(new HttpClient(new FakeSite(new() { [url] = sheet }))).DownloadAndParseGamesAsync(url);
@@ -219,7 +220,7 @@ public class IbbaLayoutTests
     {
         var header = Header.Select(h => h == "Home Score" ? "Score (home)" : h).ToArray();
 
-        var error = await Assert.ThrowsAsync<IbbaLayoutException>(() => ParseAsync(Sheet(header, Game)));
+        var error = await Assert.ThrowsAsync<LeagueLayoutException>(() => ParseAsync(Sheet(header, Game)));
         Assert.Contains("Home Score", error.Details);
     }
 
@@ -232,10 +233,10 @@ public class IbbaLayoutTests
         var game = (string[])Game.Clone();
         game[column] = value;
 
-        await Assert.ThrowsAsync<IbbaLayoutException>(() => ParseAsync(Sheet(Header, game)));
+        await Assert.ThrowsAsync<LeagueLayoutException>(() => ParseAsync(Sheet(Header, game)));
     }
 
-    private static Task<List<IbbaStandingRow>> StandingsAsync(string tableHtml)
+    private static Task<List<LeagueStanding>> StandingsAsync(string tableHtml)
     {
         const string url = "https://ibasketball.co.il/league/2026-1/";
         return new IbbaLeagueScraper(new HttpClient(new FakeSite(new() { [url] = new StringContent($"<html><body>{tableHtml}</body></html>") }))).GetStandingsAsync(url);
@@ -259,7 +260,7 @@ public class IbbaLayoutTests
     [Fact]
     public async Task A_standings_table_with_a_renamed_column_stops_the_sync()
     {
-        await Assert.ThrowsAsync<IbbaLayoutException>(() => StandingsAsync(
+        await Assert.ThrowsAsync<LeagueLayoutException>(() => StandingsAsync(
             "<table><tr><th>מיקום</th><th>קבוצה</th><th>משחקים</th><th>ניצ'</th><th>הפ'</th><th>טכני</th><th>קלעה</th><th>ספגה</th><th>הפרש</th><th>נק'</th></tr>"
             + Row("1", Team, "7", "7", "0", "0", "560", "480", "80", "14") + "</table>"));
     }
@@ -267,12 +268,12 @@ public class IbbaLayoutTests
     [Fact]
     public async Task A_standings_row_without_a_team_link_stops_the_sync()
     {
-        await Assert.ThrowsAsync<IbbaLayoutException>(() => StandingsAsync(
+        await Assert.ThrowsAsync<LeagueLayoutException>(() => StandingsAsync(
             "<table><tr><th>מיקום</th><th>קבוצה</th><th>מש'</th><th>ניצ'</th><th>הפ'</th><th>טכני</th><th>קלעה</th><th>ספגה</th><th>הפרש</th><th>נק'</th></tr>"
             + Row("1", "מכבי", "7", "7", "0", "0", "560", "480", "80", "14") + "</table>"));
     }
 
-    private static Task<IbbaPlayerInfo> PlayerAsync(string body)
+    private static Task<LeaguePlayer> PlayerAsync(string body)
     {
         const string url = "https://ibasketball.co.il/player/abc-123/";
         return new IbbaPlayerScraper(new HttpClient(new FakeSite(new() { [url] = new StringContent($"<html><body>{body}</body></html>") }))).GetPlayerInfoAsync(url);
@@ -291,7 +292,7 @@ public class IbbaLayoutTests
     [Fact]
     public async Task A_player_page_without_a_name_stops_the_sync()
     {
-        await Assert.ThrowsAsync<IbbaLayoutException>(() => PlayerAsync("<div>קבוצה נוכחית <a href='/team/151-maccabi/'>מכבי</a></div>"));
+        await Assert.ThrowsAsync<LeagueLayoutException>(() => PlayerAsync("<div>קבוצה נוכחית <a href='/team/151-maccabi/'>מכבי</a></div>"));
     }
 }
 

@@ -4,6 +4,7 @@ using StatsHub.Api.IbbaScraping;
 using StatsHub.Api.Models;
 using StatsHub.Api.Services;
 using StatsHub.Api.Tests.Infrastructure;
+using StatsHub.Api.Leagues;
 
 namespace StatsHub.Api.Tests;
 
@@ -28,7 +29,7 @@ public class IbbaGameSyncTests : IClassFixture<StatsHubFactory>
         return (own, opponent);
     }
 
-    private static IbbaGameRow Row(string code, IbbaTeam own, IbbaTeam opponent, DateTime israelDate, int? homeScore = null, int? awayScore = null) => new()
+    private static LeagueGame Row(string code, IbbaTeam own, IbbaTeam opponent, DateTime israelDate, int? homeScore = null, int? awayScore = null) => new()
     {
         League = "U16 North",
         Code = code,
@@ -43,7 +44,7 @@ public class IbbaGameSyncTests : IClassFixture<StatsHubFactory>
         AwayScore = awayScore,
     };
 
-    private async Task SyncAsync(IbbaTeam own, params IbbaGameRow[] rows)
+    private async Task SyncAsync(IbbaTeam own, params LeagueGame[] rows)
     {
         using var scope = _factory.Services.CreateScope();
         var service = (IbbaService)scope.ServiceProvider.GetRequiredService<IIbbaService>();

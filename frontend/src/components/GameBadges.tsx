@@ -1,14 +1,15 @@
 import type { GameDto } from '../api/types'
+import { LeagueMark } from './LeagueBadge'
 
-type GameKind = Pick<GameDto, 'gameType' | 'isFromIbba'>
+type GameKind = Pick<GameDto, 'gameType' | 'isFromIbba' | 'league'>
 type GameSide = Pick<GameDto, 'isHomeGame'>
 
-// "League" / "Cup" / "Friendly", with the IBBA mark on games synced from IBBA.
+// "League" / "Cup" / "Friendly", with the league's mark on games synced from one.
 export function GameTypeBadge({ game }: { game: GameKind }) {
   return (
     <span className={`game-type-badge ${game.gameType.toLowerCase()}`}>
       {game.gameType}
-      {game.isFromIbba && <img className="type-chip-ibba" src="/icons/ibba-logo.png" alt="" title="Synced from IBBA" />}
+      {game.isFromIbba && <LeagueMark league={game.league} className="type-chip-ibba" />}
     </span>
   )
 }

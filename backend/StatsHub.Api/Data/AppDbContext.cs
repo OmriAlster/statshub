@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using StatsHub.Api.Models;
 
@@ -221,6 +221,12 @@ namespace StatsHub.Api.Data
                 .IsUnique();
             modelBuilder.Entity<IbbaTeam>()
                 .HasIndex(t => t.LeagueUrl);
+            // A league's own team id - looked up when resolving a game's two sides.
+            modelBuilder.Entity<IbbaTeam>()
+                .HasIndex(t => new { t.Provider, t.IbbaTeamId });
+            // Rows from before leagues were pluggable all came from IBBA.
+            modelBuilder.Entity<IbbaTeam>().Property(t => t.Provider).HasDefaultValue("ibba");
+            modelBuilder.Entity<PlayerIbbaLink>().Property(l => l.Provider).HasDefaultValue("ibba");
 
             // The link lives on Team, not IbbaTeam - many app Teams (one per
             // player/parent) can point at the same shared IbbaTeam row, so no
@@ -258,7 +264,7 @@ namespace StatsHub.Api.Data
             // unique index regardless, but the filter also keeps this off the
             // (much larger) set of non-IBBA rows.
             modelBuilder.Entity<Game>()
-                .HasIndex(g => g.IbbaGameCode)
+                .HasIndex(g => new { g.Provider, g.IbbaGameCode })
                 .IsUnique()
                 .HasFilter("\"IbbaGameCode\" IS NOT NULL");
 

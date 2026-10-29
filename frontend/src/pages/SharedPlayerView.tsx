@@ -161,7 +161,7 @@ export default function SharedPlayerView() {
 function TeamMetaStrip({ team }: { team: SharedTeamDto }) {
   return (
     <div className="team-meta-strip">
-      <TeamCrest logoUrl={team.logoUrl} jerseyNumber={team.jerseyNumber} showIbbaMark={team.isIbba} />
+      <TeamCrest logoUrl={team.logoUrl} jerseyNumber={team.jerseyNumber} league={team.isIbba ? team.league ?? 'ibba' : null} />
       <div>
         <div className="pctr-team-name team-name-clamp" title={team.teamName}>{team.teamName}</div>
         {team.leagueName && (
