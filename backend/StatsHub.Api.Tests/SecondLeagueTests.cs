@@ -151,4 +151,25 @@ public class SecondLeagueTests : IClassFixture<SecondLeagueTests.Factory>
         Assert.Contains("IBBA", body);
         Assert.Contains("Demo League", body);
     }
+
+    [Fact]
+    public async Task A_league_player_already_on_your_players_page_is_flagged_and_not_added_twice()
+    {
+        var parent = await TestUser.SignInAsync(_factory);
+        var created = await parent.PostAsync<CreatePlayerFromIbbaResultDto>("/api/ibba/players", new { ibbaPlayerUrl = "https://demo-league.test/players/42" });
+
+        // The same page, pasted a little differently.
+        var again = "https://demo-league.test/players/42/#";
+        var preview = await parent.GetAsync<IbbaPreviewDto>($"/api/ibba/preview?playerUrl={Uri.EscapeDataString(again)}");
+        Assert.Equal(created.Player.Id, preview.AlreadyLinkedTo?.PlayerId);
+
+        var add = await parent.Http.PostAsJsonAsync("/api/ibba/players", new { ibbaPlayerUrl = again });
+        Assert.Equal(System.Net.HttpStatusCode.BadRequest, add.StatusCode);
+        Assert.Contains("already connected", await add.Content.ReadAsStringAsync());
+
+        // Another family can still add the same player.
+        var other = await TestUser.SignInAsync(_factory);
+        var theirs = await other.GetAsync<IbbaPreviewDto>($"/api/ibba/preview?playerUrl={Uri.EscapeDataString(again)}");
+        Assert.Null(theirs.AlreadyLinkedTo);
+    }
 }

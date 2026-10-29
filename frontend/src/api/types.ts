@@ -205,6 +205,14 @@ export interface CreateShotDto {
 
 export interface IbbaPreviewTeamDto {
   teamName: string
+  teamUrl: string
+  // A team the player may also play for, besides their main team.
+  isAdditional: boolean
+  // What the app already knows of the team - null until its first sync.
+  logoUrl?: string | null
+  leagueName?: string | null
+  position?: number | null
+  totalTeams?: number | null
 }
 
 export interface IbbaPreviewDto {
@@ -212,6 +220,9 @@ export interface IbbaPreviewDto {
   leagueName: string
   playerName: string
   dateOfBirth?: string | null
+  photoUrl?: string | null
+  // One of your players is already connected to this profile.
+  alreadyLinkedTo?: { playerId: string; playerName: string } | null
   teams: IbbaPreviewTeamDto[]
 }
 

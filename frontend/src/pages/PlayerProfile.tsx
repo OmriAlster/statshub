@@ -12,6 +12,7 @@ import BouncingBall, { Busy } from '../components/BouncingBall'
 import Modal from '../components/Modal'
 import LeagueBadge from '../components/LeagueBadge'
 import { leagueNames, useLeagues } from '../leagues'
+import LeagueFoundCard from '../components/LeagueFoundCard'
 
 const emptyForm = {
   firstName: '',
@@ -148,8 +149,15 @@ export default function PlayerProfile() {
     }
   }
 
-  const previewNewIbba = async () => {
-    const url = ibbaNewForm.url.trim()
+  const closeAddIbba = () => {
+    setShowAddIbbaForm(false)
+    setIbbaNewPreview(null)
+    setIbbaNewForm(emptyIbbaNewForm)
+    setIbbaNewError(null)
+  }
+
+  const previewNewIbba = async (pasted?: string) => {
+    const url = (pasted ?? ibbaNewForm.url).trim()
     if (!url) return
     setIbbaNewBusy(true)
     setIbbaNewError(null)
@@ -363,8 +371,8 @@ export default function PlayerProfile() {
     }
   }
 
-  const previewIbba = async (playerId: string) => {
-    const url = (ibbaUrlInput[playerId] ?? '').trim()
+  const previewIbba = async (playerId: string, pasted?: string) => {
+    const url = (pasted ?? ibbaUrlInput[playerId] ?? '').trim()
     if (!url) return
     setIbbaBusy((prev) => ({ ...prev, [playerId]: true }))
     setIbbaError((prev) => ({ ...prev, [playerId]: null }))
@@ -684,34 +692,47 @@ export default function PlayerProfile() {
                 <>
                   <p className="profile-section-label">Connect to {leagues}</p>
                   {ibbaPreview[player.id] ? (
-                    <div className="invite-box">
-                      <p>
-                        Found: <b>{ibbaPreview[player.id]!.playerName}</b>
-                        {ibbaPreview[player.id]!.teams.length > 0 && (
-                          <> · {ibbaPreview[player.id]!.teams.map((t) => t.teamName).join(', ')}</>
-                        )}
+                    <LeagueFoundCard
+                      preview={ibbaPreview[player.id]!}
+                      appDateOfBirth={player.dateOfBirth}
+                      appFirstName={player.firstName}
+                      confirmLabel={`Yes, connect ${player.firstName}`}
+                      busy={!!ibbaBusy[player.id]}
+                      busyLabel="Connecting…"
+                      onConfirm={() => confirmLinkIbba(player.id)}
+                      onBack={() => {
+                        setIbbaPreview((prev) => ({ ...prev, [player.id]: null }))
+                        setIbbaUrlInput((prev) => ({ ...prev, [player.id]: '' }))
+                      }}
+                    >
+                      <p className="found-note">
+                        From then on StatsHub syncs these teams&apos; games and league tables every night, and each result soon after it&apos;s posted.
                       </p>
-                      <div className="flex gap-1" style={{ marginTop: '0.5rem' }}>
-                        <button className="submit-btn" disabled={ibbaBusy[player.id]} onClick={() => confirmLinkIbba(player.id)}>
-                          Confirm Link
-                        </button>
-                        <button className="nav-btn" onClick={() => setIbbaPreview((prev) => ({ ...prev, [player.id]: null }))}>
-                          Cancel
+                    </LeagueFoundCard>
+                  ) : (
+                    <>
+                      <div className="ibba-connect-form">
+                        <input
+                          type="text"
+                          aria-label={`${player.firstName}'s player link`}
+                          className={(ibbaUrlInput[player.id] ?? '').includes('/player/') ? 'looks-like-link' : undefined}
+                          placeholder={`Paste this player's profile address (${urlExamples})`}
+                          value={ibbaUrlInput[player.id] ?? ''}
+                          onChange={(e) => setIbbaUrlInput((prev) => ({ ...prev, [player.id]: e.target.value }))}
+                          onPaste={(e) => {
+                            const pasted = e.clipboardData.getData('text').trim()
+                            if (!pasted) return
+                            e.preventDefault()
+                            setIbbaUrlInput((prev) => ({ ...prev, [player.id]: pasted }))
+                            previewIbba(player.id, pasted) // a pasted link is checked right away
+                          }}
+                        />
+                        <button className="submit-btn" disabled={ibbaBusy[player.id] || !(ibbaUrlInput[player.id] ?? '').trim()} onClick={() => previewIbba(player.id)}>
+                          {ibbaBusy[player.id] ? <Busy>Checking…</Busy> : 'Find'}
                         </button>
                       </div>
-                    </div>
-                  ) : (
-                    <div className="ibba-connect-form">
-                      <input
-                        type="text"
-                        placeholder={`Paste this player's profile address (${urlExamples})`}
-                        value={ibbaUrlInput[player.id] ?? ''}
-                        onChange={(e) => setIbbaUrlInput((prev) => ({ ...prev, [player.id]: e.target.value }))}
-                      />
-                      <button className="submit-btn" disabled={ibbaBusy[player.id] || !(ibbaUrlInput[player.id] ?? '').trim()} onClick={() => previewIbba(player.id)}>
-                        {ibbaBusy[player.id] ? <Busy>Checking…</Busy> : 'Preview'}
-                      </button>
-                    </div>
+                      <p className="found-hint">Open the player on the league&apos;s site and copy the address from the browser.</p>
+                    </>
                   )}
                   {ibbaError[player.id] && <p className="error">{ibbaError[player.id]}</p>}
                 </>
@@ -775,52 +796,62 @@ export default function PlayerProfile() {
         ))}
 
         {!isPlayerRole && !showAddForm && (
-          <div className="add-player-card">
+          <div className={ibbaNewPreview ? 'add-player-card add-player-card--found' : showAddIbbaForm ? 'add-player-card add-player-card--open' : 'add-player-card'}>
             {showAddIbbaForm ? (
-              ibbaNewPreview ? (
-                <>
-                  <h3>➕ New Player from {leagues}</h3>
-                  <p>
-                    Found: <b>{ibbaNewPreview.playerName}</b>
-                    {ibbaNewPreview.dateOfBirth && <> · born {new Date(ibbaNewPreview.dateOfBirth).toLocaleDateString()}</>}
-                    {ibbaNewPreview.teams.length > 0 && <> · {ibbaNewPreview.teams.map((t) => t.teamName).join(', ')}</>}
-                  </p>
-                  {!ibbaNewPreview.dateOfBirth && (
-                    <p className="error">This profile doesn't list a birth date - add this player manually instead.</p>
-                  )}
-                  {ibbaNewError && <p className="error">{ibbaNewError}</p>}
-                  <div className="flex gap-1" style={{ justifyContent: 'center', flexWrap: 'wrap' }}>
-                    {ibbaNewPreview.dateOfBirth && (
-                      <button className="submit-btn" onClick={createPlayerFromIbba} disabled={ibbaNewBusy}>
-                        {ibbaNewBusy ? <Busy>Creating…</Busy> : 'Create Player'}
-                      </button>
+              <>
+                {!ibbaNewPreview && (
+                  <div className="add-card-head">
+                    <h3>New player from {leagues}</h3>
+                    <button className="add-card-close" aria-label="Close" onClick={closeAddIbba}>
+                      <svg className="icon" aria-hidden="true"><use href="#i-x" /></svg>
+                    </button>
+                  </div>
+                )}
+                {ibbaNewPreview ? (
+                  <LeagueFoundCard
+                    preview={ibbaNewPreview}
+                    confirmLabel={`Yes, add ${ibbaNewPreview.playerName.split(' ')[0]}`}
+                    busy={ibbaNewBusy}
+                    busyLabel="Adding…"
+                    canConfirm={!!ibbaNewPreview.dateOfBirth}
+                    onConfirm={createPlayerFromIbba}
+                    onBack={() => { setIbbaNewPreview(null); setIbbaNewForm(emptyIbbaNewForm); setIbbaNewError(null) }}
+                    onClose={closeAddIbba}
+                  >
+                    {!ibbaNewPreview.dateOfBirth && (
+                      <p className="error">This profile doesn&apos;t list a birth date - add this player manually instead.</p>
                     )}
-                    <button onClick={() => setIbbaNewPreview(null)} disabled={ibbaNewBusy}>Back</button>
-                    <button
-                      onClick={() => { setShowAddIbbaForm(false); setIbbaNewPreview(null); setIbbaNewForm(emptyIbbaNewForm); setIbbaNewError(null) }}
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <h3>➕ New Player from {leagues}</h3>
-                  <div className="ibba-connect-form">
-                    <input
-                      type="text"
-                      placeholder={`Paste this player's profile address (${urlExamples})`}
-                      value={ibbaNewForm.url}
-                      onChange={(e) => setIbbaNewForm({ ...ibbaNewForm, url: e.target.value })}
-                    />
-                    <button className="submit-btn" disabled={ibbaNewBusy || !ibbaNewForm.url.trim()} onClick={previewNewIbba}>
-                      {ibbaNewBusy ? <Busy>Checking…</Busy> : 'Preview'}
-                    </button>
-                  </div>
-                  {ibbaNewError && <p className="error">{ibbaNewError}</p>}
-                  <button onClick={() => setShowAddIbbaForm(false)}>Cancel</button>
-                </>
-              )
+                    {ibbaNewError && <p className="error">{ibbaNewError}</p>}
+                  </LeagueFoundCard>
+                ) : (
+                  <>
+                    <p className="found-intro">Open the player&apos;s page on the league&apos;s site and paste its address here.</p>
+                    <label className="visually-hidden" htmlFor="new-player-link">The player&apos;s {leagues} link</label>
+                    <div className="ibba-connect-form">
+                      <input
+                        id="new-player-link"
+                        type="text"
+                        className={ibbaNewForm.url.includes('/player/') ? 'looks-like-link' : undefined}
+                        placeholder={`Paste this player's profile address (${urlExamples})`}
+                        value={ibbaNewForm.url}
+                        onChange={(e) => setIbbaNewForm({ ...ibbaNewForm, url: e.target.value })}
+                        onPaste={(e) => {
+                          const pasted = e.clipboardData.getData('text').trim()
+                          if (!pasted) return
+                          e.preventDefault()
+                          setIbbaNewForm({ ...ibbaNewForm, url: pasted })
+                          previewNewIbba(pasted) // a pasted link is checked right away
+                        }}
+                      />
+                      <button className="submit-btn" disabled={ibbaNewBusy || !ibbaNewForm.url.trim()} onClick={() => previewNewIbba()}>
+                        {ibbaNewBusy ? <Busy>Checking…</Busy> : 'Find'}
+                      </button>
+                    </div>
+                    
+                    {ibbaNewError && <p className="error">{ibbaNewError}</p>}
+                  </>
+                )}
+              </>
             ) : (
               <>
                 <h3>➕ Add New Player</h3>

@@ -15,6 +15,9 @@ public class LeagueTeam
 
     public string LeagueName { get; set; } = "";
     public string LeagueUrl { get; set; } = "";
+
+    /// <summary>A team the player is also allowed to play for, besides their main team.</summary>
+    public bool IsAdditional { get; set; }
 }
 
 /// <summary>Everything read off the player's own page.</summary>

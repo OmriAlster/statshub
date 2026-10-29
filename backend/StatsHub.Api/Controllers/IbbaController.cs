@@ -27,7 +27,7 @@ namespace StatsHub.Api.Controllers
 
             try
             {
-                var preview = await _ibbaService.PreviewAsync(playerUrl);
+                var preview = await _ibbaService.PreviewAsync(playerUrl, _currentUser.UserId);
                 return Ok(preview);
             }
             catch (InvalidOperationException ex)

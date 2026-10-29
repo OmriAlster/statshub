@@ -10,7 +10,7 @@ namespace StatsHub.Api.Services
 {
     public interface IIbbaService
     {
-        Task<IbbaPreviewDto> PreviewAsync(string playerUrl);
+        Task<IbbaPreviewDto> PreviewAsync(string playerUrl, Guid requestingUserId);
         Task<CreatePlayerFromIbbaResultDto> CreatePlayerFromIbbaAsync(string ibbaPlayerUrl, Guid requestingUserId);
         Task<IbbaLinkStatusDto?> LinkPlayerAsync(Guid playerId, string ibbaPlayerUrl, Guid requestingUserId);
         Task<bool> UnlinkPlayerAsync(Guid playerId, Guid requestingUserId);
@@ -75,13 +75,18 @@ namespace StatsHub.Api.Services
                 .ToListAsync();
         }
 
-        public async Task<IbbaPreviewDto> PreviewAsync(string playerUrl)
+        public async Task<IbbaPreviewDto> PreviewAsync(string playerUrl, Guid requestingUserId)
         {
             var league = _leagues.ForPlayerUrl(playerUrl);
             var info = await league.GetPlayerAsync(playerUrl);
+            var alreadyLinked = await FindLinkedPlayerAsync(playerUrl, requestingUserId);
 
             if (info.Teams.Count == 0)
                 throw new InvalidOperationException($"Could not find any current team for this player on the {league.Name} page. Check the URL is a player profile page.");
+
+            // What the app already knows of these teams - no extra trips to the site.
+            var urls = info.Teams.Select(t => t.TeamUrl).ToList();
+            var known = await _context.IbbaTeams.AsNoTracking().Where(t => urls.Contains(t.TeamUrl)).ToDictionaryAsync(t => t.TeamUrl);
 
             return new IbbaPreviewDto
             {
@@ -89,14 +94,60 @@ namespace StatsHub.Api.Services
                 LeagueName = league.Name,
                 PlayerName = info.PlayerName,
                 DateOfBirth = info.DateOfBirth,
-                Teams = info.Teams.Select(t => new IbbaPreviewTeamDto { TeamName = t.TeamName }).ToList()
+                PhotoUrl = string.IsNullOrEmpty(info.PhotoUrl) ? null : info.PhotoUrl,
+                AlreadyLinkedTo = alreadyLinked == null ? null : new IbbaLinkedPlayerDto { PlayerId = alreadyLinked.Id, PlayerName = $"{alreadyLinked.FirstName} {alreadyLinked.LastName}".Trim() },
+                Teams = info.Teams.Select(t =>
+                {
+                    known.TryGetValue(t.TeamUrl, out var team);
+                    return new IbbaPreviewTeamDto
+                    {
+                        TeamName = team?.Name ?? t.TeamName,
+                        TeamUrl = t.TeamUrl,
+                        IsAdditional = t.IsAdditional,
+                        LogoUrl = team?.LogoUrl,
+                        LeagueName = string.IsNullOrEmpty(team?.LeagueName) ? null : team.LeagueName,
+                        Position = team?.LeaguePosition,
+                        TotalTeams = team?.LeagueTotalTeams,
+                    };
+                }).ToList()
             };
+        }
+
+        // One league profile belongs to one of the family's players - adding or
+        // connecting it a second time would make a duplicate player with
+        // the same games. Links are compared by site and path, so the same
+        // page pasted with "www.", "http:", a trailing "#" or "?..." still matches.
+        private async Task<Player?> FindLinkedPlayerAsync(string playerUrl, Guid requestingUserId, Guid? exceptPlayerId = null)
+        {
+            var key = PlayerUrlKey(playerUrl);
+            var links = await _context.PlayerIbbaLinks.AsNoTracking()
+                .Where(l => _context.Players.Where(AccessRules.PlayerVisibleTo(requestingUserId)).Any(p => p.Id == l.PlayerId))
+                .Where(l => exceptPlayerId == null || l.PlayerId != exceptPlayerId)
+                .Select(l => new { l.PlayerId, l.IbbaPlayerUrl })
+                .ToListAsync();
+            var match = links.FirstOrDefault(l => PlayerUrlKey(l.IbbaPlayerUrl) == key);
+            return match == null ? null : await _context.Players.AsNoTracking().FirstAsync(p => p.Id == match.PlayerId);
+        }
+
+        private async Task EnsureNotLinkedElsewhereAsync(string playerUrl, Guid requestingUserId, Guid? playerId, string leagueName)
+        {
+            var other = await FindLinkedPlayerAsync(playerUrl, requestingUserId, playerId);
+            if (other != null)
+                throw new InvalidOperationException($"This {leagueName} player is already connected to {other.FirstName} {other.LastName}".TrimEnd() + " on your Players page.");
+        }
+
+        internal static string PlayerUrlKey(string url)
+        {
+            if (!Uri.TryCreate(url.Trim(), UriKind.Absolute, out var uri)) return url.Trim().TrimEnd('/', '#').ToLowerInvariant();
+            var host = uri.Host.StartsWith("www.", StringComparison.OrdinalIgnoreCase) ? uri.Host[4..] : uri.Host;
+            return $"{host}{Uri.UnescapeDataString(uri.AbsolutePath).TrimEnd('/')}".ToLowerInvariant();
         }
 
         public async Task<IbbaLinkStatusDto?> LinkPlayerAsync(Guid playerId, string ibbaPlayerUrl, Guid requestingUserId)
         {
             if (!await _playerService.CanAccessPlayerAsync(playerId, requestingUserId)) return null;
             var league = _leagues.ForPlayerUrl(ibbaPlayerUrl);
+            await EnsureNotLinkedElsewhereAsync(ibbaPlayerUrl, requestingUserId, playerId, league.Name);
 
             var link = await _context.PlayerIbbaLinks.FirstOrDefaultAsync(l => l.PlayerId == playerId);
             if (link == null)
@@ -127,6 +178,7 @@ namespace StatsHub.Api.Services
         public async Task<CreatePlayerFromIbbaResultDto> CreatePlayerFromIbbaAsync(string ibbaPlayerUrl, Guid requestingUserId)
         {
             var league = _leagues.ForPlayerUrl(ibbaPlayerUrl);
+            await EnsureNotLinkedElsewhereAsync(ibbaPlayerUrl, requestingUserId, null, league.Name);
             var info = await league.GetPlayerAsync(ibbaPlayerUrl);
 
             if (info.Teams.Count == 0)
