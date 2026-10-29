@@ -198,11 +198,18 @@ public class IbbaLeagueProvider : ILeagueProvider
         var match = System.Text.RegularExpressions.Regex.Match(slug, "^[0-9]{2}([0-9a-f]{8})[0-9a-f]{6}-[0-9]+$");
         if (!match.Success) return false;
         var saved = DateTimeOffset.FromUnixTimeSeconds(Convert.ToInt64(match.Groups[1].Value, 16)).UtcDateTime;
-        var seasonStart = new DateTime(now.Month >= 8 ? now.Year : now.Year - 1, 8, 1, 0, 0, 0, DateTimeKind.Utc);
-        return saved >= seasonStart;
+        return saved >= LeagueSeason.StartOf(now);
     }
 
-    // The site's open team data (/team/<slug>/ -> its crest image) answers in
-    // well under a second, against ~3 s for a team page IBBA hasn't cached.
-    public async Task<string?> QuickTeamLogoUrlAsync(string teamUrl) => (await OpenData().FindTeamAsync(teamUrl))?.CrestUrl;
+    // The site's open team data answers in well under a second, against ~3 s
+    // for a team page IBBA hasn't cached: its crest, and its newest league
+    // that isn't a cup - this season's, once the season has begun.
+    public async Task<LeagueTeamQuick?> QuickTeamAsync(string teamUrl)
+    {
+        var openData = OpenData();
+        var info = await openData.FindTeamAsync(teamUrl);
+        if (info == null) return null;
+        var league = await openData.FindNewestLeagueAsync(info.LeagueIds);
+        return new LeagueTeamQuick(info.CrestUrl, league?.Name, league?.PageUrl);
+    }
 }

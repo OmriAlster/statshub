@@ -76,6 +76,22 @@ public class IbbaOpenData
     }
 
     /// <summary>
+    /// The team's newest league that isn't a cup - the one it plays in this
+    /// season (the cup is its own league, named גביע ...).
+    /// </summary>
+    public async Task<LeagueInfo?> FindNewestLeagueAsync(IEnumerable<int> leagueIds)
+    {
+        var ids = leagueIds.Distinct().ToList();
+        if (ids.Count == 0) return null;
+        using var timing = RequestTimings.Time("ibba-api-league");
+        var leagues = await GetAsync<List<LeagueJson>>($"{Api}/leagues?include={string.Join(',', ids)}&per_page=100&_fields=id,name,link");
+        var league = leagues?
+            .Where(l => !Decode(l.Name).Contains("גביע") && !string.IsNullOrEmpty(l.Link))
+            .MaxBy(l => l.Id);
+        return league == null ? null : new LeagueInfo(league.Id, Decode(league.Name), PageUrl(league.Link!));
+    }
+
+    /// <summary>
     /// The league's table (its regular-season one when it has stages), each
     /// row with the team's page address - one request for the table, one for
     /// the addresses.
@@ -84,9 +100,13 @@ public class IbbaOpenData
     {
         using var timing = RequestTimings.Time("ibba-api-standings");
         var tables = await GetAsync<List<TableJson>>($"{Api}/tables?leagues={leagueId}&_fields=id,title,data");
+        // A league can have more than one table of the same name - one left
+        // empty (everyone on 0 games) beside the live one: the live one is the
+        // one with games in it, the newest when two do.
         var table = tables?
             .OrderByDescending(t => Decode(t.Title?.Rendered).Contains("רגילה"))
-            .ThenBy(t => t.Id)
+            .ThenByDescending(t => GamesIn(t) > 0)
+            .ThenByDescending(t => t.Id)
             .FirstOrDefault();
         if (table?.Data == null) return null;
 
@@ -122,6 +142,10 @@ public class IbbaOpenData
         }
         return standings.OrderBy(s => s.Position).ToList();
     }
+
+    private static int GamesIn(TableJson table) =>
+        table.Data?.Where(r => r.Key != "0")
+            .Sum(r => r.Value.TryGetValue("gp", out var gp) && gp.ValueKind == JsonValueKind.Number ? gp.GetInt32() : 0) ?? 0;
 
     private async Task<T?> GetAsync<T>(string url) where T : class
     {

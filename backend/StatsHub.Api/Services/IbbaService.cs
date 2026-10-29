@@ -122,21 +122,21 @@ namespace StatsHub.Api.Services
 
         internal const int MinSearchLength = 3;
 
-        // A team's crest for a found player's card - a day in memory; a failed
-        // lookup just means no crest.
-        private Task<string?> QuickTeamLogoAsync(ILeagueProvider league, string teamUrl) =>
-            _cache.GetOrCreateAsync($"team-crest:{league.Key}:{teamUrl}", async entry =>
+        // A team's crest and this season's league for a found player's card -
+        // a day in memory; a failed lookup just means they're not shown.
+        private Task<LeagueTeamQuick?> QuickTeamAsync(ILeagueProvider league, string teamUrl) =>
+            _cache.GetOrCreateAsync($"team-quick:{league.Key}:{teamUrl}", async entry =>
             {
                 entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromDays(1);
                 try
                 {
-                    var crest = await league.QuickTeamLogoUrlAsync(teamUrl);
-                    if (crest == null) entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(10); // none, or IBBA didn't answer
-                    return crest;
+                    var quick = await league.QuickTeamAsync(teamUrl);
+                    if (quick == null) entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(10); // none, or IBBA didn't answer
+                    return quick;
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogInformation(ex, "No quick crest for {TeamUrl}", teamUrl);
+                    _logger.LogInformation(ex, "No quick team data for {TeamUrl}", teamUrl);
                     entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(5);
                     return null;
                 }
@@ -146,16 +146,21 @@ namespace StatsHub.Api.Services
         {
             var alreadyLinked = await FindLinkedPlayerAsync(playerUrl, requestingUserId);
 
-            // What the app already knows of these teams - no extra trips to the site.
+            // What the app already knows of these teams - its league and place
+            // only when synced this season (a team kept from last season would
+            // show last season's league).
             var urls = info.Teams.Select(t => t.TeamUrl).ToList();
-            var known = await _context.IbbaTeams.AsNoTracking().Where(t => urls.Contains(t.TeamUrl)).ToDictionaryAsync(t => t.TeamUrl);
+            var seasonStart = LeagueSeason.StartOf(DateTime.UtcNow);
+            var known = (await _context.IbbaTeams.AsNoTracking().Where(t => urls.Contains(t.TeamUrl)).ToListAsync())
+                .GroupBy(t => t.TeamUrl).ToDictionary(g => g.Key, g => g.First());
+            bool Current(IbbaTeam? t) => t != null && t.SyncedAt >= seasonStart && !string.IsNullOrEmpty(t.LeagueName);
 
-            // Crests of teams the app doesn't know yet - quickly, all at once.
-            var crests = new Dictionary<string, string?>();
-            await Task.WhenAll(info.Teams.Where(t => !known.TryGetValue(t.TeamUrl, out var k) || string.IsNullOrEmpty(k.LogoUrl)).Select(async t =>
+            // Crest and this season's league of the rest - quickly, all at once.
+            var quick = new Dictionary<string, LeagueTeamQuick?>();
+            await Task.WhenAll(info.Teams.Where(t => !known.TryGetValue(t.TeamUrl, out var k) || string.IsNullOrEmpty(k.LogoUrl) || !Current(k)).Select(async t =>
             {
-                var crest = await QuickTeamLogoAsync(league, t.TeamUrl);
-                lock (crests) crests[t.TeamUrl] = crest;
+                var q = await QuickTeamAsync(league, t.TeamUrl);
+                lock (quick) quick[t.TeamUrl] = q;
             }));
 
             return new IbbaPreviewDto
@@ -170,15 +175,17 @@ namespace StatsHub.Api.Services
                 Teams = info.Teams.Select(t =>
                 {
                     known.TryGetValue(t.TeamUrl, out var team);
+                    var q = quick.GetValueOrDefault(t.TeamUrl);
+                    var current = Current(team);
                     return new IbbaPreviewTeamDto
                     {
                         TeamName = team?.Name ?? t.TeamName,
                         TeamUrl = t.TeamUrl,
                         IsAdditional = t.IsAdditional,
-                        LogoUrl = string.IsNullOrEmpty(team?.LogoUrl) ? crests.GetValueOrDefault(t.TeamUrl) : team.LogoUrl,
-                        LeagueName = string.IsNullOrEmpty(team?.LeagueName) ? null : team.LeagueName,
-                        Position = team?.LeaguePosition,
-                        TotalTeams = team?.LeagueTotalTeams,
+                        LogoUrl = string.IsNullOrEmpty(team?.LogoUrl) ? q?.CrestUrl : team.LogoUrl,
+                        LeagueName = current ? team!.LeagueName : string.IsNullOrEmpty(q?.LeagueName) ? null : q.LeagueName,
+                        Position = current && team!.LeaguePosition > 0 ? team.LeaguePosition : null,
+                        TotalTeams = current && team!.LeaguePosition > 0 ? team.LeagueTotalTeams : null,
                     };
                 }).ToList()
             };
@@ -658,8 +665,7 @@ namespace StatsHub.Api.Services
                     if (playerEntity != null) playerEntity.ProfilePictureUrl = player.PhotoUrl;
                 }
 
-                var urls = pages.Select(p => p.Team.TeamUrl).ToList();
-                var known = await _context.IbbaTeams.Where(t => urls.Contains(t.TeamUrl)).ToDictionaryAsync(t => t.TeamUrl);
+                var known = await KnownTeamsAsync(pages.Select(p => (p.Team.TeamUrl, p.Team.TeamSlugId)).ToList(), league.Key);
                 var memberOf = (await _context.PlayerIbbaTeams
                     .Where(pit => pit.PlayerIbbaLinkId == link.Id)
                     .Select(pit => pit.IbbaTeamId)
@@ -896,6 +902,30 @@ namespace StatsHub.Api.Services
             return existing;
         }
 
+        // The teams already saved for these addresses, by address. A team IBBA
+        // renamed keeps its id but gets a new address (/team/1232-old-name/ ->
+        // /team/1232-new-name/) - found by its id, it moves to the new address
+        // instead of a second team with the same id being added.
+        private async Task<Dictionary<string, IbbaTeam>> KnownTeamsAsync(List<(string Url, string Code)> teams, string provider)
+        {
+            var urls = teams.Select(t => t.Url).Distinct().ToList();
+            var known = (await _context.IbbaTeams.Where(t => urls.Contains(t.TeamUrl)).ToListAsync())
+                .GroupBy(t => t.TeamUrl).ToDictionary(g => g.Key, g => g.First());
+
+            var renamed = teams.Where(t => !known.ContainsKey(t.Url) && !string.IsNullOrEmpty(t.Code)).ToList();
+            if (renamed.Count == 0) return known;
+            var codes = renamed.Select(t => t.Code).Distinct().ToList();
+            var byCode = (await _context.IbbaTeams.Where(t => t.Provider == provider && codes.Contains(t.IbbaTeamId)).ToListAsync())
+                .GroupBy(t => t.IbbaTeamId).ToDictionary(g => g.Key, g => g.OrderByDescending(t => t.SyncedAt).First());
+            foreach (var (url, code) in renamed)
+            {
+                if (!byCode.TryGetValue(code, out var team) || known.ContainsValue(team)) continue;
+                team.TeamUrl = url;
+                known[url] = team;
+            }
+            return known;
+        }
+
         // Every team in the league's standings gets upserted here, not just the
         // one the player is on - this is what lets an opponent be resolved by id
         // and get a logo, the same as your own team. Returns every touched
@@ -906,9 +936,7 @@ namespace StatsHub.Api.Services
             var urls = rows.Where(r => !string.IsNullOrEmpty(r.TeamUrl)).Select(r => r.TeamUrl).Distinct().ToList();
             if (urls.Count == 0) return new List<Guid>();
 
-            var existingTeams = await _context.IbbaTeams
-                .Where(t => urls.Contains(t.TeamUrl))
-                .ToDictionaryAsync(t => t.TeamUrl);
+            var existingTeams = await KnownTeamsAsync(urls.Select(u => (u, league.TeamIdFromUrl(u))).ToList(), provider);
 
             foreach (var row in rows)
             {
@@ -945,9 +973,12 @@ namespace StatsHub.Api.Services
             // A team of this league that's no longer in its table withdrew (or
             // was removed) - it leaves the table. Its row stays: its games and
             // any app team linked to it still point at it.
-            var gone = await _context.IbbaTeams
+            var inTable = existingTeams.Values.ToHashSet(); // incl. a renamed team, not yet saved at its new address
+            var gone = (await _context.IbbaTeams
                 .Where(t => t.LeagueUrl == leagueUrl && t.LeaguePosition != null && !urls.Contains(t.TeamUrl))
-                .ToListAsync();
+                .ToListAsync())
+                .Where(t => !inTable.Contains(t))
+                .ToList();
             foreach (var team in gone)
             {
                 team.LeaguePosition = null;
@@ -1114,7 +1145,7 @@ namespace StatsHub.Api.Services
                     var resolved = await ResolveUnknownOpponentsAsync(context, _leagues.Get(provider), unresolvedCodes, namesByCode);
                     if (resolved.Count == 0) return;
 
-                    var teamsByCode = resolved.ToDictionary(t => t.IbbaTeamId);
+                    var teamsByCode = resolved.GroupBy(t => t.IbbaTeamId).ToDictionary(g => g.Key, g => g.First());
 
                     foreach (var row in rows)
                     {
@@ -1160,9 +1191,13 @@ namespace StatsHub.Api.Services
                 .Where(code => !string.IsNullOrEmpty(code))
                 .Distinct()
                 .ToList();
-            var teamsByCode = await _timings.MeasureAsync("db-games-find-teams", () => _context.IbbaTeams
-                .Where(t => t.Provider == ownTeam.Provider && allCodes.Contains(t.IbbaTeamId))
-                .ToDictionaryAsync(t => t.IbbaTeamId));
+            // (Two saved teams with one id - from before renamed teams were
+            // recognised - resolve to the one synced most recently.)
+            var teamsByCode = (await _timings.MeasureAsync("db-games-find-teams", () => _context.IbbaTeams
+                    .Where(t => t.Provider == ownTeam.Provider && allCodes.Contains(t.IbbaTeamId))
+                    .ToListAsync()))
+                .GroupBy(t => t.IbbaTeamId)
+                .ToDictionary(g => g.Key, g => g.OrderByDescending(t => t.SyncedAt).First());
 
             // Any team not already known by id (typically a cup/friendly game
             // against a team from a different league/age group, which our own

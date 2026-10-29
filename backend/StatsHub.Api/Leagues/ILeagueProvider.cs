@@ -66,8 +66,9 @@ public interface ILeagueProvider
     Task<List<LeaguePlayerHit>> SearchPlayersAsync(string name) => Task.FromResult(new List<LeaguePlayerHit>());
 
     /// <summary>
-    /// A team's crest without loading its page, when the league offers a quick
-    /// way (for a found player's card); null when it doesn't or has none.
+    /// A team's crest and this season's league without loading its pages, when
+    /// the league offers a quick way (for a found player's card); null when it
+    /// doesn't.
     /// </summary>
-    Task<string?> QuickTeamLogoUrlAsync(string teamUrl) => Task.FromResult<string?>(null);
+    Task<LeagueTeamQuick?> QuickTeamAsync(string teamUrl) => Task.FromResult<LeagueTeamQuick?>(null);
 }

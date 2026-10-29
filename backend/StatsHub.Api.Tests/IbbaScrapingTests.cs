@@ -344,7 +344,7 @@ public class IbbaLayoutTests
                 "[{\"id\":746561,\"title\":{\"rendered\":\"מכבי תל מונד\"},\"link\":\"https://ibasketball.co.il/team/10550-x/\",\"_embedded\":{\"wp:featuredmedia\":[{\"source_url\":\"https://ibasketball.co.il/crest.png\",\"media_details\":{\"sizes\":{\"thumbnail\":{\"source_url\":\"https://ibasketball.co.il/crest-150x150.png\"}}}}]}}]"),
         });
 
-        var crest = await new IbbaLeagueProvider(new Factory(site)).QuickTeamLogoUrlAsync("https://ibasketball.co.il/team/10550-%d7%9e%d7%9b%d7%91%d7%99-%d7%aa%d7%9c-%d7%9e%d7%95%d7%a0%d7%93/");
+        var crest = (await new IbbaLeagueProvider(new Factory(site)).QuickTeamAsync("https://ibasketball.co.il/team/10550-%d7%9e%d7%9b%d7%91%d7%99-%d7%aa%d7%9c-%d7%9e%d7%95%d7%a0%d7%93/"))?.CrestUrl;
 
         Assert.Equal("https://ibasketball.co.il/crest-150x150.png", crest);
     }

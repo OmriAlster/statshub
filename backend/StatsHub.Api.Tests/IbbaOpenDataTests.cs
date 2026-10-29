@@ -60,8 +60,12 @@ public class IbbaOpenDataTests
              {"id":119959,"name":"נערים ב לאומית צפון","link":"https://ibasketball.co.il/league/2026-201/"},
              {"id":120232,"name":"גביע המדינה לנערים ב","link":"https://ibasketball.co.il/league/2026-901/"}]
             """),
+        // Two tables of one name - the live one, and one left empty.
         [$"{Api}/tables?leagues=119959&_fields=id,title,data"] = Json("""
-            [{"id":1501421,"title":{"rendered":"נערים ב לאומית צפון &#8211; רגילה &#8211; רגילה &#8211; 2026"},"data":{
+            [{"id":1501399,"title":{"rendered":"נערים ב לאומית צפון &#8211; רגילה &#8211; רגילה &#8211; 2026"},"data":{
+              "168967":{"gp":0,"w":0,"l":0,"lt":0,"bf":0,"ba":0,"bd":0,"pts":0,"pos":0,"name":"מכבי חיפה"},
+              "0":{"pos":"מיקום","name":"קבוצה"}}},
+             {"id":1501421,"title":{"rendered":"נערים ב לאומית צפון &#8211; רגילה &#8211; רגילה &#8211; 2026"},"data":{
               "168967":{"gp":2,"w":1,"l":1,"lt":0,"bf":136,"ba":141,"bd":-5,"pts":3,"pos":2,"name":"מכבי חיפה"},
               "880927":{"gp":3,"w":2,"l":1,"lt":0,"bf":221,"ba":197,"bd":24,"pts":5,"pos":1,"name":"הפועל מגידו צפון"},
               "0":{"pos":"מיקום","name":"קבוצה","gp":"מש׳","w":"ניצ׳","l":"הפ׳","lt":"טכני","bf":"קלעה","ba":"ספגה","bd":"הפרש","pts":"נק׳"}}}]
