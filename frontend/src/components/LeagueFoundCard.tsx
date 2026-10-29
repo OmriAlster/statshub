@@ -5,8 +5,9 @@ import LeagueBadge from './LeagueBadge'
 import TeamCrest from './TeamCrest'
 
 // What a pasted league link turned out to be, before anything is linked or
-// created: the player (photo, name, birth date - checked against the one in
-// StatsHub when there is one) and their current teams, then a clear yes / no.
+// created - shown like the player card it's about to become: the player
+// (photo, name, birth date - checked against the one in StatsHub when there
+// is one) and their current teams, then a clear yes / no.
 export default function LeagueFoundCard({
   preview,
   appDateOfBirth,
@@ -17,6 +18,7 @@ export default function LeagueFoundCard({
   canConfirm = true,
   onConfirm,
   onBack,
+  onClose,
   children,
 }: {
   preview: IbbaPreviewDto
@@ -28,6 +30,7 @@ export default function LeagueFoundCard({
   canConfirm?: boolean
   onConfirm: () => void
   onBack: () => void
+  onClose?: () => void
   children?: ReactNode
 }) {
   const born = preview.dateOfBirth ? new Date(preview.dateOfBirth) : null
@@ -38,11 +41,17 @@ export default function LeagueFoundCard({
 
   return (
     <div className="found-card">
-      <div className="found-who">
-      <p className="found-status">
-        <svg className="icon" aria-hidden="true"><use href="#i-check" /></svg>
-        Found on {preview.leagueName}
-      </p>
+      <div className="found-head">
+        <span className="found-status">
+          <svg className="icon" aria-hidden="true"><use href="#i-check" /></svg>
+          Found on {preview.leagueName}
+        </span>
+        {onClose && (
+          <button className="add-card-close" aria-label="Close" onClick={onClose} disabled={busy}>
+            <svg className="icon" aria-hidden="true"><use href="#i-x" /></svg>
+          </button>
+        )}
+      </div>
 
       <div className="found-player">
         {preview.photoUrl ? (
@@ -65,30 +74,31 @@ export default function LeagueFoundCard({
         </div>
       </div>
 
-      </div>
-
-      <div className="found-details">
-      <p className="found-label">Current teams on {preview.leagueName}</p>
-      <ul className="found-teams">
+      <ul className="found-teams" aria-label={`Current teams on ${preview.leagueName}`}>
         {preview.teams.map((t) => (
           <li key={t.teamUrl || t.teamName} className="found-team">
             <TeamCrest logoUrl={t.logoUrl} league={preview.leagueKey} size="sm" />
             <span className="found-team-text">
               <span className="found-team-name" dir="auto">{t.teamName}</span>
-              <span className="found-team-meta">
-                {/* <bdi> keeps a Hebrew league name from flipping the English beside it */}
-                {t.leagueName && <><bdi>{t.leagueName}</bdi> · </>}
-                {t.isAdditional ? 'also allowed to play' : 'main team'}
-              </span>
+              {t.leagueName && (
+                <span className="found-league">
+                  <svg className="icon" aria-hidden="true"><use href="#i-trophy" /></svg>
+                  {/* <bdi> keeps a Hebrew league name from flipping the English beside it */}
+                  <bdi>{t.leagueName}</bdi>
+                  {t.position != null && t.totalTeams != null && <> · {t.position}{ordinal(t.position)} of {t.totalTeams}</>}
+                </span>
+              )}
+              <span className="found-team-meta">{t.isAdditional ? 'Also allowed to play' : 'Main team'}</span>
             </span>
-            {t.position != null && t.totalTeams != null && (
-              <span className="found-position">{t.position}{ordinal(t.position)} of {t.totalTeams}</span>
-            )}
           </li>
         ))}
       </ul>
 
       {children}
+
+      <p className="found-note">
+        Games and league tables sync by themselves, every night and soon after each result.
+      </p>
 
       <div className="found-actions">
         {canConfirm && (
@@ -96,8 +106,7 @@ export default function LeagueFoundCard({
             {busy ? <Busy>{busyLabel}</Busy> : confirmLabel}
           </button>
         )}
-        <button className="found-back" onClick={onBack} disabled={busy}>No, use another link</button>
-      </div>
+        <button className="found-back" onClick={onBack} disabled={busy}>Not them? Use another link</button>
       </div>
     </div>
   )

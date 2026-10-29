@@ -149,6 +149,13 @@ export default function PlayerProfile() {
     }
   }
 
+  const closeAddIbba = () => {
+    setShowAddIbbaForm(false)
+    setIbbaNewPreview(null)
+    setIbbaNewForm(emptyIbbaNewForm)
+    setIbbaNewError(null)
+  }
+
   const previewNewIbba = async (pasted?: string) => {
     const url = (pasted ?? ibbaNewForm.url).trim()
     if (!url) return
@@ -789,19 +796,17 @@ export default function PlayerProfile() {
         ))}
 
         {!isPlayerRole && !showAddForm && (
-          <div className={showAddIbbaForm ? 'add-player-card add-player-card--open' : 'add-player-card'}>
+          <div className={ibbaNewPreview ? 'add-player-card add-player-card--found' : showAddIbbaForm ? 'add-player-card add-player-card--open' : 'add-player-card'}>
             {showAddIbbaForm ? (
               <>
-                <div className="add-card-head">
-                  <h3>New player from {leagues}</h3>
-                  <button
-                    className="add-card-close"
-                    aria-label="Close"
-                    onClick={() => { setShowAddIbbaForm(false); setIbbaNewPreview(null); setIbbaNewForm(emptyIbbaNewForm); setIbbaNewError(null) }}
-                  >
-                    <svg className="icon" aria-hidden="true"><use href="#i-x" /></svg>
-                  </button>
-                </div>
+                {!ibbaNewPreview && (
+                  <div className="add-card-head">
+                    <h3>New player from {leagues}</h3>
+                    <button className="add-card-close" aria-label="Close" onClick={closeAddIbba}>
+                      <svg className="icon" aria-hidden="true"><use href="#i-x" /></svg>
+                    </button>
+                  </div>
+                )}
                 {ibbaNewPreview ? (
                   <LeagueFoundCard
                     preview={ibbaNewPreview}
@@ -811,6 +816,7 @@ export default function PlayerProfile() {
                     canConfirm={!!ibbaNewPreview.dateOfBirth}
                     onConfirm={createPlayerFromIbba}
                     onBack={() => { setIbbaNewPreview(null); setIbbaNewForm(emptyIbbaNewForm); setIbbaNewError(null) }}
+                    onClose={closeAddIbba}
                   >
                     {!ibbaNewPreview.dateOfBirth && (
                       <p className="error">This profile doesn&apos;t list a birth date - add this player manually instead.</p>
@@ -819,7 +825,8 @@ export default function PlayerProfile() {
                   </LeagueFoundCard>
                 ) : (
                   <>
-                    <label className="found-label" htmlFor="new-player-link">The player&apos;s {leagues} link</label>
+                    <p className="found-intro">Open the player&apos;s page on the league&apos;s site and paste its address here.</p>
+                    <label className="visually-hidden" htmlFor="new-player-link">The player&apos;s {leagues} link</label>
                     <div className="ibba-connect-form">
                       <input
                         id="new-player-link"
@@ -840,7 +847,7 @@ export default function PlayerProfile() {
                         {ibbaNewBusy ? <Busy>Checking…</Busy> : 'Find'}
                       </button>
                     </div>
-                    <p className="found-hint">Open the player on the league&apos;s site and copy the address from the browser.</p>
+                    
                     {ibbaNewError && <p className="error">{ibbaNewError}</p>}
                   </>
                 )}
