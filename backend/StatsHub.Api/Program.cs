@@ -206,8 +206,9 @@ builder.Services.AddHttpClient("Ibba", client =>
 .AddHttpMessageHandler(() => new StatsHub.Api.IbbaScraping.IbbaNoCacheHandler())
 // IBBA is slow and sometimes briefly down: a failed or timed-out request
 // (5xx, 408, 429, network error) is tried twice more with growing pauses;
-// at most 100 requests to IBBA at a time, the rest wait their turn (raised
-// from 4 so a name search's matches load together, not in rounds); and after many
+// at most 4 requests to IBBA at a time, the rest wait their turn, so a busy
+// night or many parents syncing never floods the site (more at once didn't
+// make searches faster - IBBA's own server is the limit); and after many
 // failures in a row, requests stop for a while instead of piling on.
 .AddStandardResilienceHandler(options =>
 {
@@ -216,7 +217,7 @@ builder.Services.AddHttpClient("Ibba", client =>
     options.CircuitBreaker.SamplingDuration = TimeSpan.FromSeconds(90); // at least twice the attempt timeout
     options.Retry.MaxRetryAttempts = 2;
     options.Retry.Delay = TimeSpan.FromSeconds(2);
-    options.RateLimiter.DefaultRateLimiterOptions.PermitLimit = 100;
+    options.RateLimiter.DefaultRateLimiterOptions.PermitLimit = 4;
     options.RateLimiter.DefaultRateLimiterOptions.QueueLimit = 1000;
 });
 
