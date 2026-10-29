@@ -6299,6 +6299,17 @@ a.game-card:active {
 
 .found-league .icon { width: 12px; height: 12px; flex-shrink: 0; }
 
+.found-taken {
+  background: var(--color-gold-soft);
+  border: 1px solid rgba(255, 210, 63, 0.35);
+  border-radius: var(--radius-sm);
+  padding: 0.65rem 0.75rem;
+  color: var(--color-gold);
+  font-size: 0.85rem;
+  font-weight: 600;
+  line-height: 1.45;
+}
+
 .found-note {
   background: var(--color-surface);
   border: 1px dashed var(--color-border-strong);

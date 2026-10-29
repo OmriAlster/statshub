@@ -94,19 +94,27 @@ export default function LeagueFoundCard({
         ))}
       </ul>
 
+      {preview.alreadyLinkedTo && (
+        <p className="found-taken">
+          <bdi>{preview.alreadyLinkedTo.playerName}</bdi> on your Players page is already connected to this {preview.leagueName} player.
+        </p>
+      )}
+
       {children}
 
-      <p className="found-note">
-        Games and league tables sync by themselves, every night and soon after each result.
-      </p>
+      {!preview.alreadyLinkedTo && (
+        <p className="found-note">
+          Games and league tables sync by themselves, every night and soon after each result.
+        </p>
+      )}
 
       <div className="found-actions">
-        {canConfirm && (
+        {canConfirm && !preview.alreadyLinkedTo && (
           <button className="found-confirm" onClick={onConfirm} disabled={busy}>
             {busy ? <Busy>{busyLabel}</Busy> : confirmLabel}
           </button>
         )}
-        <button className="found-back" onClick={onBack} disabled={busy}>Not them? Use another link</button>
+        <button className="found-back" onClick={onBack} disabled={busy}>{preview.alreadyLinkedTo ? 'Use another link' : 'Not them? Use another link'}</button>
       </div>
     </div>
   )

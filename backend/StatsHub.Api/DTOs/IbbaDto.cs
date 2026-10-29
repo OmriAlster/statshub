@@ -9,7 +9,15 @@ namespace StatsHub.Api.DTOs
         public string PlayerName { get; set; } = string.Empty;
         public DateTime? DateOfBirth { get; set; }
         public string? PhotoUrl { get; set; }
+        // Set when one of your players is already connected to this profile.
+        public IbbaLinkedPlayerDto? AlreadyLinkedTo { get; set; }
         public List<IbbaPreviewTeamDto> Teams { get; set; } = new();
+    }
+
+    public class IbbaLinkedPlayerDto
+    {
+        public Guid PlayerId { get; set; }
+        public string PlayerName { get; set; } = string.Empty;
     }
 
     // A team on the player's league page. League, table position and crest

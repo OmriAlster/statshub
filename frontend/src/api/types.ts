@@ -221,6 +221,8 @@ export interface IbbaPreviewDto {
   playerName: string
   dateOfBirth?: string | null
   photoUrl?: string | null
+  // One of your players is already connected to this profile.
+  alreadyLinkedTo?: { playerId: string; playerName: string } | null
   teams: IbbaPreviewTeamDto[]
 }
 
