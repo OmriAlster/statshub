@@ -76,6 +76,9 @@ public class SecondLeagueTests : IClassFixture<SecondLeagueTests.Factory>
         public Task<(string CanonicalUrl, string Name, string? LogoUrl)?> ResolveTeamByIdAsync(string teamId) => Task.FromResult<(string, string, string?)?>(null);
         public Task<string?> FindTeamLogoUrlAsync(string teamUrl, string teamName) => Task.FromResult<string?>(null);
         public string TeamIdFromUrl(string teamUrl) => teamUrl.Split('/').Last();
+
+        public async Task<List<LeaguePlayer>> SearchPlayersAsync(string name) =>
+            "Noa Cohen".Contains(name, StringComparison.OrdinalIgnoreCase) ? [await GetPlayerAsync("https://demo-league.test/players/77")] : [];
     }
 
     private readonly Factory _factory;
@@ -171,5 +174,24 @@ public class SecondLeagueTests : IClassFixture<SecondLeagueTests.Factory>
         var other = await TestUser.SignInAsync(_factory);
         var theirs = await other.GetAsync<IbbaPreviewDto>($"/api/ibba/preview?playerUrl={Uri.EscapeDataString(again)}");
         Assert.Null(theirs.AlreadyLinkedTo);
+    }
+
+    [Fact]
+    public async Task A_player_can_be_found_by_name_and_shows_once_added()
+    {
+        var parent = await TestUser.SignInAsync(_factory);
+
+        var found = Assert.Single(await parent.GetAsync<List<IbbaPreviewDto>>("/api/ibba/search?name=noa%20%20cohen"));
+        Assert.Equal(("Demo League", "https://demo-league.test/players/77", "Demo Lions"), (found.LeagueName, found.PlayerUrl, found.Teams.Single().TeamName));
+        Assert.Null(found.AlreadyLinkedTo);
+
+        // Picking it adds the player by the address the search gave.
+        var created = await parent.PostAsync<CreatePlayerFromIbbaResultDto>("/api/ibba/players", new { ibbaPlayerUrl = found.PlayerUrl });
+        var again = Assert.Single(await parent.GetAsync<List<IbbaPreviewDto>>("/api/ibba/search?name=Noa"));
+        Assert.Equal(created.Player.Id, again.AlreadyLinkedTo?.PlayerId);
+
+        Assert.Empty(await parent.GetAsync<List<IbbaPreviewDto>>("/api/ibba/search?name=Dana"));
+        var tooShort = await parent.Http.GetAsync("/api/ibba/search?name=No");
+        Assert.Equal(System.Net.HttpStatusCode.BadRequest, tooShort.StatusCode);
     }
 }

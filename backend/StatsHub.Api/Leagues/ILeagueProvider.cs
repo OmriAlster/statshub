@@ -53,4 +53,11 @@ public interface ILeagueProvider
 
     /// <summary>The league's id for a team, read from its address (same id as LeagueTeam.TeamSlugId).</summary>
     string TeamIdFromUrl(string teamUrl);
+
+    /// <summary>
+    /// Players on the league's site whose name matches, each with their own
+    /// page read (as GetPlayerAsync) - so a parent can find a player by name
+    /// instead of pasting an address. A league without a search returns none.
+    /// </summary>
+    Task<List<LeaguePlayer>> SearchPlayersAsync(string name) => Task.FromResult(new List<LeaguePlayer>());
 }

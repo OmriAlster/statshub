@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Caching.Memory;
 using System.Globalization;
 using Microsoft.EntityFrameworkCore;
 using StatsHub.Api.Data;
@@ -11,6 +12,7 @@ namespace StatsHub.Api.Services
     public interface IIbbaService
     {
         Task<IbbaPreviewDto> PreviewAsync(string playerUrl, Guid requestingUserId);
+        Task<List<IbbaPreviewDto>> SearchPlayersAsync(string name, Guid requestingUserId);
         Task<CreatePlayerFromIbbaResultDto> CreatePlayerFromIbbaAsync(string ibbaPlayerUrl, Guid requestingUserId);
         Task<IbbaLinkStatusDto?> LinkPlayerAsync(Guid playerId, string ibbaPlayerUrl, Guid requestingUserId);
         Task<bool> UnlinkPlayerAsync(Guid playerId, Guid requestingUserId);
@@ -37,9 +39,11 @@ namespace StatsHub.Api.Services
         private readonly ISeasonService _seasonService;
         private readonly RequestTimings _timings;
         private readonly IbbaSyncTracker _syncTracker;
+        private readonly IMemoryCache _cache;
 
-        public IbbaService(AppDbContext context, IPlayerService playerService, LeagueProviders leagues, IPushNotificationService push, ILogger<IbbaService> logger, IServiceScopeFactory scopeFactory, ISeasonService seasonService, RequestTimings timings, IbbaSyncTracker syncTracker)
+        public IbbaService(AppDbContext context, IPlayerService playerService, LeagueProviders leagues, IPushNotificationService push, ILogger<IbbaService> logger, IServiceScopeFactory scopeFactory, ISeasonService seasonService, RequestTimings timings, IbbaSyncTracker syncTracker, IMemoryCache cache)
         {
+            _cache = cache;
             _timings = timings;
             _syncTracker = syncTracker;
             _seasonService = seasonService;
@@ -79,10 +83,48 @@ namespace StatsHub.Api.Services
         {
             var league = _leagues.ForPlayerUrl(playerUrl);
             var info = await league.GetPlayerAsync(playerUrl);
-            var alreadyLinked = await FindLinkedPlayerAsync(playerUrl, requestingUserId);
 
             if (info.Teams.Count == 0)
                 throw new InvalidOperationException($"Could not find any current team for this player on the {league.Name} page. Check the URL is a player profile page.");
+
+            return await ToPreviewAsync(league, info, playerUrl, requestingUserId);
+        }
+
+        // Players found by name, on every league that has a search - each as
+        // the same card a pasted link shows, so picking one goes straight to
+        // "Yes, add". A league whose search fails just adds nothing; the same
+        // name again within a few minutes is answered from memory, not the site.
+        public async Task<List<IbbaPreviewDto>> SearchPlayersAsync(string name, Guid requestingUserId)
+        {
+            name = string.Join(' ', name.Split(' ', StringSplitOptions.RemoveEmptyEntries));
+            if (name.Length < MinSearchLength)
+                throw new InvalidOperationException($"Type at least {MinSearchLength} letters of the player's name.");
+
+            var results = new List<IbbaPreviewDto>();
+            foreach (var league in _leagues.All)
+            {
+                var players = await _cache.GetOrCreateAsync($"league-search:{league.Key}:{name.ToLowerInvariant()}", async entry =>
+                {
+                    entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(10);
+                    try { return await league.SearchPlayersAsync(name); }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Player search on {League} failed for {Name}", league.Key, name);
+                        entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(1); // don't remember a failure
+                        return new List<LeaguePlayer>();
+                    }
+                }) ?? [];
+                foreach (var player in players)
+                    results.Add(await ToPreviewAsync(league, player, player.PlayerUrl, requestingUserId));
+            }
+            return results;
+        }
+
+        internal const int MinSearchLength = 3;
+
+        private async Task<IbbaPreviewDto> ToPreviewAsync(ILeagueProvider league, LeaguePlayer info, string playerUrl, Guid requestingUserId)
+        {
+            var alreadyLinked = await FindLinkedPlayerAsync(playerUrl, requestingUserId);
 
             // What the app already knows of these teams - no extra trips to the site.
             var urls = info.Teams.Select(t => t.TeamUrl).ToList();
@@ -93,6 +135,7 @@ namespace StatsHub.Api.Services
                 LeagueKey = league.Key,
                 LeagueName = league.Name,
                 PlayerName = info.PlayerName,
+                PlayerUrl = playerUrl,
                 DateOfBirth = info.DateOfBirth,
                 PhotoUrl = string.IsNullOrEmpty(info.PhotoUrl) ? null : info.PhotoUrl,
                 AlreadyLinkedTo = alreadyLinked == null ? null : new IbbaLinkedPlayerDto { PlayerId = alreadyLinked.Id, PlayerName = $"{alreadyLinked.FirstName} {alreadyLinked.LastName}".Trim() },

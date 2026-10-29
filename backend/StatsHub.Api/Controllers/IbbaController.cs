@@ -40,6 +40,21 @@ namespace StatsHub.Api.Controllers
             }
         }
 
+        // Players on the league sites whose name matches - each ready to add,
+        // like a pasted link's preview.
+        [HttpGet("ibba/search")]
+        public async Task<ActionResult<List<IbbaPreviewDto>>> SearchPlayers([FromQuery] string? name)
+        {
+            try
+            {
+                return Ok(await _ibbaService.SearchPlayersAsync(name ?? "", _currentUser.UserId));
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
         // Creates a brand-new player straight from an IBBA profile URL, instead of
         // requiring a manually-created player that gets connected to IBBA afterward.
         // Name comes from the scrape; jersey/position/DOB still need a human since
