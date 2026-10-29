@@ -10,7 +10,7 @@ namespace StatsHub.Api.Services
         Task<ShotDto?> CreateShotAsync(CreateShotDto dto, Guid requestingUserId);
         Task<bool> DeleteShotAsync(Guid id, Guid requestingUserId);
         Task<List<ShotDto>> GetShotsByGameStatsAsync(Guid gameStatsId, Guid requestingUserId);
-        Task<List<ShotDto>> GetShotsByPlayerAndTeamAsync(Guid playerId, Guid teamId, Guid requestingUserId);
+        Task<List<ShotDto>> GetShotsByPlayerAndTeamAsync(Guid playerId, Guid teamId, Guid requestingUserId, string? gameType = null);
     }
 
     public class ShotService : IShotService
@@ -82,8 +82,9 @@ namespace StatsHub.Api.Services
             return shots.Select(s => s.ToDto(gameStats)).ToList();
         }
 
-        public async Task<List<ShotDto>> GetShotsByPlayerAndTeamAsync(Guid playerId, Guid teamId, Guid requestingUserId)
+        public async Task<List<ShotDto>> GetShotsByPlayerAndTeamAsync(Guid playerId, Guid teamId, Guid requestingUserId, string? gameType = null)
         {
+            gameType = Game.ParseGameTypeFilter(gameType);
             if (!await CanReadPlayerAsync(playerId, requestingUserId)) return new List<ShotDto>();
 
             var team = await _context.Teams.FindAsync(teamId);
@@ -92,9 +93,10 @@ namespace StatsHub.Api.Services
             // (IbbaGameCode null) but IbbaTeam ids for a synced one - a
             // teammate's shots for a shared game need the IbbaTeamId match,
             // not literal team ids, on either side of the fixture.
-            // A season shot chart - friendly games don't count toward it.
+            // A season shot chart - friendly games don't count toward it,
+            // unless friendlies are exactly what was asked for.
             var shots = await _context.Shots
-                .Where(s => s.GameStats.PlayerId == playerId && s.GameStats.Game.GameType != Game.FriendlyGameType && (
+                .Where(s => s.GameStats.PlayerId == playerId && (gameType == null ? s.GameStats.Game.GameType != Game.FriendlyGameType : s.GameStats.Game.GameType == gameType) && (
                     (s.GameStats.Game.IbbaGameCode == null && (s.GameStats.Game.HomeTeamId == teamId || s.GameStats.Game.AwayTeamId == teamId)) ||
                     (s.GameStats.Game.IbbaGameCode != null && team != null && team.IbbaTeamId != null && (s.GameStats.Game.HomeTeamId == team.IbbaTeamId || s.GameStats.Game.AwayTeamId == team.IbbaTeamId))))
                 .Include(s => s.GameStats)

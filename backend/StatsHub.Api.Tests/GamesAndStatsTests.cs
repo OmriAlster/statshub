@@ -198,6 +198,34 @@ public class GamesAndStatsTests : IClassFixture<StatsHubFactory>
     }
 
     [Fact]
+    public async Task Season_stats_and_shot_charts_can_be_narrowed_to_one_game_type()
+    {
+        var (parent, player, team) = await ParentWithPlayerOnTeamAsync();
+        var league = await parent.CreateGameAsync(team.Id, "League");
+        var cup = await parent.CreateGameAsync(team.Id, "Cup");
+        var friendly = await parent.CreateGameAsync(team.Id, "Friendly");
+        await parent.CreateStatsAsync(league.Id, player.Id, ftm: 4, fta: 4);
+        await parent.CreateStatsAsync(cup.Id, player.Id, ftm: 6, fta: 6);
+        var friendlyStats = await parent.CreateStatsAsync(friendly.Id, player.Id, ftm: 20, fta: 20);
+        await parent.PostAsync<ShotDto>("/api/shots", new CreateShotDto { GameStatsId = friendlyStats.Id, Quarter = 1, X = 0.5, Y = 0.5, Made = true, Value = 2 });
+
+        async Task<(int Games, int Points)> SeasonFor(string query)
+        {
+            var season = (await parent.GetAsync<List<PlayerTeamStatsDto>>($"/api/gamestats/player/{player.Id}{query}")).Single();
+            return (season.GamesPlayed, season.TotalPoints);
+        }
+
+        Assert.Equal((2, 10), await SeasonFor(""));               // league + cup, as always
+        Assert.Equal((1, 4), await SeasonFor("?gameType=League"));
+        Assert.Equal((1, 6), await SeasonFor("?gameType=cup"));
+        Assert.Equal((1, 22), await SeasonFor("?gameType=Friendly")); // friendlies count when they're what you picked
+        Assert.Equal((2, 10), await SeasonFor("?gameType=nonsense"));
+
+        Assert.Single(await parent.GetAsync<List<ShotDto>>($"/api/shots/player/{player.Id}/team/{team.Id}?gameType=Friendly"));
+        Assert.Empty(await parent.GetAsync<List<ShotDto>>($"/api/shots/player/{player.Id}/team/{team.Id}?gameType=League"));
+    }
+
+    [Fact]
     public async Task Season_game_count_includes_each_teams_games_once()
     {
         var (parent, player, team) = await ParentWithPlayerOnTeamAsync();

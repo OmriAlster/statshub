@@ -11,7 +11,7 @@ namespace StatsHub.Api.Services
         Task<GameStatsDto> CreateGameStatsAsync(CreateGameStatsDto dto, Guid requestingUserId);
         Task<GameStatsDto?> UpdateGameStatsAsync(Guid id, UpdateGameStatsDto dto, Guid requestingUserId);
         Task<bool> DeleteGameStatsAsync(Guid id, Guid requestingUserId);
-        Task<List<PlayerTeamStatsDto>> GetStatsByPlayerAsync(Guid playerId, Guid requestingUserId);
+        Task<List<PlayerTeamStatsDto>> GetStatsByPlayerAsync(Guid playerId, Guid requestingUserId, string? gameType = null);
         Task<PlayerTeamStatsDto?> GetTeamStatsForPlayerAsync(Guid playerId, Guid teamId, Guid requestingUserId);
         Task<List<PlayerTeamStatsDto>> GetStatsByPlayerUnrestrictedAsync(Guid playerId);
     }
@@ -141,10 +141,10 @@ namespace StatsHub.Api.Services
             return true;
         }
 
-        public async Task<List<PlayerTeamStatsDto>> GetStatsByPlayerAsync(Guid playerId, Guid requestingUserId)
+        public async Task<List<PlayerTeamStatsDto>> GetStatsByPlayerAsync(Guid playerId, Guid requestingUserId, string? gameType = null)
         {
             if (!await CanReadPlayerAsync(playerId, requestingUserId)) return new List<PlayerTeamStatsDto>();
-            return await ComputeStatsByPlayerAsync(playerId);
+            return await ComputeStatsByPlayerAsync(playerId, Game.ParseGameTypeFilter(gameType));
         }
 
         public async Task<List<PlayerTeamStatsDto>> GetStatsByPlayerUnrestrictedAsync(Guid playerId)
@@ -178,7 +178,7 @@ namespace StatsHub.Api.Services
             return BuildTeamStatsDto(player, team, jerseyNumber, gameStats);
         }
 
-        private async Task<List<PlayerTeamStatsDto>> ComputeStatsByPlayerAsync(Guid playerId)
+        private async Task<List<PlayerTeamStatsDto>> ComputeStatsByPlayerAsync(Guid playerId, string? gameType = null)
         {
             // The player comes along with their memberships - no teams means
             // no per-team stat lines to return anyway.
@@ -195,9 +195,10 @@ namespace StatsHub.Api.Services
             // split per team in memory - instead of one query per team, since
             // each query is a full network round trip to the database in
             // production.
-            // Friendly games never count toward season stats.
+            // Friendly games never count toward season stats - unless
+            // friendlies are exactly what was asked for.
             var allStats = await _context.GameStats
-                .Where(gs => gs.PlayerId == playerId && gs.Game.GameType != Game.FriendlyGameType)
+                .Where(gs => gs.PlayerId == playerId && (gameType == null ? gs.Game.GameType != Game.FriendlyGameType : gs.Game.GameType == gameType))
                 .Include(gs => gs.Game)
                 .ToListAsync();
 

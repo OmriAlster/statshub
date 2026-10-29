@@ -38,7 +38,7 @@ function DateBlock({ iso, withTime }: { iso: string; withTime: boolean }) {
   )
 }
 
-function Matchup({ game }: { game: GameDto }) {
+function Matchup({ game, counted = countsTowardStats(game) }: { game: GameDto; counted?: boolean }) {
   return (
     <>
       <div className="game-card-opponent">
@@ -48,7 +48,7 @@ function Matchup({ game }: { game: GameDto }) {
       <div className="game-card-meta">
         <HomeAway game={game} />
         <GameTypeBadge game={game} />
-        {game.status === 'Completed' && !countsTowardStats(game) && <span className="not-counted-note">not counted</span>}
+        {game.status === 'Completed' && !counted && <span className="not-counted-note">not counted</span>}
       </div>
     </>
   )
@@ -65,19 +65,29 @@ function Result({ game }: { game: GameDto }) {
 }
 
 // Completed games with this player's box score (Stats tab).
-export function StatsGameCards({ games, linkFor }: { games: GameDto[]; linkFor: (game: GameDto) => string }) {
+export function StatsGameCards({
+  games,
+  linkFor,
+  isCounted = countsTowardStats,
+}: {
+  games: GameDto[]
+  linkFor: (game: GameDto) => string
+  // Which games count toward the numbers - friendlies don't, unless they're
+  // what the game-type filter is showing.
+  isCounted?: (game: GameDto) => boolean
+}) {
   return (
     <ul className="game-cards mobile-only">
       {games.map((game) => {
         const stats = game.playerStats[0]
-        const counted = countsTowardStats(game)
+        const counted = isCounted(game)
         return (
           <li key={game.id}>
             <Link to={linkFor(game)} className={`game-card ${counted ? '' : 'not-counted'}`}>
               <div className="game-card-head">
                 <DateBlock iso={game.gameDate} withTime={false} />
                 <div className="game-card-main">
-                  <Matchup game={game} />
+                  <Matchup game={game} counted={counted} />
                 </div>
                 <Result game={game} />
               </div>

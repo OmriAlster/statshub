@@ -84,10 +84,11 @@ namespace StatsHub.Api.Controllers
         }
 
         // One entry per team the player is rostered on, each with its own stat line.
+        // ?gameType=League|Cup|Friendly narrows it to that kind of game.
         [HttpGet("player/{playerId}")]
-        public async Task<ActionResult<List<PlayerTeamStatsDto>>> GetStatsByPlayer(Guid playerId)
+        public async Task<ActionResult<List<PlayerTeamStatsDto>>> GetStatsByPlayer(Guid playerId, [FromQuery] string? gameType = null)
         {
-            var stats = await _gameStatsService.GetStatsByPlayerAsync(playerId, _currentUser.UserId);
+            var stats = await _gameStatsService.GetStatsByPlayerAsync(playerId, _currentUser.UserId, gameType);
             return Ok(stats);
         }
     }
