@@ -1,3 +1,4 @@
+using System.Net.Http.Json;
 using HtmlAgilityPack;
 using StatsHub.Api.Leagues;
 using StatsHub.Api.Services;
@@ -115,4 +116,22 @@ public class IbbaLeagueProvider : ILeagueProvider
         new IbbaTeamScraper(Http()).FindTeamLogoUrlAsync(teamUrl, teamName);
 
     public string TeamIdFromUrl(string teamUrl) => IbbaPlayerScraper.ExtractTeamSlugId(teamUrl);
+
+    // How many name matches a search returns.
+    internal const int MaxSearchResults = 8;
+
+    // The site's own search (WordPress's, limited to player pages): names and
+    // page addresses only - each page is read separately, as the parent's
+    // list fills in, since a page IBBA hasn't cached takes ~3 s.
+    public async Task<List<LeaguePlayerHit>> SearchPlayersAsync(string name)
+    {
+        var url = $"https://ibasketball.co.il/wp-json/wp/v2/search?search={Uri.EscapeDataString(name)}&type=post&subtype=sp_player&per_page={MaxSearchResults}";
+        var hits = await Http().GetFromJsonAsync<List<SearchHit>>(url) ?? [];
+        return hits
+            .Where(h => h.Url != null && IsPlayerUrl(h.Url))
+            .Select(h => new LeaguePlayerHit(HtmlEntity.DeEntitize(h.Title ?? "").Trim(), h.Url!))
+            .ToList();
+    }
+
+    private sealed record SearchHit(string? Title, string? Url);
 }

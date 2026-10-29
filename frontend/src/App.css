@@ -6514,3 +6514,125 @@ a.game-card:active {
   color: var(--color-text-muted);
 }
 
+/* Find a league player by name (or a pasted link): the matches as you type */
+.player-finder {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.finder-status { margin: 0; font-size: 0.85rem; color: var(--color-text-muted); }
+
+.finder-results {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.player-finder .finder-result {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.6rem 0.75rem;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: none;
+  color: var(--color-text);
+  font: inherit;
+  font-weight: 400;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color var(--transition), background var(--transition);
+}
+
+.player-finder .finder-result:hover { transform: none; border-color: var(--color-accent); background: var(--color-surface-hover); }
+
+.finder-avatar {
+  width: 42px;
+  height: 42px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--color-surface-alt);
+  border: 1px solid var(--color-border-strong);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 0.8rem;
+}
+
+.finder-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+  flex-grow: 1;
+}
+
+.finder-name { font-weight: 700; font-size: 0.95rem; }
+
+.finder-teams {
+  display: flex;
+  flex-direction: column;
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
+}
+
+.finder-team { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.finder-side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.25rem;
+  flex-shrink: 0;
+}
+
+.finder-born { font-size: 0.8rem; font-weight: 700; color: var(--color-text-muted); font-variant-numeric: tabular-nums; }
+
+.finder-added {
+  background: var(--color-gold-soft);
+  color: var(--color-gold);
+  border-radius: var(--radius-pill);
+  padding: 0.1rem 0.5rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+/* A match whose team is still loading */
+.finder-loading {
+  display: block;
+  width: 9rem;
+  max-width: 100%;
+  height: 0.7rem;
+  margin-top: 0.25rem;
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-alt);
+  overflow: hidden;
+}
+
+.finder-loading span {
+  display: block;
+  width: 40%;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--color-border-strong);
+  animation: finder-loading 1.1s ease-in-out infinite;
+}
+
+@keyframes finder-loading {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(250%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .finder-loading span { animation: none; width: 100%; opacity: 0.5; }
+}
+

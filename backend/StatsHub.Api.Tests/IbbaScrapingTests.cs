@@ -294,6 +294,25 @@ public class IbbaLayoutTests
     {
         await Assert.ThrowsAsync<LeagueLayoutException>(() => PlayerAsync("<div>קבוצה נוכחית <a href='/team/151-maccabi/'>מכבי</a></div>"));
     }
+
+    private sealed class Factory(HttpMessageHandler site) : IHttpClientFactory
+    {
+        public HttpClient CreateClient(string name) => new(site, disposeHandler: false);
+    }
+
+    [Fact]
+    public async Task Searching_by_name_lists_player_pages_only()
+    {
+        var site = new FakeSite(new()
+        {
+            [$"https://ibasketball.co.il/wp-json/wp/v2/search?search=Noa Cohen&type=post&subtype=sp_player&per_page={IbbaLeagueProvider.MaxSearchResults}"] = new StringContent(
+                "[{\"id\":1,\"title\":\"Noa &amp; Cohen\",\"url\":\"https://ibasketball.co.il/player/aaa-1/\"},{\"id\":3,\"title\":\"News\",\"url\":\"https://ibasketball.co.il/news/x/\"}]"),
+        });
+
+        var found = await new IbbaLeagueProvider(new Factory(site)).SearchPlayersAsync("Noa Cohen");
+
+        Assert.Equal([new LeaguePlayerHit("Noa & Cohen", "https://ibasketball.co.il/player/aaa-1/")], found);
+    }
 }
 
 public class IbbaUrlTests

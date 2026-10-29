@@ -219,6 +219,8 @@ export interface IbbaPreviewDto {
   leagueKey: string
   leagueName: string
   playerName: string
+  // The player's page on the league's site - what adding or connecting them uses.
+  playerUrl: string
   dateOfBirth?: string | null
   photoUrl?: string | null
   // One of your players is already connected to this profile.

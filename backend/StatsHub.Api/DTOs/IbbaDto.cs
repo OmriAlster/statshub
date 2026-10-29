@@ -7,11 +7,22 @@ namespace StatsHub.Api.DTOs
         public string LeagueKey { get; set; } = string.Empty;
         public string LeagueName { get; set; } = string.Empty;
         public string PlayerName { get; set; } = string.Empty;
+        // The player's page on the league's site - what adding or connecting them uses.
+        public string PlayerUrl { get; set; } = string.Empty;
         public DateTime? DateOfBirth { get; set; }
         public string? PhotoUrl { get; set; }
         // Set when one of your players is already connected to this profile.
         public IbbaLinkedPlayerDto? AlreadyLinkedTo { get; set; }
         public List<IbbaPreviewTeamDto> Teams { get; set; } = new();
+    }
+
+    // A name search's match - its details come from /ibba/preview.
+    public class LeaguePlayerHitDto
+    {
+        public string LeagueKey { get; set; } = string.Empty;
+        public string LeagueName { get; set; } = string.Empty;
+        public string PlayerName { get; set; } = string.Empty;
+        public string PlayerUrl { get; set; } = string.Empty;
     }
 
     public class IbbaLinkedPlayerDto

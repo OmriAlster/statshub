@@ -114,7 +114,7 @@ export default function LeagueFoundCard({
             {busy ? <Busy>{busyLabel}</Busy> : confirmLabel}
           </button>
         )}
-        <button className="found-back" onClick={onBack} disabled={busy}>{preview.alreadyLinkedTo ? 'Use another link' : 'Not them? Use another link'}</button>
+        <button className="found-back" onClick={onBack} disabled={busy}>{preview.alreadyLinkedTo ? 'Go back' : 'Not them? Go back'}</button>
       </div>
     </div>
   )

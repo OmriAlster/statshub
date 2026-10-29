@@ -76,6 +76,9 @@ public class SecondLeagueTests : IClassFixture<SecondLeagueTests.Factory>
         public Task<(string CanonicalUrl, string Name, string? LogoUrl)?> ResolveTeamByIdAsync(string teamId) => Task.FromResult<(string, string, string?)?>(null);
         public Task<string?> FindTeamLogoUrlAsync(string teamUrl, string teamName) => Task.FromResult<string?>(null);
         public string TeamIdFromUrl(string teamUrl) => teamUrl.Split('/').Last();
+
+        public Task<List<LeaguePlayerHit>> SearchPlayersAsync(string name) => Task.FromResult<List<LeaguePlayerHit>>(
+            "Noa Cohen".Contains(name, StringComparison.OrdinalIgnoreCase) ? [new("Noa Cohen", "https://demo-league.test/players/77")] : []);
     }
 
     private readonly Factory _factory;
@@ -171,5 +174,27 @@ public class SecondLeagueTests : IClassFixture<SecondLeagueTests.Factory>
         var other = await TestUser.SignInAsync(_factory);
         var theirs = await other.GetAsync<IbbaPreviewDto>($"/api/ibba/preview?playerUrl={Uri.EscapeDataString(again)}");
         Assert.Null(theirs.AlreadyLinkedTo);
+    }
+
+    [Fact]
+    public async Task A_player_can_be_found_by_name_and_shows_once_added()
+    {
+        var parent = await TestUser.SignInAsync(_factory);
+
+        var hit = Assert.Single(await parent.GetAsync<List<LeaguePlayerHitDto>>("/api/ibba/search?name=noa%20%20cohen"));
+        Assert.Equal(("Demo League", "Noa Cohen", "https://demo-league.test/players/77"), (hit.LeagueName, hit.PlayerName, hit.PlayerUrl));
+
+        // Its card: the same preview a pasted link gets.
+        var card = await parent.GetAsync<IbbaPreviewDto>($"/api/ibba/preview?playerUrl={Uri.EscapeDataString(hit.PlayerUrl)}");
+        Assert.Equal(("Demo Lions", hit.PlayerUrl), (card.Teams.Single().TeamName, card.PlayerUrl));
+        Assert.Null(card.AlreadyLinkedTo);
+
+        var created = await parent.PostAsync<CreatePlayerFromIbbaResultDto>("/api/ibba/players", new { ibbaPlayerUrl = card.PlayerUrl });
+        var again = await parent.GetAsync<IbbaPreviewDto>($"/api/ibba/preview?playerUrl={Uri.EscapeDataString(hit.PlayerUrl)}");
+        Assert.Equal(created.Player.Id, again.AlreadyLinkedTo?.PlayerId);
+
+        Assert.Empty(await parent.GetAsync<List<LeaguePlayerHitDto>>("/api/ibba/search?name=Dana"));
+        var tooShort = await parent.Http.GetAsync("/api/ibba/search?name=No");
+        Assert.Equal(System.Net.HttpStatusCode.BadRequest, tooShort.StatusCode);
     }
 }
