@@ -207,7 +207,8 @@ builder.Services.AddHttpClient("Ibba", client =>
 // IBBA is slow and sometimes briefly down: a failed or timed-out request
 // (5xx, 408, 429, network error) is tried twice more with growing pauses;
 // at most 4 requests to IBBA at a time, the rest wait their turn, so a busy
-// night or many parents syncing never floods the site; and after many
+// night or many parents syncing never floods the site (more at once didn't
+// make searches faster - IBBA's own server is the limit); and after many
 // failures in a row, requests stop for a while instead of piling on.
 .AddStandardResilienceHandler(options =>
 {

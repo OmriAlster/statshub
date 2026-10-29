@@ -117,21 +117,63 @@ public class IbbaLeagueProvider : ILeagueProvider
 
     public string TeamIdFromUrl(string teamUrl) => IbbaPlayerScraper.ExtractTeamSlugId(teamUrl);
 
-    // How many name matches a search returns.
+    // How many name matches a search returns, and how many it asks the site
+    // for (past players are dropped from those first).
     internal const int MaxSearchResults = 8;
+    internal const int SearchHitsRequested = 30;
 
     // The site's own search (WordPress's, limited to player pages): names and
     // page addresses only - each page is read separately, as the parent's
-    // list fills in, since a page IBBA hasn't cached takes ~3 s.
+    // list fills in, since a page IBBA hasn't cached takes ~3 s. Players not
+    // registered this season are left out up front, by their address (below).
     public async Task<List<LeaguePlayerHit>> SearchPlayersAsync(string name)
     {
-        var url = $"https://ibasketball.co.il/wp-json/wp/v2/search?search={Uri.EscapeDataString(name)}&type=post&subtype=sp_player&per_page={MaxSearchResults}";
+        var url = $"https://ibasketball.co.il/wp-json/wp/v2/search?search={Uri.EscapeDataString(name)}&type=post&subtype=sp_player&per_page={SearchHitsRequested}";
         var hits = await Http().GetFromJsonAsync<List<SearchHit>>(url) ?? [];
+        var now = DateTime.UtcNow;
         return hits
-            .Where(h => h.Url != null && IsPlayerUrl(h.Url))
+            .Where(h => h.Url != null && IsPlayerUrl(h.Url) && RegisteredThisSeason(h.Url, now))
+            .Take(MaxSearchResults)
             .Select(h => new LeaguePlayerHit(HtmlEntity.DeEntitize(h.Title ?? "").Trim(), h.Url!))
             .ToList();
     }
 
     private sealed record SearchHit(string? Title, string? Url);
+
+    // A player's address carries the time their registration was last saved:
+    // /player/246acb577fbe7bd2-30377483/ - the 8 hex digits after the first two
+    // are a Unix time (here 6acb577f = Oct 2026). Checked against 80 players:
+    // everyone saved since the season began (August) has a current team, and
+    // no one saved before it - or with an address in the old format
+    // (/player/39-name/) - does. So those are dropped without reading their page.
+    internal static bool RegisteredThisSeason(string playerUrl, DateTime now)
+    {
+        var slug = Uri.TryCreate(playerUrl, UriKind.Absolute, out var uri) ? uri.Segments.LastOrDefault()?.Trim('/') ?? "" : "";
+        var match = System.Text.RegularExpressions.Regex.Match(slug, "^[0-9]{2}([0-9a-f]{8})[0-9a-f]{6}-[0-9]+$");
+        if (!match.Success) return false;
+        var saved = DateTimeOffset.FromUnixTimeSeconds(Convert.ToInt64(match.Groups[1].Value, 16)).UtcDateTime;
+        var seasonStart = new DateTime(now.Month >= 8 ? now.Year : now.Year - 1, 8, 1, 0, 0, 0, DateTimeKind.Utc);
+        return saved >= seasonStart;
+    }
+
+    // The site's open team data (/team/<slug>/ -> its crest image) answers in
+    // well under a second, against ~3 s for a team page IBBA hasn't cached.
+    public async Task<string?> QuickTeamLogoUrlAsync(string teamUrl)
+    {
+        if (!Uri.TryCreate(teamUrl, UriKind.Absolute, out var uri)) return null;
+        var slug = Uri.UnescapeDataString(uri.Segments.LastOrDefault()?.Trim('/') ?? "");
+        if (slug.Length == 0) return null;
+        var url = $"https://ibasketball.co.il/wp-json/sportspress/v2/teams?slug={Uri.EscapeDataString(slug)}&_embed=wp:featuredmedia&_fields=id,_links,_embedded";
+        var teams = await Http().GetFromJsonAsync<List<TeamHit>>(url) ?? [];
+        var media = teams.FirstOrDefault()?.Embedded?.FeaturedMedia?.FirstOrDefault();
+        return media?.MediaDetails?.Sizes?.GetValueOrDefault("thumbnail")?.SourceUrl ?? media?.SourceUrl;
+    }
+
+    private sealed record TeamHit([property: System.Text.Json.Serialization.JsonPropertyName("_embedded")] TeamEmbeds? Embedded);
+    private sealed record TeamEmbeds([property: System.Text.Json.Serialization.JsonPropertyName("wp:featuredmedia")] List<Media>? FeaturedMedia);
+    private sealed record Media(
+        [property: System.Text.Json.Serialization.JsonPropertyName("source_url")] string? SourceUrl,
+        [property: System.Text.Json.Serialization.JsonPropertyName("media_details")] MediaDetails? MediaDetails);
+    private sealed record MediaDetails(Dictionary<string, MediaSize>? Sizes);
+    private sealed record MediaSize([property: System.Text.Json.Serialization.JsonPropertyName("source_url")] string? SourceUrl);
 }

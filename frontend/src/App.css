@@ -6636,3 +6636,24 @@ a.game-card:active {
   .finder-loading span { animation: none; width: 100%; opacity: 0.5; }
 }
 
+/* The main team's crest on a search match's photo */
+.finder-avatar-wrap {
+  position: relative;
+  flex-shrink: 0;
+  display: inline-flex;
+}
+
+.finder-crest {
+  position: absolute;
+  right: -5px;
+  bottom: -4px;
+  width: 22px;
+  height: 22px;
+  box-sizing: border-box;
+  border-radius: 50%;
+  object-fit: contain;
+  background: #fff;
+  border: 2px solid var(--color-surface);
+  box-shadow: var(--shadow-sm);
+}
+

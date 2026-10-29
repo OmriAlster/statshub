@@ -300,18 +300,49 @@ public class IbbaLayoutTests
         public HttpClient CreateClient(string name) => new(site, disposeHandler: false);
     }
 
+    // A player address as IBBA makes them: 2 digits, the save time in hex, 6 more, -id.
+    private static string PlayerAddress(DateTime saved, string id) =>
+        $"https://ibasketball.co.il/player/24{((DateTimeOffset)saved).ToUnixTimeSeconds():x8}7fbe7b-{id}/";
+
     [Fact]
-    public async Task Searching_by_name_lists_player_pages_only()
+    public async Task Searching_by_name_lists_this_seasons_players_only()
     {
+        var now = DateTime.UtcNow;
+        var current = PlayerAddress(now.AddDays(-1), "30377483");
+        var lastSeason = PlayerAddress(now.AddYears(-1).AddDays(-1), "11111111");
         var site = new FakeSite(new()
         {
-            [$"https://ibasketball.co.il/wp-json/wp/v2/search?search=Noa Cohen&type=post&subtype=sp_player&per_page={IbbaLeagueProvider.MaxSearchResults}"] = new StringContent(
-                "[{\"id\":1,\"title\":\"Noa &amp; Cohen\",\"url\":\"https://ibasketball.co.il/player/aaa-1/\"},{\"id\":3,\"title\":\"News\",\"url\":\"https://ibasketball.co.il/news/x/\"}]"),
+            [$"https://ibasketball.co.il/wp-json/wp/v2/search?search=Noa Cohen&type=post&subtype=sp_player&per_page={IbbaLeagueProvider.SearchHitsRequested}"] = new StringContent(
+                $"[{{\"title\":\"Noa &amp; Cohen\",\"url\":\"{current}\"}},{{\"title\":\"Noa Cohen\",\"url\":\"{lastSeason}\"}},{{\"title\":\"Noa Cohen\",\"url\":\"https://ibasketball.co.il/player/39-noa-cohen/\"}},{{\"title\":\"News\",\"url\":\"https://ibasketball.co.il/news/x/\"}}]"),
         });
 
         var found = await new IbbaLeagueProvider(new Factory(site)).SearchPlayersAsync("Noa Cohen");
 
-        Assert.Equal([new LeaguePlayerHit("Noa & Cohen", "https://ibasketball.co.il/player/aaa-1/")], found);
+        Assert.Equal([new LeaguePlayerHit("Noa & Cohen", current)], found);
+    }
+
+    [Theory]
+    [InlineData("https://ibasketball.co.il/player/246acb577fbe7bd2-30377483/", "2026-10-29", true)]  // saved Oct 2026
+    [InlineData("https://ibasketball.co.il/player/286a5d3d8f8e4846-09716466/", "2026-10-29", false)] // saved Jul 2026, before this season
+    [InlineData("https://ibasketball.co.il/player/286a5d3d8f8e4846-09716466/", "2026-07-30", true)]  // ...which was this season back then
+    [InlineData("https://ibasketball.co.il/player/39-תומר-מסקילצי/", "2026-10-29", false)]          // the old address format
+    public void A_players_address_tells_whether_they_registered_this_season(string url, string today, bool expected)
+    {
+        Assert.Equal(expected, IbbaLeagueProvider.RegisteredThisSeason(url, DateTime.Parse(today)));
+    }
+
+    [Fact]
+    public async Task A_teams_crest_comes_from_the_open_team_data()
+    {
+        var site = new FakeSite(new()
+        {
+            ["https://ibasketball.co.il/wp-json/sportspress/v2/teams?slug=10550-מכבי-תל-מונד&_embed=wp:featuredmedia&_fields=id,_links,_embedded"] = new StringContent(
+                "[{\"id\":746561,\"_embedded\":{\"wp:featuredmedia\":[{\"source_url\":\"https://ibasketball.co.il/crest.png\",\"media_details\":{\"sizes\":{\"thumbnail\":{\"source_url\":\"https://ibasketball.co.il/crest-150x150.png\"}}}}]}}]"),
+        });
+
+        var crest = await new IbbaLeagueProvider(new Factory(site)).QuickTeamLogoUrlAsync("https://ibasketball.co.il/team/10550-%d7%9e%d7%9b%d7%91%d7%99-%d7%aa%d7%9c-%d7%9e%d7%95%d7%a0%d7%93/");
+
+        Assert.Equal("https://ibasketball.co.il/crest-150x150.png", crest);
     }
 }
 
