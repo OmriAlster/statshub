@@ -16,6 +16,15 @@ namespace StatsHub.Api.DTOs
         public List<IbbaPreviewTeamDto> Teams { get; set; } = new();
     }
 
+    // A name search's match - its details come from /ibba/preview.
+    public class LeaguePlayerHitDto
+    {
+        public string LeagueKey { get; set; } = string.Empty;
+        public string LeagueName { get; set; } = string.Empty;
+        public string PlayerName { get; set; } = string.Empty;
+        public string PlayerUrl { get; set; } = string.Empty;
+    }
+
     public class IbbaLinkedPlayerDto
     {
         public Guid PlayerId { get; set; }

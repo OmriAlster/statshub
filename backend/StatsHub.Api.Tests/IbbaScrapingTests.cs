@@ -301,23 +301,17 @@ public class IbbaLayoutTests
     }
 
     [Fact]
-    public async Task Searching_by_name_reads_each_match_and_keeps_only_current_players()
+    public async Task Searching_by_name_lists_player_pages_only()
     {
-        const string current = "https://ibasketball.co.il/player/aaa-1/";
-        const string retired = "https://ibasketball.co.il/player/bbb-2/";
         var site = new FakeSite(new()
         {
             [$"https://ibasketball.co.il/wp-json/wp/v2/search?search=Noa Cohen&type=post&subtype=sp_player&per_page={IbbaLeagueProvider.MaxSearchResults}"] = new StringContent(
-                $"[{{\"id\":1,\"title\":\"Noa Cohen\",\"url\":\"{current}\"}},{{\"id\":2,\"title\":\"Noa Cohen\",\"url\":\"{retired}\"}},{{\"id\":3,\"title\":\"News\",\"url\":\"https://ibasketball.co.il/news/x/\"}}]"),
-            [current] = new StringContent("<html><body><h1>Noa Cohen</h1><div class='data-birthdate'><span>תאריך לידה:</span>02-06-2014</div><div>קבוצה נוכחית <a href='/team/151-maccabi/'>מכבי</a></div></body></html>"),
-            [retired] = new StringContent("<html><body><h1>Noa Cohen</h1><div>ליגות וקבוצות עבר <a href='/team/7-old/'>Old</a></div></body></html>"),
+                "[{\"id\":1,\"title\":\"Noa &amp; Cohen\",\"url\":\"https://ibasketball.co.il/player/aaa-1/\"},{\"id\":3,\"title\":\"News\",\"url\":\"https://ibasketball.co.il/news/x/\"}]"),
         });
 
         var found = await new IbbaLeagueProvider(new Factory(site)).SearchPlayersAsync("Noa Cohen");
 
-        var player = Assert.Single(found);
-        Assert.Equal((current, "Noa Cohen", new DateTime(2014, 6, 2)), (player.PlayerUrl, player.PlayerName, player.DateOfBirth!.Value.Date));
-        Assert.Equal("https://ibasketball.co.il/team/151-maccabi/", player.Teams.Single().TeamUrl);
+        Assert.Equal([new LeaguePlayerHit("Noa & Cohen", "https://ibasketball.co.il/player/aaa-1/")], found);
     }
 }
 

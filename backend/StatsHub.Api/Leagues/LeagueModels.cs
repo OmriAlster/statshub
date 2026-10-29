@@ -30,6 +30,9 @@ public class LeaguePlayer
     public string PhotoUrl { get; set; } = "";
 }
 
+/// <summary>A player a name search found: just who and where - their page has the rest.</summary>
+public record LeaguePlayerHit(string PlayerName, string PlayerUrl);
+
 /// <summary>One game of a team's schedule.</summary>
 public class LeagueGame
 {

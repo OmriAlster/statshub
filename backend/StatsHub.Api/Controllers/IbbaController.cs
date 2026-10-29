@@ -40,14 +40,14 @@ namespace StatsHub.Api.Controllers
             }
         }
 
-        // Players on the league sites whose name matches - each ready to add,
-        // like a pasted link's preview.
+        // Players on the league sites whose name matches - name and address;
+        // each one's card is then /ibba/preview.
         [HttpGet("ibba/search")]
-        public async Task<ActionResult<List<IbbaPreviewDto>>> SearchPlayers([FromQuery] string? name)
+        public async Task<ActionResult<List<LeaguePlayerHitDto>>> SearchPlayers([FromQuery] string? name)
         {
             try
             {
-                return Ok(await _ibbaService.SearchPlayersAsync(name ?? "", _currentUser.UserId));
+                return Ok(await _ibbaService.SearchPlayersAsync(name ?? ""));
             }
             catch (InvalidOperationException ex)
             {

@@ -12,7 +12,7 @@ namespace StatsHub.Api.Services
     public interface IIbbaService
     {
         Task<IbbaPreviewDto> PreviewAsync(string playerUrl, Guid requestingUserId);
-        Task<List<IbbaPreviewDto>> SearchPlayersAsync(string name, Guid requestingUserId);
+        Task<List<LeaguePlayerHitDto>> SearchPlayersAsync(string name);
         Task<CreatePlayerFromIbbaResultDto> CreatePlayerFromIbbaAsync(string ibbaPlayerUrl, Guid requestingUserId);
         Task<IbbaLinkStatusDto?> LinkPlayerAsync(Guid playerId, string ibbaPlayerUrl, Guid requestingUserId);
         Task<bool> UnlinkPlayerAsync(Guid playerId, Guid requestingUserId);
@@ -90,20 +90,21 @@ namespace StatsHub.Api.Services
             return await ToPreviewAsync(league, info, playerUrl, requestingUserId);
         }
 
-        // Players found by name, on every league that has a search - each as
-        // the same card a pasted link shows, so picking one goes straight to
-        // "Yes, add". A league whose search fails just adds nothing; the same
-        // name again within a few minutes is answered from memory, not the site.
-        public async Task<List<IbbaPreviewDto>> SearchPlayersAsync(string name, Guid requestingUserId)
+        // Players found by name, on every league that has a search - names and
+        // addresses only, so the list shows at once; each one's details are a
+        // preview (PreviewAsync), fetched by the page as the list fills in. A
+        // league whose search fails just adds nothing; the same name again
+        // within a few minutes is answered from memory, not the site.
+        public async Task<List<LeaguePlayerHitDto>> SearchPlayersAsync(string name)
         {
             name = string.Join(' ', name.Split(' ', StringSplitOptions.RemoveEmptyEntries));
             if (name.Length < MinSearchLength)
                 throw new InvalidOperationException($"Type at least {MinSearchLength} letters of the player's name.");
 
-            var results = new List<IbbaPreviewDto>();
+            var results = new List<LeaguePlayerHitDto>();
             foreach (var league in _leagues.All)
             {
-                var players = await _cache.GetOrCreateAsync($"league-search:{league.Key}:{name.ToLowerInvariant()}", async entry =>
+                var hits = await _cache.GetOrCreateAsync($"league-search:{league.Key}:{name.ToLowerInvariant()}", async entry =>
                 {
                     entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(10);
                     try { return await league.SearchPlayersAsync(name); }
@@ -111,11 +112,10 @@ namespace StatsHub.Api.Services
                     {
                         _logger.LogWarning(ex, "Player search on {League} failed for {Name}", league.Key, name);
                         entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(1); // don't remember a failure
-                        return new List<LeaguePlayer>();
+                        return new List<LeaguePlayerHit>();
                     }
                 }) ?? [];
-                foreach (var player in players)
-                    results.Add(await ToPreviewAsync(league, player, player.PlayerUrl, requestingUserId));
+                results.AddRange(hits.Select(h => new LeaguePlayerHitDto { LeagueKey = league.Key, LeagueName = league.Name, PlayerName = h.PlayerName, PlayerUrl = h.PlayerUrl }));
             }
             return results;
         }
