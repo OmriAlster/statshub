@@ -56,9 +56,9 @@ namespace StatsHub.Api.Controllers
         }
 
         [HttpGet("player/{playerId}/team/{teamId}")]
-        public async Task<ActionResult<List<ShotDto>>> GetShotsByPlayerAndTeam(Guid playerId, Guid teamId)
+        public async Task<ActionResult<List<ShotDto>>> GetShotsByPlayerAndTeam(Guid playerId, Guid teamId, [FromQuery] string? gameType = null)
         {
-            var shots = await _shotService.GetShotsByPlayerAndTeamAsync(playerId, teamId, _currentUser.UserId);
+            var shots = await _shotService.GetShotsByPlayerAndTeamAsync(playerId, teamId, _currentUser.UserId, gameType);
             return Ok(shots);
         }
     }

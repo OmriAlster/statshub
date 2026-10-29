@@ -156,6 +156,7 @@ function PlayerProfilePanel({ player, prefetched }: { player: PlayerDto; prefetc
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [selectedTeamId, setSelectedTeamId] = useState<string | 'all' | null>(null)
+  const [typeFilter, setTypeFilter] = useState<GameTypeFilter>('All')
   const [standingsFor, setStandingsFor] = useState<{ league?: string | null; leagueUrl: string; leagueName: string; teamName: string; teamUrl: string } | null>(null)
 
   useEffect(() => {
@@ -275,6 +276,10 @@ function PlayerProfilePanel({ player, prefetched }: { player: PlayerDto; prefetc
 
   const selectedTeam = selectedTeamId !== null && selectedTeamId !== 'all' ? teamMeta[selectedTeamId] : null
   const gamesForTeam = selectedTeamId === 'all' || selectedTeamId === null ? games : games.filter((g) => g.teamId === selectedTeamId)
+  // Played games of each type - a type chip only shows when there's one to see.
+  const typeCounts = gameTypeCounts(gamesForTeam.filter((g) => g.status === 'Completed'))
+  // A filter left on a type this team / player has no games of falls back to all.
+  const activeType: GameTypeFilter = typeFilter !== 'All' && !typeCounts[typeFilter] ? 'All' : typeFilter
 
   return (
     <div>
@@ -338,7 +343,9 @@ function PlayerProfilePanel({ player, prefetched }: { player: PlayerDto; prefetc
         onChange={setTab}
       />
 
-      {tab === 'stats' && <StatsPanel games={gamesForTeam} playerId={player.id} />}
+      {tab !== 'schedule' && <GameTypeChips counts={typeCounts} value={activeType} onChange={setTypeFilter} />}
+
+      {tab === 'stats' && <StatsPanel games={gamesForTeam} playerId={player.id} typeFilter={activeType} />}
       {tab === 'schedule' && (
         <SchedulePanel
           player={player}
@@ -351,7 +358,7 @@ function PlayerProfilePanel({ player, prefetched }: { player: PlayerDto; prefetc
           onEditorClosed={refreshGame}
         />
       )}
-      {tab === 'season' && <SeasonPanel player={player} stats={seasonStats} selectedTeamId={selectedTeamId} />}
+      {tab === 'season' && <SeasonPanel player={player} stats={seasonStats} selectedTeamId={selectedTeamId} typeFilter={activeType} />}
 
       {standingsFor && (
         <StandingsModal
@@ -367,14 +374,16 @@ function PlayerProfilePanel({ player, prefetched }: { player: PlayerDto; prefetc
   )
 }
 
-function StatsPanel({ games, playerId }: { games: GameDto[]; playerId: string }) {
+function StatsPanel({ games, playerId, typeFilter }: { games: GameDto[]; playerId: string; typeFilter: GameTypeFilter }) {
+  const isCounted = countedFor(typeFilter)
   const { completedGames, wins, losses, ppg, averages } = useMemo(() => {
     const completedGames = games
-      .filter((g) => g.status === 'Completed')
+      .filter((g) => g.status === 'Completed' && (typeFilter === 'All' || g.gameType === typeFilter))
       .sort((a, b) => new Date(a.gameDate).getTime() - new Date(b.gameDate).getTime())
     // Friendly games stay in the table (their box score is still worth
-    // seeing) but never count toward the record or any average.
-    const countedGames = completedGames.filter(countsTowardStats)
+    // seeing) but never count toward the record or any average - unless
+    // friendlies are what the filter is showing.
+    const countedGames = completedGames.filter(countedFor(typeFilter))
     // Team record reflects every counted game regardless of whether this
     // player's box score has been tracked yet (e.g. a game just synced from
     // IBBA). Personal averages below must not count those - an untracked
@@ -405,7 +414,7 @@ function StatsPanel({ games, playerId }: { games: GameDto[]; playerId: string })
       : null
 
     return { completedGames, wins, losses, ppg, averages }
-  }, [games])
+  }, [games, typeFilter])
 
   const [wrapRef, wrapVisible] = useElementVisible<HTMLDivElement>()
   const [footRef, footVisible] = useElementVisible<HTMLTableSectionElement>()
@@ -426,13 +435,14 @@ function StatsPanel({ games, playerId }: { games: GameDto[]; playerId: string })
           <span className="summary-value">{wins}-{losses}</span>
           <span className="summary-label">Record</span>
         </div>
+        <p className="summary-caption">{FILTER_CAPTIONS[typeFilter]}</p>
       </div>
 
       {completedGames.length === 0 ? (
         <p>No completed games yet.</p>
       ) : (
         <>
-        <StatsGameCards games={completedGames} linkFor={(game) => `/games/${game.id}?playerId=${playerId}`} />
+        <StatsGameCards games={completedGames} isCounted={isCounted} linkFor={(game) => `/games/${game.id}?playerId=${playerId}`} />
         {averages && <AveragesCard averages={averages} />}
         <div className="games-table-wrap desktop-only" ref={wrapRef}>
           <table className="games-table">
@@ -457,7 +467,7 @@ function StatsPanel({ games, playerId }: { games: GameDto[]; playerId: string })
               {completedGames.map((game) => {
                 const stats = game.playerStats[0]
                 const won = (game.teamScore ?? 0) > (game.opponentScore ?? 0)
-                const counted = countsTowardStats(game)
+                const counted = isCounted(game)
                 return (
                   <tr key={game.id} className={counted ? '' : 'not-counted-row'} title={counted ? undefined : 'Friendly - not counted in stats'}>
                     <td>
@@ -1122,9 +1132,31 @@ function QuickStatsForm({
   )
 }
 
-function SeasonPanel({ player, stats, selectedTeamId }: { player: PlayerDto; stats: PlayerTeamStatsDto[]; selectedTeamId: string | 'all' | null }) {
+function SeasonPanel({
+  player,
+  stats: allTypeStats,
+  selectedTeamId,
+  typeFilter,
+}: {
+  player: PlayerDto
+  stats: PlayerTeamStatsDto[]
+  selectedTeamId: string | 'all' | null
+  typeFilter: GameTypeFilter
+}) {
   const [showTotals, setShowTotals] = useState(false)
   const [shots, setShots] = useState<ShotDto[]>([])
+  // One game type picked: the season line for just those games, from the server.
+  const [typeStats, setTypeStats] = useState<{ type: GameTypeFilter; stats: PlayerTeamStatsDto[] } | null>(null)
+  useEffect(() => {
+    if (typeFilter === 'All') return
+    let current = true
+    api
+      .get<PlayerTeamStatsDto[]>(`/gamestats/player/${player.id}`, { params: { gameType: typeFilter } })
+      .then((res) => current && setTypeStats({ type: typeFilter, stats: res.data }))
+      .catch(() => {})
+    return () => { current = false }
+  }, [player.id, typeFilter, allTypeStats])
+  const stats = typeFilter !== 'All' && typeStats?.type === typeFilter ? typeStats.stats : allTypeStats
 
   const selected = useMemo(() => {
     if (selectedTeamId !== null && selectedTeamId !== 'all') return stats.find((s) => s.teamId === selectedTeamId) ?? null
@@ -1136,8 +1168,11 @@ function SeasonPanel({ player, stats, selectedTeamId }: { player: PlayerDto; sta
       setShots([])
       return
     }
-    api.get<ShotDto[]>(`/shots/player/${player.id}/team/${selected.teamId}`).then((res) => setShots(res.data)).catch(() => setShots([]))
-  }, [player.id, selected])
+    api
+      .get<ShotDto[]>(`/shots/player/${player.id}/team/${selected.teamId}`, { params: typeFilter === 'All' ? {} : { gameType: typeFilter } })
+      .then((res) => setShots(res.data))
+      .catch(() => setShots([]))
+  }, [player.id, selected, typeFilter])
 
   if (stats.length === 0) return <p>No teams yet - add your player to a team on the Players page.</p>
   if (!selected) return <p>Pick a specific team above to see its season stats.</p>
@@ -1235,6 +1270,57 @@ function SeasonPanel({ player, stats, selectedTeamId }: { player: PlayerDto; sta
           </div>
         </div>
       </div>
+    </div>
+  )
+}
+
+type GameTypeFilter = 'All' | GameType
+
+const TYPE_CHIPS: { value: GameTypeFilter; label: string }[] = [
+  { value: 'All', label: 'All games' },
+  { value: 'League', label: 'League' },
+  { value: 'Cup', label: 'Cup' },
+  { value: 'Friendly', label: 'Friendly' },
+]
+
+const FILTER_CAPTIONS: Record<GameTypeFilter, string> = {
+  All: 'League and cup games · friendlies are listed but not counted',
+  League: 'League games only',
+  Cup: 'Cup games only',
+  Friendly: 'Friendlies only · counted here, never in All games',
+}
+
+function gameTypeCounts(games: GameDto[]): Record<GameTypeFilter, number> {
+  const counts: Record<GameTypeFilter, number> = { All: games.length, League: 0, Cup: 0, Friendly: 0 }
+  for (const g of games) counts[g.gameType] = (counts[g.gameType] ?? 0) + 1
+  return counts
+}
+
+// Under "All games" friendlies don't count; pick a type and every game shown counts.
+const countAll = () => true
+function countedFor(typeFilter: GameTypeFilter): (game: GameDto) => boolean {
+  return typeFilter === 'All' ? countsTowardStats : countAll
+}
+
+// League / Cup / Friendly chips, each with how many games it holds - only the
+// types the player has, and none at all when there's just one type.
+function GameTypeChips({ counts, value, onChange }: { counts: Record<GameTypeFilter, number>; value: GameTypeFilter; onChange: (v: GameTypeFilter) => void }) {
+  const chips = TYPE_CHIPS.filter((c) => c.value === 'All' || counts[c.value] > 0)
+  if (chips.length <= 2) return null
+  return (
+    <div className="type-filter" role="group" aria-label="Game type">
+      {chips.map((c) => (
+        <button
+          key={c.value}
+          type="button"
+          className={`type-filter-chip ${c.value.toLowerCase()} ${c.value === value ? 'active' : ''}`}
+          aria-pressed={c.value === value}
+          onClick={() => onChange(c.value)}
+        >
+          {c.label}
+          <span className="type-filter-count">{counts[c.value]}</span>
+        </button>
+      ))}
     </div>
   )
 }

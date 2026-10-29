@@ -9,6 +9,13 @@ namespace StatsHub.Api.Models
         // Friendly games are tracked (schedule, live scoring, box score) but
         // never count toward season stats - averages, totals, shot charts.
         public const string FriendlyGameType = "Friendly";
+        public static readonly string[] GameTypes = ["League", "Cup", FriendlyGameType];
+
+        // The one game type asked for (League / Cup / Friendly - a friendly
+        // counts when it's what you picked), or null for the usual "every game
+        // but friendlies". Anything else is treated as null.
+        public static string? ParseGameTypeFilter(string? gameType) =>
+            GameTypes.FirstOrDefault(t => string.Equals(t, gameType, StringComparison.OrdinalIgnoreCase));
         public DateTime GameDate { get; set; }
         public string Location { get; set; } = string.Empty;
         public string Status { get; set; } = "Upcoming"; // Upcoming, In Progress, Completed
