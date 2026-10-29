@@ -111,11 +111,15 @@ public class IbbaScrapingTests
         // kept an old game time in production - so each spreadsheet request
         // is unique. Pages may come from the cache: IBBA takes ~20s to build
         // one itself, against ~0.3s cached.
+        // (A background job - see IbbaOpenDataTests for a parent waiting.)
         var site = new RecordingSite();
         var http = new HttpClient(new IbbaNoCacheHandler { InnerHandler = site });
 
-        await http.GetAsync("https://ibasketball.co.il/team/13352-x/?feed=xlsx&team_id=746561");
-        await http.GetAsync("https://ibasketball.co.il/team/13352-x/?feed=xlsx&team_id=746561");
+        using (IbbaFreshness.RequireFresh())
+        {
+            await http.GetAsync("https://ibasketball.co.il/team/13352-x/?feed=xlsx&team_id=746561");
+            await http.GetAsync("https://ibasketball.co.il/team/13352-x/?feed=xlsx&team_id=746561");
+        }
         await http.GetAsync("https://ibasketball.co.il/team/13352-x/");
         await http.GetAsync("https://ibasketball.co.il/player/abc-123/");
         await http.GetAsync("https://example.com/other");
@@ -336,8 +340,8 @@ public class IbbaLayoutTests
     {
         var site = new FakeSite(new()
         {
-            ["https://ibasketball.co.il/wp-json/sportspress/v2/teams?slug=10550-מכבי-תל-מונד&_embed=wp:featuredmedia&_fields=id,_links,_embedded"] = new StringContent(
-                "[{\"id\":746561,\"_embedded\":{\"wp:featuredmedia\":[{\"source_url\":\"https://ibasketball.co.il/crest.png\",\"media_details\":{\"sizes\":{\"thumbnail\":{\"source_url\":\"https://ibasketball.co.il/crest-150x150.png\"}}}}]}}]"),
+            ["https://ibasketball.co.il/wp-json/sportspress/v2/teams?slug=10550-מכבי-תל-מונד&_embed=wp:featuredmedia&_fields=id,title,link,leagues,_links,_embedded"] = new StringContent(
+                "[{\"id\":746561,\"title\":{\"rendered\":\"מכבי תל מונד\"},\"link\":\"https://ibasketball.co.il/team/10550-x/\",\"_embedded\":{\"wp:featuredmedia\":[{\"source_url\":\"https://ibasketball.co.il/crest.png\",\"media_details\":{\"sizes\":{\"thumbnail\":{\"source_url\":\"https://ibasketball.co.il/crest-150x150.png\"}}}}]}}]"),
         });
 
         var crest = await new IbbaLeagueProvider(new Factory(site)).QuickTeamLogoUrlAsync("https://ibasketball.co.il/team/10550-%d7%9e%d7%9b%d7%91%d7%99-%d7%aa%d7%9c-%d7%9e%d7%95%d7%a0%d7%93/");

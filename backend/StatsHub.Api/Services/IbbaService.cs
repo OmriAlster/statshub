@@ -128,7 +128,12 @@ namespace StatsHub.Api.Services
             _cache.GetOrCreateAsync($"team-crest:{league.Key}:{teamUrl}", async entry =>
             {
                 entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromDays(1);
-                try { return await league.QuickTeamLogoUrlAsync(teamUrl); }
+                try
+                {
+                    var crest = await league.QuickTeamLogoUrlAsync(teamUrl);
+                    if (crest == null) entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(10); // none, or IBBA didn't answer
+                    return crest;
+                }
                 catch (Exception ex)
                 {
                     _logger.LogInformation(ex, "No quick crest for {TeamUrl}", teamUrl);
@@ -338,6 +343,7 @@ namespace StatsHub.Api.Services
             var team = await _context.IbbaTeams.FindAsync(ibbaTeamId);
             if (team == null || string.IsNullOrEmpty(team.TeamUrl)) return;
 
+            using var fresh = IbbaFreshness.RequireFresh(); // no one's waiting - never a cached schedule
             await UpsertGamesAsync(team, await _leagues.Get(team.Provider).LoadTeamGamesAsync(team.TeamUrl));
         }
 
@@ -346,9 +352,35 @@ namespace StatsHub.Api.Services
             var link = await _context.PlayerIbbaLinks.FirstOrDefaultAsync(l => l.Id == linkId);
             if (link == null) return; // unlinked since the job listed it
 
+            using var fresh = IbbaFreshness.RequireFresh(); // no one's waiting - never a cached schedule
+
+            // The player's own page (photo, which teams) is read one night a
+            // week - their night, spread across the week by link; the other
+            // nights use the teams already known, so only games and standings
+            // are read. Sync Now always reads the page.
+            var knownPlayer = IsPlayerPageNight(link.Id, DateTime.UtcNow) ? null : await KnownPlayerAsync(link);
+
             // Never throws for a scrape/parse failure - it's recorded on the
             // link as LastSyncError, same as a manual sync.
-            await RunSyncAsync(link);
+            await RunSyncAsync(link, knownPlayer);
+        }
+
+        internal static bool IsPlayerPageNight(Guid linkId, DateTime now) => linkId.ToByteArray()[0] % 7 == (int)now.DayOfWeek;
+
+        // The player as last read - their teams, from the database - or null
+        // when none are known yet (then the page is read).
+        private async Task<LeaguePlayer?> KnownPlayerAsync(PlayerIbbaLink link)
+        {
+            var teams = await _context.PlayerIbbaTeams
+                .Where(pit => pit.PlayerIbbaLinkId == link.Id)
+                .Select(pit => new { pit.IbbaTeam.TeamUrl, pit.IbbaTeam.Name, pit.IbbaTeam.IbbaTeamId })
+                .ToListAsync();
+            if (teams.Count == 0 || teams.Any(t => string.IsNullOrEmpty(t.TeamUrl))) return null;
+            return new LeaguePlayer
+            {
+                PlayerUrl = link.IbbaPlayerUrl,
+                Teams = teams.Select(t => new LeagueTeam { TeamUrl = t.TeamUrl, TeamName = t.Name, TeamSlugId = t.IbbaTeamId }).ToList(),
+            };
         }
 
         public async Task<IbbaLinkStatusDto?> GetLinkStatusAsync(Guid playerId, Guid requestingUserId)
@@ -995,7 +1027,7 @@ namespace StatsHub.Api.Services
         // page load. Always called from the background (see
         // EnqueueOpponentBackfill) - takes an explicit context since the
         // request's own scoped one is gone by the time this runs.
-        private async Task<List<IbbaTeam>> ResolveUnknownOpponentsAsync(AppDbContext context, ILeagueProvider league, List<string> codes)
+        private async Task<List<IbbaTeam>> ResolveUnknownOpponentsAsync(AppDbContext context, ILeagueProvider league, List<string> codes, Dictionary<string, string> namesByCode)
         {
             using var throttle = new SemaphoreSlim(5);
             var results = new System.Collections.Concurrent.ConcurrentBag<(string Code, string Url, string Name, string? LogoUrl)>();
@@ -1005,7 +1037,7 @@ namespace StatsHub.Api.Services
                 await throttle.WaitAsync();
                 try
                 {
-                    var resolved = await league.ResolveTeamByIdAsync(code);
+                    var resolved = await league.ResolveTeamByIdAsync(code, namesByCode.GetValueOrDefault(code));
                     if (resolved != null) results.Add((code, resolved.Value.CanonicalUrl, resolved.Value.Name, resolved.Value.LogoUrl));
                 }
                 catch
@@ -1073,7 +1105,13 @@ namespace StatsHub.Api.Services
                 {
                     using var scope = _scopeFactory.CreateScope();
                     var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-                    var resolved = await ResolveUnknownOpponentsAsync(context, _leagues.Get(provider), unresolvedCodes);
+                    // Each opponent's name as the games list it - found by name in IBBA's open data.
+                    var namesByCode = rows
+                        .SelectMany(r => new[] { (r.HomeTeamCode, r.HomeTeam), (r.AwayTeamCode, r.AwayTeam) })
+                        .Where(p => !string.IsNullOrEmpty(p.Item1) && !string.IsNullOrEmpty(p.Item2))
+                        .GroupBy(p => p.Item1)
+                        .ToDictionary(g => g.Key, g => g.First().Item2);
+                    var resolved = await ResolveUnknownOpponentsAsync(context, _leagues.Get(provider), unresolvedCodes, namesByCode);
                     if (resolved.Count == 0) return;
 
                     var teamsByCode = resolved.ToDictionary(t => t.IbbaTeamId);
