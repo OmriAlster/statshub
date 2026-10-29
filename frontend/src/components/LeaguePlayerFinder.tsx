@@ -158,14 +158,19 @@ export default function LeaguePlayerFinder({
         <ul className="finder-results" aria-label="Players found">
           {rows.map(({ hit, detail }) => {
             const p = detail.state === 'ready' ? detail.preview : null
+            // The main team's crest, as a badge on the photo.
+            const crest = p && (p.teams.find((t) => !t.isAdditional) ?? p.teams[0])?.logoUrl
             return (
               <li key={hit.playerUrl}>
                 <button type="button" className="finder-result" onClick={() => pick(hit, detail)} disabled={busy}>
-                  {p?.photoUrl ? (
-                    <img className="finder-avatar" src={p.photoUrl} alt="" />
-                  ) : (
-                    <span className="finder-avatar">{initials(hit.playerName)}</span>
-                  )}
+                  <span className="finder-avatar-wrap">
+                    {p?.photoUrl ? (
+                      <img className="finder-avatar" src={p.photoUrl} alt="" />
+                    ) : (
+                      <span className="finder-avatar">{initials(hit.playerName)}</span>
+                    )}
+                    {crest && <img className="finder-crest" src={crest} alt="" />}
+                  </span>
                   <span className="finder-text">
                     <span className="finder-name" dir="auto">{p?.playerName ?? hit.playerName}</span>
                     <span className="finder-teams">

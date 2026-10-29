@@ -122,6 +122,21 @@ namespace StatsHub.Api.Services
 
         internal const int MinSearchLength = 3;
 
+        // A team's crest for a found player's card - a day in memory; a failed
+        // lookup just means no crest.
+        private Task<string?> QuickTeamLogoAsync(ILeagueProvider league, string teamUrl) =>
+            _cache.GetOrCreateAsync($"team-crest:{league.Key}:{teamUrl}", async entry =>
+            {
+                entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromDays(1);
+                try { return await league.QuickTeamLogoUrlAsync(teamUrl); }
+                catch (Exception ex)
+                {
+                    _logger.LogInformation(ex, "No quick crest for {TeamUrl}", teamUrl);
+                    entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(5);
+                    return null;
+                }
+            });
+
         private async Task<IbbaPreviewDto> ToPreviewAsync(ILeagueProvider league, LeaguePlayer info, string playerUrl, Guid requestingUserId)
         {
             var alreadyLinked = await FindLinkedPlayerAsync(playerUrl, requestingUserId);
@@ -129,6 +144,14 @@ namespace StatsHub.Api.Services
             // What the app already knows of these teams - no extra trips to the site.
             var urls = info.Teams.Select(t => t.TeamUrl).ToList();
             var known = await _context.IbbaTeams.AsNoTracking().Where(t => urls.Contains(t.TeamUrl)).ToDictionaryAsync(t => t.TeamUrl);
+
+            // Crests of teams the app doesn't know yet - quickly, all at once.
+            var crests = new Dictionary<string, string?>();
+            await Task.WhenAll(info.Teams.Where(t => !known.TryGetValue(t.TeamUrl, out var k) || string.IsNullOrEmpty(k.LogoUrl)).Select(async t =>
+            {
+                var crest = await QuickTeamLogoAsync(league, t.TeamUrl);
+                lock (crests) crests[t.TeamUrl] = crest;
+            }));
 
             return new IbbaPreviewDto
             {
@@ -147,7 +170,7 @@ namespace StatsHub.Api.Services
                         TeamName = team?.Name ?? t.TeamName,
                         TeamUrl = t.TeamUrl,
                         IsAdditional = t.IsAdditional,
-                        LogoUrl = team?.LogoUrl,
+                        LogoUrl = string.IsNullOrEmpty(team?.LogoUrl) ? crests.GetValueOrDefault(t.TeamUrl) : team.LogoUrl,
                         LeagueName = string.IsNullOrEmpty(team?.LeagueName) ? null : team.LeagueName,
                         Position = team?.LeaguePosition,
                         TotalTeams = team?.LeagueTotalTeams,
