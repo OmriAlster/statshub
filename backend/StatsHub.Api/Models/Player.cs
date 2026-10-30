@@ -9,7 +9,8 @@ namespace StatsHub.Api.Models
         public string Position { get; set; } = string.Empty; // PG, SG, SF, PF, C
         public int? Height { get; set; } // in cm
         public int? Weight { get; set; } // in kg
-        public DateTime DateOfBirth { get; set; }
+        // Not every child has one on file (IBBA leaves it out for many).
+        public DateTime? DateOfBirth { get; set; }
         public string? ProfilePictureUrl { get; set; }
 
         // Player account linking: lets the player log in with their own
