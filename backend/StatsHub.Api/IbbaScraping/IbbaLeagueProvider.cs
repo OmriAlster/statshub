@@ -6,10 +6,16 @@ using StatsHub.Api.Services;
 namespace StatsHub.Api.IbbaScraping;
 
 /// <summary>
-/// The Israel Basketball Association (ibasketball.co.il): ties IbbaPlayerScraper,
-/// IbbaTeamScraper and IbbaLeagueScraper together. Player -> every current team
-/// (main + any רשאי), and per team - logo, league, games (from the team's Excel
-/// export) and the league table. Reads the site only; saving is the shared sync's.
+/// The Israel Basketball Association (ibasketball.co.il). Player -> every
+/// current team (main + any רשאי), and per team - name, crest, league, games
+/// (the team's games spreadsheet) and the league table. Reads the site only;
+/// saving is the shared sync's.
+///
+/// Where IBBA's open data has it (IbbaOpenData - teams, leagues, tables) it's
+/// read from there, in well under a second; the player's page (players
+/// aren't open) and the games spreadsheet are read as files. Should the open
+/// data not answer or look different, the team / league page is read
+/// instead, as before (IbbaTeamScraper, IbbaLeagueScraper).
 /// </summary>
 public class IbbaLeagueProvider : ILeagueProvider
 {
@@ -30,8 +36,10 @@ public class IbbaLeagueProvider : ILeagueProvider
     // Through the "Ibba" client: retries, a request limit, cache rules (Program.cs).
     private HttpClient Http() => _httpClientFactory.CreateClient("Ibba");
 
-    // What stage 1 keeps of a team's page for stage 2.
-    private sealed record PageState(HtmlDocument Doc, string? ExcelUrl);
+    private IbbaOpenData OpenData() => new(Http());
+
+    // What stage 1 keeps of a team for stage 2: its open data, or its page.
+    private sealed record PageState(IbbaOpenData.TeamInfo? Info, HtmlDocument? Doc, string? ExcelUrl);
 
     public Task<LeaguePlayer> GetPlayerAsync(string playerUrl) => new IbbaPlayerScraper(Http()).GetPlayerInfoAsync(playerUrl);
 
@@ -50,12 +58,23 @@ public class IbbaLeagueProvider : ILeagueProvider
             throw new InvalidOperationException("Could not find any current team for this player on the page.");
 
         var teamScraper = new IbbaTeamScraper(Http());
-        var pages = (await Task.WhenAll(player.Teams.Select(team => LoadTeamPageAsync(teamScraper, team)))).ToList();
+        var openData = OpenData();
+        var pages = (await Task.WhenAll(player.Teams.Select(team => LoadTeamPageAsync(openData, teamScraper, team)))).ToList();
         return (player, pages);
     }
 
-    private static async Task<LeagueTeamPage> LoadTeamPageAsync(IbbaTeamScraper teamScraper, LeagueTeam team)
+    private static async Task<LeagueTeamPage> LoadTeamPageAsync(IbbaOpenData openData, IbbaTeamScraper teamScraper, LeagueTeam team)
     {
+        // The open data has the name, crest and the id the games spreadsheet
+        // needs - no team page at all.
+        var info = await openData.FindTeamAsync(team.TeamUrl);
+        if (info != null)
+        {
+            if (!string.IsNullOrEmpty(info.Name)) team.TeamName = info.Name;
+            team.TeamLogoUrl = info.CrestUrl ?? "";
+            return new LeagueTeamPage { Team = team, State = new PageState(info, null, info.GamesSpreadsheetUrl) };
+        }
+
         // One fetch of the team's own page covers name, crest, and the Excel
         // export link (and later the league link).
         var doc = await teamScraper.LoadTeamPageAsync(team.TeamUrl);
@@ -67,7 +86,7 @@ public class IbbaLeagueProvider : ILeagueProvider
             // " - LeagueName"), which would break exact-match lookups later.
             team.TeamName = teamScraper.GetTeamName(doc) ?? team.TeamName;
             team.TeamLogoUrl = teamScraper.FindTeamLogo(doc, team.TeamUrl, team.TeamName) ?? "";
-            return new LeagueTeamPage { Team = team, State = new PageState(doc, teamScraper.FindExcelExportUrl(doc, team.TeamUrl)) };
+            return new LeagueTeamPage { Team = team, State = new PageState(null, doc, teamScraper.FindExcelExportUrl(doc, team.TeamUrl)) };
         }
     }
 
@@ -89,13 +108,28 @@ public class IbbaLeagueProvider : ILeagueProvider
         // not just the main team's (unlike the player page's "ליגה" label, which only
         // labels the main team).
         var leagueName = report.Games.FirstOrDefault(g => !g.IsCup)?.League;
-        if (!string.IsNullOrEmpty(leagueName))
+        if (string.IsNullOrEmpty(leagueName)) return report;
+        team.LeagueName = leagueName;
+
+        // This season's league of that name, and its table, from the open data.
+        if (state.Info != null)
         {
-            team.LeagueName = leagueName;
-            team.LeagueUrl = teamScraper.FindLeagueUrl(state.Doc, team.TeamUrl, leagueName) ?? "";
-            if (!string.IsNullOrEmpty(team.LeagueUrl))
-                report.Standings = await new IbbaLeagueScraper(Http()).GetStandingsAsync(team.LeagueUrl);
+            var openData = OpenData();
+            var league = await openData.FindCurrentLeagueAsync(state.Info.LeagueIds, leagueName);
+            if (league != null)
+            {
+                team.LeagueUrl = league.PageUrl;
+                var standings = await openData.GetStandingsAsync(league.Id);
+                report.Standings = standings ?? await new IbbaLeagueScraper(Http()).GetStandingsAsync(team.LeagueUrl);
+                return report;
+            }
         }
+
+        // Otherwise the team page's league directory and the league page.
+        var doc = state.Doc ?? await teamScraper.LoadTeamPageAsync(team.TeamUrl);
+        team.LeagueUrl = teamScraper.FindLeagueUrl(doc, team.TeamUrl, leagueName) ?? "";
+        if (!string.IsNullOrEmpty(team.LeagueUrl))
+            report.Standings = await new IbbaLeagueScraper(Http()).GetStandingsAsync(team.LeagueUrl);
 
         return report;
     }
@@ -103,17 +137,29 @@ public class IbbaLeagueProvider : ILeagueProvider
     public async Task<List<LeagueGame>> LoadTeamGamesAsync(string teamUrl)
     {
         var scraper = new IbbaTeamScraper(Http());
+        var info = await OpenData().FindTeamAsync(teamUrl);
+        if (info != null) return await scraper.DownloadAndParseGamesAsync(info.GamesSpreadsheetUrl);
+
         var doc = await scraper.LoadTeamPageAsync(teamUrl);
         var excelUrl = scraper.FindExcelExportUrl(doc, teamUrl)
             ?? throw new LeagueLayoutException($"team page {teamUrl} has no games spreadsheet link");
         return await scraper.DownloadAndParseGamesAsync(excelUrl);
     }
 
-    public Task<(string CanonicalUrl, string Name, string? LogoUrl)?> ResolveTeamByIdAsync(string teamId) =>
-        new IbbaTeamScraper(Http()).ResolveTeamByIdAsync(teamId);
+    public async Task<(string CanonicalUrl, string Name, string? LogoUrl)?> ResolveTeamByIdAsync(string teamId, string? teamName = null)
+    {
+        if (!string.IsNullOrWhiteSpace(teamName) && await OpenData().FindTeamByCodeAsync(teamId, teamName) is { } info)
+            return (info.TeamUrl, info.Name, info.CrestUrl);
+        return await new IbbaTeamScraper(Http()).ResolveTeamByIdAsync(teamId);
+    }
 
-    public Task<string?> FindTeamLogoUrlAsync(string teamUrl, string teamName) =>
-        new IbbaTeamScraper(Http()).FindTeamLogoUrlAsync(teamUrl, teamName);
+    public async Task<string?> FindTeamLogoUrlAsync(string teamUrl, string teamName)
+    {
+        // A team the open data knows but has no crest for has none on its page either.
+        var info = await OpenData().FindTeamAsync(teamUrl);
+        if (info != null) return info.CrestUrl;
+        return await new IbbaTeamScraper(Http()).FindTeamLogoUrlAsync(teamUrl, teamName);
+    }
 
     public string TeamIdFromUrl(string teamUrl) => IbbaPlayerScraper.ExtractTeamSlugId(teamUrl);
 
@@ -152,28 +198,18 @@ public class IbbaLeagueProvider : ILeagueProvider
         var match = System.Text.RegularExpressions.Regex.Match(slug, "^[0-9]{2}([0-9a-f]{8})[0-9a-f]{6}-[0-9]+$");
         if (!match.Success) return false;
         var saved = DateTimeOffset.FromUnixTimeSeconds(Convert.ToInt64(match.Groups[1].Value, 16)).UtcDateTime;
-        var seasonStart = new DateTime(now.Month >= 8 ? now.Year : now.Year - 1, 8, 1, 0, 0, 0, DateTimeKind.Utc);
-        return saved >= seasonStart;
+        return saved >= LeagueSeason.StartOf(now);
     }
 
-    // The site's open team data (/team/<slug>/ -> its crest image) answers in
-    // well under a second, against ~3 s for a team page IBBA hasn't cached.
-    public async Task<string?> QuickTeamLogoUrlAsync(string teamUrl)
+    // The site's open team data answers in well under a second, against ~3 s
+    // for a team page IBBA hasn't cached: its crest, and its newest league
+    // that isn't a cup - this season's, once the season has begun.
+    public async Task<LeagueTeamQuick?> QuickTeamAsync(string teamUrl)
     {
-        if (!Uri.TryCreate(teamUrl, UriKind.Absolute, out var uri)) return null;
-        var slug = Uri.UnescapeDataString(uri.Segments.LastOrDefault()?.Trim('/') ?? "");
-        if (slug.Length == 0) return null;
-        var url = $"https://ibasketball.co.il/wp-json/sportspress/v2/teams?slug={Uri.EscapeDataString(slug)}&_embed=wp:featuredmedia&_fields=id,_links,_embedded";
-        var teams = await Http().GetFromJsonAsync<List<TeamHit>>(url) ?? [];
-        var media = teams.FirstOrDefault()?.Embedded?.FeaturedMedia?.FirstOrDefault();
-        return media?.MediaDetails?.Sizes?.GetValueOrDefault("thumbnail")?.SourceUrl ?? media?.SourceUrl;
+        var openData = OpenData();
+        var info = await openData.FindTeamAsync(teamUrl);
+        if (info == null) return null;
+        var league = await openData.FindNewestLeagueAsync(info.LeagueIds);
+        return new LeagueTeamQuick(info.CrestUrl, league?.Name, league?.PageUrl);
     }
-
-    private sealed record TeamHit([property: System.Text.Json.Serialization.JsonPropertyName("_embedded")] TeamEmbeds? Embedded);
-    private sealed record TeamEmbeds([property: System.Text.Json.Serialization.JsonPropertyName("wp:featuredmedia")] List<Media>? FeaturedMedia);
-    private sealed record Media(
-        [property: System.Text.Json.Serialization.JsonPropertyName("source_url")] string? SourceUrl,
-        [property: System.Text.Json.Serialization.JsonPropertyName("media_details")] MediaDetails? MediaDetails);
-    private sealed record MediaDetails(Dictionary<string, MediaSize>? Sizes);
-    private sealed record MediaSize([property: System.Text.Json.Serialization.JsonPropertyName("source_url")] string? SourceUrl);
 }
