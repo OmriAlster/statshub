@@ -118,7 +118,7 @@ export default function LeaguePlayerFinder({
   }
 
   return (
-    <div className="player-finder">
+    <div className="player-finder" data-guide="player-finder">
       <label className="visually-hidden" htmlFor={inputId}>{label}</label>
       <div className="ibba-connect-form">
         <input
