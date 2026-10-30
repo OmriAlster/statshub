@@ -86,9 +86,24 @@ public class IbbaTeamScraper
 
     public async Task<List<LeagueGame>> DownloadAndParseGamesAsync(string excelUrl)
     {
-        var games = new List<LeagueGame>();
+        var fileBytes = await _http.GetByteArrayAsync(excelUrl);
+        try
+        {
+            return ParseGames(fileBytes);
+        }
+        catch (Exception ex) when (ex is not LeagueLayoutException && !IbbaFreshness.FreshRequired)
+        {
+            // A file that won't open at all (once, IBBA's copy came back
+            // broken - "Invalid character in the given encoding"): one more
+            // try with a freshly built one before the sync gives up.
+            using var fresh = IbbaFreshness.RequireFresh();
+            return ParseGames(await _http.GetByteArrayAsync(excelUrl));
+        }
+    }
 
-        byte[] fileBytes = await _http.GetByteArrayAsync(excelUrl);
+    private static List<LeagueGame> ParseGames(byte[] fileBytes)
+    {
+        var games = new List<LeagueGame>();
         using var parsing = RequestTimings.Time("parse-games-xlsx");
 
         using var stream = new MemoryStream(fileBytes);

@@ -207,4 +207,21 @@ public class IbbaOpenDataTests
             Assert.Equal(1, Enumerable.Range(0, 7).Count(d => IbbaService.IsPlayerPageNight(link, monday.AddDays(d))));
         }
     }
+
+    [Fact]
+    public async Task A_games_file_that_wont_open_is_read_again_fresh()
+    {
+        var calls = 0;
+        var good = IbbaLayoutTests.Sheet(["ליגה", "Code", "Week Day", "תאריך", "מחזור", "Time", "Home Team", "Home Team Code", "Away Team", "Away Team Code", "Venue", "Home Score", "Away Score"],
+            ["L", "1", "Sun", "1-11-2026", "1", "18:00", "A", "1", "B", "2", "Gym", "", ""]);
+        var goodBytes = await good.ReadAsByteArrayAsync();
+        var site = new Site(new()
+        {
+            [Spreadsheet] = () => ++calls == 1 ? new ByteArrayContent([0x50, 0x4b, 0x03, 0x04, 0xff, 0xfe, 0x00]) : new ByteArrayContent(goodBytes),
+        });
+
+        var games = await new IbbaTeamScraper(new HttpClient(site)).DownloadAndParseGamesAsync(Spreadsheet);
+
+        Assert.Equal(("1", 2), (games.Single().Code, calls));
+    }
 }
