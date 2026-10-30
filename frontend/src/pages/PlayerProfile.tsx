@@ -656,7 +656,7 @@ export default function PlayerProfile() {
             <div className="ibba-connect-box">
               {ibbaLinks[player.id] ? (
                 <>
-                  <p className="profile-section-label" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <p className="profile-section-label" data-guide="ibba-sync" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                     <LeagueBadge league={ibbaLinks[player.id]!.leagueKey} />
                     {ibbaLinks[player.id]!.lastSyncedAt && (
                       <span style={{ textTransform: 'none', letterSpacing: 0, fontWeight: 400 }}>
@@ -755,7 +755,7 @@ export default function PlayerProfile() {
               )}
             </div>
 
-            <div className="profile-actions">
+            <div className="profile-actions" data-guide="family-actions">
               <button onClick={() => shareProfile(player.id)} disabled={busyPlayerId === player.id}>
                 🔗 Share Stats
               </button>
@@ -841,8 +841,8 @@ export default function PlayerProfile() {
                 <h3>➕ Add New Player</h3>
                 <p>Manage multiple players</p>
                 <div className="flex gap-1" style={{ justifyContent: 'center', flexWrap: 'wrap' }}>
-                  <button onClick={() => setShowAddForm(true)}>Add Manually</button>
-                  <button onClick={() => setShowAddIbbaForm(true)}>Find on {leagues}</button>
+                  <button data-guide="add-manually" onClick={() => setShowAddForm(true)}>Add Manually</button>
+                  <button data-guide="find-on-ibba" onClick={() => setShowAddIbbaForm(true)}>Find on {leagues}</button>
                 </div>
               </>
             )}

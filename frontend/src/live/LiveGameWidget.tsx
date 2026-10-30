@@ -817,7 +817,7 @@ export default function LiveGameWidget() {
   return (
     <>
       {!overlayOpen && (
-        <button className={`fab-live ${active ? 'is-live' : ''}`} onClick={openOverlay}>
+        <button className={`fab-live ${active ? 'is-live' : ''}`} data-guide={active ? undefined : 'start-live'} onClick={openOverlay}>
           {active ? (
             <>
               <span className="fab-live-dot" />

@@ -110,7 +110,7 @@ export default function LeagueFoundCard({
 
       <div className="found-actions">
         {canConfirm && !preview.alreadyLinkedTo && (
-          <button className="found-confirm" onClick={onConfirm} disabled={busy}>
+          <button className="found-confirm" data-guide="found-confirm" onClick={onConfirm} disabled={busy}>
             {busy ? <Busy>{busyLabel}</Busy> : confirmLabel}
           </button>
         )}

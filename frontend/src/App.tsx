@@ -5,6 +5,7 @@ import { useAuth } from './auth/AuthContext'
 import IconSprite from './components/IconSprite'
 import Layout from './components/Layout'
 import { LiveGameProvider } from './live/LiveGameContext'
+import { GuideProvider } from './guide/GuideContext'
 import { Analytics } from '@vercel/analytics/react'
 import BouncingBall from './components/BouncingBall'
 
@@ -39,6 +40,7 @@ function App() {
 
   return (
     <LiveGameProvider>
+    <GuideProvider>
     <IconSprite />
     <Analytics />
     <Suspense fallback={<div className="app-loading"><BouncingBall size="lg" /></div>}>
@@ -60,6 +62,7 @@ function App() {
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
     </Suspense>
+    </GuideProvider>
     </LiveGameProvider>
   )
 }

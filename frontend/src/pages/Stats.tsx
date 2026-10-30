@@ -1308,7 +1308,7 @@ function GameTypeChips({ counts, value, onChange }: { counts: Record<GameTypeFil
   const chips = TYPE_CHIPS.filter((c) => c.value === 'All' || counts[c.value] > 0)
   if (chips.length <= 2) return null
   return (
-    <div className="type-filter" role="group" aria-label="Game type">
+    <div className="type-filter" role="group" aria-label="Game type" data-guide="type-filter">
       {chips.map((c) => (
         <button
           key={c.value}

@@ -5,6 +5,8 @@ import InstallAppBanner from './InstallAppBanner'
 import NotificationBanner from './NotificationBanner'
 import NotificationBell from './NotificationBell'
 import { Busy } from './BouncingBall'
+import GuideLayer from '../guide/GuideLayer'
+import { useGuide } from '../guide/GuideContext'
 
 const LiveGameWidget = lazy(() => import('../live/LiveGameWidget'))
 
@@ -38,6 +40,7 @@ export default function Layout({ children }: { children: ReactNode }) {
           <div className="user-info">
             <UserAvatar url={user.profilePictureUrl} initials={initials} />
             <span>{user.firstName} {user.lastName}</span> {isPlayerRole && <span className="role-badge">Player</span>}
+            <HelpButton />
             <NotificationBell />
             <LogoutMenu onLogout={handleLogout} />
           </div>
@@ -67,6 +70,7 @@ export default function Layout({ children }: { children: ReactNode }) {
               <span className="u-name">{user.firstName} {user.lastName}</span>
               {isPlayerRole && <span className="role-badge">Player</span>}
             </div>
+            <HelpButton />
             <NotificationBell />
             <LogoutMenu onLogout={handleLogout} />
           </div>
@@ -84,7 +88,21 @@ export default function Layout({ children }: { children: ReactNode }) {
           <LiveGameWidget />
         </Suspense>
       )}
+
+      <GuideLayer />
     </div>
+  )
+}
+
+// "?" - the getting-started guide again.
+function HelpButton() {
+  const guide = useGuide()
+  const navigate = useNavigate()
+  if (!guide.enabled) return null
+  return (
+    <button className="help-btn" aria-label="Show the getting-started guide" title="Getting-started guide" onClick={() => { navigate('/'); guide.replay() }}>
+      ?
+    </button>
   )
 }
 

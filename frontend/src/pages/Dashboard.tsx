@@ -13,6 +13,8 @@ import { collectUpcomingGames, UPCOMING_PREVIEW_COUNT } from '../utils/upcomingG
 import BouncingBall from '../components/BouncingBall'
 import { GameTypeBadge, HomeAway } from '../components/GameBadges'
 import LeagueBadge from '../components/LeagueBadge'
+import { useGuide } from '../guide/GuideContext'
+import GettingStarted from '../guide/GettingStarted'
 
 interface PlayerCard {
   player: PlayerDto
@@ -37,6 +39,13 @@ export default function Dashboard() {
   const [standingsFor, setStandingsFor] = useState<{ league?: string | null; leagueUrl: string; leagueName: string; teamName: string; teamUrl: string } | null>(null)
   const [showAllUpcoming, setShowAllUpcoming] = useState(false)
   const upcomingGames = useMemo(() => collectUpcomingGames(players), [players])
+  const guide = useGuide()
+  const { offerWelcome } = guide
+
+  // A parent with no players yet gets the welcome (once).
+  useEffect(() => {
+    if (!loading && !error && !isPlayerRole && players.length === 0) offerWelcome()
+  }, [loading, error, isPlayerRole, players.length, offerWelcome])
 
   useEffect(() => {
     load()
@@ -142,6 +151,13 @@ export default function Dashboard() {
         <svg className="icon"><use href="#i-home" /></svg>
         {isPlayerRole ? 'My Dashboard' : `Season Dashboard${currentSeason ? ` - ${currentSeason.name}` : ''}`}
       </h2>
+      {!isPlayerRole && (
+        <GettingStarted
+          hasPlayer={players.length > 0}
+          hasIbba={players.some((p) => !!p.ibba)}
+          hasTrackedGame={players.some((p) => Object.values(p.gamesByTeam).some((games) => games.some((g) => g.playerStats.length > 0)))}
+        />
+      )}
 
       <div className="dashboard-grid">
         {players.map(({ player, teamStats, ibba, gamesByTeam }) => (
