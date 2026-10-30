@@ -20,7 +20,7 @@ const emptyForm = {
   firstName: '',
   lastName: '',
   position: '',
-  dateOfBirth: new Date().toISOString().split('T')[0],
+  dateOfBirth: '', // optional
 }
 
 const emptyIbbaNewForm = {
@@ -138,7 +138,7 @@ export default function PlayerProfile() {
     try {
       const { data } = await api.post<PlayerDto>('/players', {
         ...form,
-        dateOfBirth: new Date(form.dateOfBirth).toISOString(),
+        dateOfBirth: form.dateOfBirth ? new Date(form.dateOfBirth).toISOString() : null,
       })
       setPlayers((prev) => [...prev, data])
       setForm(emptyForm)
@@ -507,7 +507,7 @@ export default function PlayerProfile() {
             </div>
 
             <div className="profile-info">
-              <p>📅 Born: {new Date(player.dateOfBirth).toLocaleDateString()}</p>
+              {player.dateOfBirth && <p>📅 Born: {new Date(player.dateOfBirth).toLocaleDateString()}</p>}
               {player.height && <p>📏 Height: {player.height} cm</p>}
               {player.weight && <p>⚖️ Weight: {player.weight} kg</p>}
             </div>
@@ -804,7 +804,6 @@ export default function PlayerProfile() {
                     confirmLabel={`Yes, add ${ibbaNewPreview.playerName.split(' ')[0]}`}
                     busy={ibbaNewBusy}
                     busyLabel="Adding…"
-                    canConfirm={!!ibbaNewPreview.dateOfBirth}
                     onConfirm={createPlayerFromIbba}
                     onBack={() => {
                       setIbbaNewPreview(null)
@@ -813,9 +812,6 @@ export default function PlayerProfile() {
                     }}
                     onClose={closeAddIbba}
                   >
-                    {!ibbaNewPreview.dateOfBirth && (
-                      <p className="error">This profile doesn&apos;t list a birth date - add this player manually instead.</p>
-                    )}
                     {ibbaNewError && <p className="error">{ibbaNewError}</p>}
                   </LeagueFoundCard>
                 ) : (
@@ -868,7 +864,8 @@ export default function PlayerProfile() {
             </label>
             <label>
               Date of Birth
-              <input type="date" value={form.dateOfBirth} onChange={(e) => setForm({ ...form, dateOfBirth: e.target.value })} />
+              <input type="date" value={form.dateOfBirth} onChange={(e) => setForm({ ...form, dateOfBirth: e.target.value })} aria-describedby="dob-optional" />
+              <span id="dob-optional" className="field-hint">Optional</span>
             </label>
           </div>
           <div className="flex gap-1">

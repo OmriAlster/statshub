@@ -45,7 +45,7 @@ export default function Dashboard() {
 
   // A live game started or finished from the live widget on top of this
   // page - the last/next game and averages here should reflect it.
-  const { liveGameVersion } = useLiveGameOverlay()
+  const { liveGameVersion, requestLiveStart } = useLiveGameOverlay()
   const seenLiveGameVersion = useRef(liveGameVersion)
   useEffect(() => {
     if (liveGameVersion === seenLiveGameVersion.current) return
@@ -253,11 +253,16 @@ export default function Dashboard() {
               {(showAllUpcoming ? upcomingGames : upcomingGames.slice(0, UPCOMING_PREVIEW_COUNT)).map(({ game, players: gamePlayers }) => {
                 const isLive = game.status === 'In Progress'
                 const date = new Date(game.gameDate)
+                const today = !isLive && game.status === 'Upcoming' && isToday(date)
                 return (
-                  <li key={game.id}>
+                  <li key={game.id} className={today ? 'dash-upcoming-today' : undefined}>
                     <Link className={`dash-upcoming-row ${isLive ? 'live' : ''}`} to={`/games/${game.id}?playerId=${gamePlayers[0].id}`}>
                       <div className="dash-upcoming-date-tile" aria-hidden="true">
-                        <span className="dash-upcoming-tile-month">{date.toLocaleDateString('en-US', { month: 'short' })}</span>
+                        {today ? (
+                          <span className="dash-upcoming-tile-today">Today</span>
+                        ) : (
+                          <span className="dash-upcoming-tile-month">{date.toLocaleDateString('en-US', { month: 'short' })}</span>
+                        )}
                         <span className="dash-upcoming-tile-day">{date.getDate()}</span>
                         <span className="dash-upcoming-tile-weekday">{date.toLocaleDateString('en-US', { weekday: 'short' })}</span>
                       </div>
@@ -289,6 +294,13 @@ export default function Dashboard() {
                         )}
                       </div>
                     </Link>
+                    {today && !isPlayerRole && (
+                      <button type="button" className="dash-upcoming-start" onClick={() => requestLiveStart(game.id, gamePlayers[0].id)}>
+                        <svg className="icon" aria-hidden="true"><use href="#i-live" /></svg>
+                        Start live
+                        {gamePlayers.length > 1 && <span className="dash-upcoming-start-who">· {gamePlayers[0].firstName}</span>}
+                      </button>
+                    )}
                   </li>
                 )
               })}
@@ -315,4 +327,9 @@ export default function Dashboard() {
       )}
     </div>
   )
+}
+
+function isToday(date: Date) {
+  const now = new Date()
+  return date.getFullYear() === now.getFullYear() && date.getMonth() === now.getMonth() && date.getDate() === now.getDate()
 }

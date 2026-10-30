@@ -249,8 +249,6 @@ namespace StatsHub.Api.Services
 
             if (info.Teams.Count == 0)
                 throw new InvalidOperationException($"Could not find any current team for this player on the {league.Name} page. Check the URL is a player profile page.");
-            if (info.DateOfBirth == null)
-                throw new InvalidOperationException($"This {league.Name} profile doesn't list a birth date - add this player manually instead.");
 
             var nameParts = info.PlayerName.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
             var firstName = nameParts.Length > 1 ? string.Join(' ', nameParts[..^1]) : info.PlayerName;
@@ -261,7 +259,7 @@ namespace StatsHub.Api.Services
                 FirstName = firstName,
                 LastName = lastName,
                 Position = "",
-                DateOfBirth = info.DateOfBirth.Value,
+                DateOfBirth = info.DateOfBirth, // many IBBA profiles leave it out
             });
 
             var link = new PlayerIbbaLink { PlayerId = player.Id, IbbaPlayerUrl = ibbaPlayerUrl, Provider = league.Key, CreatedAt = DateTime.UtcNow };
