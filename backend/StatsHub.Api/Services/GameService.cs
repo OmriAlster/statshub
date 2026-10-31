@@ -54,8 +54,11 @@ namespace StatsHub.Api.Services
         // could be read from the wrong side. When the caller says which
         // player's page it's on, that player's own team wins; otherwise the
         // lowest id, so the pick is at least stable.
-        private async Task<Team?> FindAccessibleOwnTeamAsync(Game game, Guid requestingUserId, Guid? viewingPlayerId = null)
+        // reading: also a team the user plays on (signed in as the player) -
+        // for showing a game; changing one needs a team they manage.
+        private async Task<Team?> FindAccessibleOwnTeamAsync(Game game, Guid requestingUserId, Guid? viewingPlayerId = null, bool reading = false)
         {
+            var allowed = reading ? AccessRules.TeamSeenBy(requestingUserId) : AccessRules.TeamManagedBy(requestingUserId);
             if (game.IbbaGameCode == null)
             {
                 var teamId = game.HomeTeamId ?? game.AwayTeamId;
@@ -63,7 +66,7 @@ namespace StatsHub.Api.Services
 
                 return await _context.Teams.Include(t => t.IbbaTeam)
                     .Where(t => t.Id == teamId.Value)
-                    .FirstOrDefaultAsync(AccessRules.TeamManagedBy(requestingUserId));
+                    .FirstOrDefaultAsync(allowed);
             }
 
             var sideIds = new[] { game.HomeTeamId, game.AwayTeamId }
@@ -72,7 +75,7 @@ namespace StatsHub.Api.Services
 
             return await _context.Teams.Include(t => t.IbbaTeam)
                 .Where(t => t.IbbaTeamId != null && sideIds.Contains(t.IbbaTeamId.Value))
-                .Where(AccessRules.TeamManagedBy(requestingUserId))
+                .Where(allowed)
                 .OrderByDescending(t => viewingPlayerId != null && t.PlayerTeams.Any(pt => pt.PlayerId == viewingPlayerId))
                 .ThenBy(t => t.Id)
                 .FirstOrDefaultAsync();
@@ -110,7 +113,7 @@ namespace StatsHub.Api.Services
 
             if (game == null) return null;
 
-            var ownTeam = await FindAccessibleOwnTeamAsync(game, requestingUserId, viewingPlayerId);
+            var ownTeam = await FindAccessibleOwnTeamAsync(game, requestingUserId, viewingPlayerId, reading: true);
             if (ownTeam == null)
             {
                 // Not a team owner - only reachable via a stats-only fallback
@@ -395,7 +398,7 @@ namespace StatsHub.Api.Services
             var current = await GetGameByIdAsync(gameId, requestingUserId, playerId);
             if (current == null) return null;
             var game = await _context.Games.AsNoTracking().FirstAsync(g => g.Id == gameId);
-            var ownTeam = await FindAccessibleOwnTeamAsync(game, requestingUserId, playerId);
+            var ownTeam = await FindAccessibleOwnTeamAsync(game, requestingUserId, playerId, reading: true);
             var seasonStart = LeagueSeason.StartOf(DateTime.UtcNow);
 
             IbbaTeam? ours = null, theirs = null;

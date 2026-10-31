@@ -322,6 +322,32 @@ namespace StatsHub.Api.Data.Migrations.Sqlite
                     b.ToTable("Players");
                 });
 
+            modelBuilder.Entity("StatsHub.Api.Models.PlayerGoal", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("PlayerId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Stat")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<double>("Target")
+                        .HasColumnType("REAL");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PlayerId", "Stat");
+
+                    b.ToTable("PlayerGoals");
+                });
+
             modelBuilder.Entity("StatsHub.Api.Models.PlayerIbbaLink", b =>
                 {
                     b.Property<Guid>("Id")
@@ -688,6 +714,17 @@ namespace StatsHub.Api.Data.Migrations.Sqlite
                     b.Navigation("LinkedUser");
 
                     b.Navigation("User");
+                });
+
+            modelBuilder.Entity("StatsHub.Api.Models.PlayerGoal", b =>
+                {
+                    b.HasOne("StatsHub.Api.Models.Player", "Player")
+                        .WithMany()
+                        .HasForeignKey("PlayerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Player");
                 });
 
             modelBuilder.Entity("StatsHub.Api.Models.PlayerIbbaLink", b =>

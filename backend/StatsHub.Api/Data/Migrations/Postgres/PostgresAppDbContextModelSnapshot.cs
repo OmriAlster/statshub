@@ -327,6 +327,32 @@ namespace StatsHub.Api.Data.Migrations.Postgres
                     b.ToTable("Players");
                 });
 
+            modelBuilder.Entity("StatsHub.Api.Models.PlayerGoal", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("PlayerId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Stat")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<double>("Target")
+                        .HasColumnType("double precision");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PlayerId", "Stat");
+
+                    b.ToTable("PlayerGoals");
+                });
+
             modelBuilder.Entity("StatsHub.Api.Models.PlayerIbbaLink", b =>
                 {
                     b.Property<Guid>("Id")
@@ -693,6 +719,17 @@ namespace StatsHub.Api.Data.Migrations.Postgres
                     b.Navigation("LinkedUser");
 
                     b.Navigation("User");
+                });
+
+            modelBuilder.Entity("StatsHub.Api.Models.PlayerGoal", b =>
+                {
+                    b.HasOne("StatsHub.Api.Models.Player", "Player")
+                        .WithMany()
+                        .HasForeignKey("PlayerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Player");
                 });
 
             modelBuilder.Entity("StatsHub.Api.Models.PlayerIbbaLink", b =>
