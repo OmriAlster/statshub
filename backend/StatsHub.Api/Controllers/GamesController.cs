@@ -26,6 +26,15 @@ namespace StatsHub.Api.Controllers
             return Ok(games);
         }
 
+        // Before a game: the two sides in the league table, and their earlier games this season.
+        [HttpGet("{id}/matchup")]
+        public async Task<ActionResult<MatchupDto>> GetMatchup(Guid id, [FromQuery] Guid playerId)
+        {
+            var matchup = await _gameService.GetMatchupAsync(id, _currentUser.UserId, playerId);
+            if (matchup == null) return NotFound(new { message = "Game not found" });
+            return Ok(matchup);
+        }
+
         [HttpGet("player/{playerId}")]
         public async Task<ActionResult<List<GameDto>>> GetGamesByPlayer(Guid playerId)
         {
