@@ -26,4 +26,9 @@
     <ProjectReference Include="..\StatsHub.Api\StatsHub.Api.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Real scoresheet PDFs and their verified expected output, read by the Scoresheets tests. -->
+    <None Include="Scoresheets\Fixtures\**" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>
