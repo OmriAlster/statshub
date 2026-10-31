@@ -63,7 +63,7 @@ const STORAGE_KEY_PREFIX = 'statshub_active_live_game'
 
 export default function LiveGameWidget() {
   const { user } = useAuth()
-  const { overlayOpen, openOverlay, closeOverlay, markLiveGameChanged } = useLiveGameOverlay()
+  const { overlayOpen, openOverlay, closeOverlay, markLiveGameChanged, startRequest } = useLiveGameOverlay()
   const [promoting, setPromoting] = useState(false)
   const [players, setPlayers] = useState<PlayerDto[]>([])
   const [todaysGames, setTodaysGames] = useState<TodaysGame[]>([])
@@ -74,6 +74,7 @@ export default function LiveGameWidget() {
   const [selectedPlayerId, setSelectedPlayerId] = useState<string>('')
   const [selectedTeamId, setSelectedTeamId] = useState<string>('')
   const [gameType, setGameType] = useState<GameType>('League')
+  const [isHomeGame, setIsHomeGame] = useState(true)
   const [opponent, setOpponent] = useState('')
   const [location, setLocation] = useState('')
   const [gameDate, setGameDate] = useState(new Date().toISOString().split('T')[0])
@@ -118,6 +119,16 @@ export default function LiveGameWidget() {
     loadSetupData(restoredGameId)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storageKey])
+
+  // "Start live" on a game's row elsewhere: open and start that game.
+  const handledStart = useRef<number | null>(null)
+  useEffect(() => {
+    if (!startRequest || handledStart.current === startRequest.at) return
+    handledStart.current = startRequest.at
+    openOverlay()
+    if (!active) promoteToLive(startRequest.gameId, startRequest.playerId)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [startRequest])
 
   const promoteToLive = async (gameId: string, playerId: string) => {
     setPromoting(true)
@@ -455,6 +466,7 @@ export default function LiveGameWidget() {
         opponentName: opponent.trim(),
         gameDate: new Date(gameDate).toISOString(),
         location: location.trim(),
+        isHomeGame,
       })
 
       // Create the stats row (and get the uniqueness check) before flipping
@@ -970,6 +982,17 @@ export default function LiveGameWidget() {
                       </div>
                     </div>
                     <div>
+                      <label>Home / Away:</label>
+                      <div className="game-type-toggle">
+                        <button type="button" className={`toggle-option ${isHomeGame ? 'active' : ''}`} onClick={() => setIsHomeGame(true)} aria-pressed={isHomeGame}>
+                          🏠 Home
+                        </button>
+                        <button type="button" className={`toggle-option ${!isHomeGame ? 'active' : ''}`} onClick={() => setIsHomeGame(false)} aria-pressed={!isHomeGame}>
+                          ✈️ Away
+                        </button>
+                      </div>
+                    </div>
+                    <div>
                       <label>Opponent:</label>
                       <input
                         type="text"
@@ -980,7 +1003,7 @@ export default function LiveGameWidget() {
                     </div>
                     <div>
                       <label>Location:</label>
-                      <input type="text" value={location} onChange={(e) => setLocation(e.target.value)} placeholder="e.g. Home gym" />
+                      <input type="text" value={location} onChange={(e) => setLocation(e.target.value)} placeholder={isHomeGame ? 'e.g. Home gym' : 'e.g. Their gym'} />
                     </div>
                     <div>
                       <label>Date:</label>

@@ -40,7 +40,8 @@ public class SecondLeagueTests : IClassFixture<SecondLeagueTests.Factory>
         {
             PlayerName = "Noa Cohen",
             PlayerUrl = playerUrl,
-            DateOfBirth = new DateTime(2011, 5, 1, 0, 0, 0, DateTimeKind.Utc),
+            // A profile without a birth date (many IBBA ones) - "/players/nodob".
+            DateOfBirth = playerUrl.EndsWith("/nodob") ? null : new DateTime(2011, 5, 1, 0, 0, 0, DateTimeKind.Utc),
             Teams = [new LeagueTeam { TeamName = "Demo Lions", TeamUrl = TeamUrl, TeamSlugId = "151" }],
         });
 
@@ -73,7 +74,7 @@ public class SecondLeagueTests : IClassFixture<SecondLeagueTests.Factory>
         ];
 
         public Task<List<LeagueGame>> LoadTeamGamesAsync(string teamUrl) => Task.FromResult(Games());
-        public Task<(string CanonicalUrl, string Name, string? LogoUrl)?> ResolveTeamByIdAsync(string teamId) => Task.FromResult<(string, string, string?)?>(null);
+        public Task<(string CanonicalUrl, string Name, string? LogoUrl)?> ResolveTeamByIdAsync(string teamId, string? teamName = null) => Task.FromResult<(string, string, string?)?>(null);
         public Task<string?> FindTeamLogoUrlAsync(string teamUrl, string teamName) => Task.FromResult<string?>(null);
         public string TeamIdFromUrl(string teamUrl) => teamUrl.Split('/').Last();
 
@@ -196,5 +197,16 @@ public class SecondLeagueTests : IClassFixture<SecondLeagueTests.Factory>
         Assert.Empty(await parent.GetAsync<List<LeaguePlayerHitDto>>("/api/ibba/search?name=Dana"));
         var tooShort = await parent.Http.GetAsync("/api/ibba/search?name=No");
         Assert.Equal(System.Net.HttpStatusCode.BadRequest, tooShort.StatusCode);
+    }
+
+    [Fact]
+    public async Task A_player_whose_league_profile_has_no_birth_date_is_added_without_one()
+    {
+        var parent = await TestUser.SignInAsync(_factory);
+
+        var created = await parent.PostAsync<CreatePlayerFromIbbaResultDto>("/api/ibba/players", new { ibbaPlayerUrl = "https://demo-league.test/players/nodob" });
+
+        Assert.Null(created.Player.DateOfBirth);
+        Assert.Null((await parent.GetAsync<PlayerDto>($"/api/players/{created.Player.Id}")).DateOfBirth);
     }
 }

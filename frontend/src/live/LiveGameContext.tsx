@@ -11,6 +11,10 @@ interface LiveGameContextValue {
   // otherwise wouldn't know.
   liveGameVersion: number
   markLiveGameChanged: () => void
+  // "Start live" on a scheduled game elsewhere (the dashboard's row) - the
+  // live widget picks it up and starts that very game.
+  startRequest: { gameId: string; playerId: string; at: number } | null
+  requestLiveStart: (gameId: string, playerId: string) => void
 }
 
 const LiveGameContext = createContext<LiveGameContextValue | null>(null)
@@ -19,6 +23,7 @@ export function LiveGameProvider({ children }: { children: ReactNode }) {
   const [overlayOpen, setOverlayOpen] = useState(false)
   const [liveGameVersion, setLiveGameVersion] = useState(0)
   const markLiveGameChanged = useCallback(() => setLiveGameVersion((v) => v + 1), [])
+  const [startRequest, setStartRequest] = useState<{ gameId: string; playerId: string; at: number } | null>(null)
 
   return (
     <LiveGameContext.Provider
@@ -28,6 +33,8 @@ export function LiveGameProvider({ children }: { children: ReactNode }) {
         closeOverlay: () => setOverlayOpen(false),
         liveGameVersion,
         markLiveGameChanged,
+        startRequest,
+        requestLiveStart: (gameId, playerId) => setStartRequest({ gameId, playerId, at: Date.now() }),
       }}
     >
       {children}

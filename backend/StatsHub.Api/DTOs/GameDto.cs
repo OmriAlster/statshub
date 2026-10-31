@@ -44,6 +44,8 @@ namespace StatsHub.Api.DTOs
         public DateTime GameDate { get; set; }
         public string Location { get; set; } = string.Empty;
         public string? Notes { get; set; }
+        // Played at home (the team is the home side) or away.
+        public bool IsHomeGame { get; set; } = true;
     }
 
     public class UpdateGameDto

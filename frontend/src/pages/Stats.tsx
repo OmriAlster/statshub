@@ -704,6 +704,7 @@ interface ScheduleNewGameForm {
   gameDate: string
   location: string
   gameType: GameType
+  isHomeGame: boolean
 }
 
 // <input type="datetime-local"> reads/writes local time as "YYYY-MM-DDTHH:mm"
@@ -732,6 +733,7 @@ function ScheduleNewGamePanel({
     gameDate: toDatetimeLocalValue(new Date()),
     location: '',
     gameType: 'League',
+    isHomeGame: true,
   })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -750,6 +752,7 @@ function ScheduleNewGamePanel({
         opponentName: form.opponentName.trim(),
         gameDate: new Date(form.gameDate).toISOString(),
         location: form.location.trim(),
+        isHomeGame: form.isHomeGame,
       })
       onCreated(data)
     } catch {
@@ -781,8 +784,15 @@ function ScheduleNewGamePanel({
           <input type="datetime-local" value={form.gameDate} onChange={(e) => setForm({ ...form, gameDate: e.target.value })} />
         </label>
         <label>
+          Home / Away
+          <select value={form.isHomeGame ? 'home' : 'away'} onChange={(e) => setForm({ ...form, isHomeGame: e.target.value === 'home' })}>
+            <option value="home">🏠 Home</option>
+            <option value="away">✈️ Away</option>
+          </select>
+        </label>
+        <label>
           Location
-          <input value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} placeholder="e.g. Home gym" />
+          <input value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} placeholder={form.isHomeGame ? 'e.g. Home gym' : "e.g. Their gym"} />
         </label>
         <label>
           Type

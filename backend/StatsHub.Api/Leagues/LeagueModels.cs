@@ -30,6 +30,15 @@ public class LeaguePlayer
     public string PhotoUrl { get; set; } = "";
 }
 
+/// <summary>The basketball season - August to July. Only the current one matters.</summary>
+public static class LeagueSeason
+{
+    public static DateTime StartOf(DateTime now) => new(now.Month >= 8 ? now.Year : now.Year - 1, 8, 1, 0, 0, 0, DateTimeKind.Utc);
+}
+
+/// <summary>What a found player's card shows of a team the app hasn't synced this season.</summary>
+public record LeagueTeamQuick(string? CrestUrl, string? LeagueName, string? LeagueUrl);
+
 /// <summary>A player a name search found: just who and where - their page has the rest.</summary>
 public record LeaguePlayerHit(string PlayerName, string PlayerUrl);
 

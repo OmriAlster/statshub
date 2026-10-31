@@ -199,13 +199,12 @@ namespace StatsHub.Api.Services
             if (!await OwnsTeamAsync(dto.TeamId, requestingUserId))
                 throw new UnauthorizedAccessException("Team not found or not owned by user");
 
-            // No home/away preference is given at creation time, so this
-            // defaults to home - editable afterward via UpdateGameDto.IsHomeGame,
-            // which moves the id between Home/AwayTeamId rather than flipping a
-            // separately-stored flag.
+            // Home or away is which side the team's id goes in (Home/AwayTeamId)
+            // - no separate flag; UpdateGameDto.IsHomeGame moves it later.
             var game = new Game
             {
-                HomeTeamId = dto.TeamId,
+                HomeTeamId = dto.IsHomeGame ? dto.TeamId : null,
+                AwayTeamId = dto.IsHomeGame ? null : dto.TeamId,
                 GameType = string.IsNullOrWhiteSpace(dto.GameType) ? "League" : dto.GameType,
                 OpponentName = dto.OpponentName,
                 GameDate = dto.GameDate,

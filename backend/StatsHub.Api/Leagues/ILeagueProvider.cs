@@ -45,8 +45,11 @@ public interface ILeagueProvider
     /// <summary>Just a team's games, by its address - for checking results soon after a game.</summary>
     Task<List<LeagueGame>> LoadTeamGamesAsync(string teamUrl);
 
-    /// <summary>A team known only by the id a game uses for it (e.g. a cup opponent from another league).</summary>
-    Task<(string CanonicalUrl, string Name, string? LogoUrl)?> ResolveTeamByIdAsync(string teamId);
+    /// <summary>
+    /// A team known only by the id a game uses for it (e.g. a cup opponent from
+    /// another league) - and its name in that game, when known.
+    /// </summary>
+    Task<(string CanonicalUrl, string Name, string? LogoUrl)?> ResolveTeamByIdAsync(string teamId, string? teamName = null);
 
     /// <summary>A team's crest, or null when its page has none.</summary>
     Task<string?> FindTeamLogoUrlAsync(string teamUrl, string teamName);
@@ -63,8 +66,9 @@ public interface ILeagueProvider
     Task<List<LeaguePlayerHit>> SearchPlayersAsync(string name) => Task.FromResult(new List<LeaguePlayerHit>());
 
     /// <summary>
-    /// A team's crest without loading its page, when the league offers a quick
-    /// way (for a found player's card); null when it doesn't or has none.
+    /// A team's crest and this season's league without loading its pages, when
+    /// the league offers a quick way (for a found player's card); null when it
+    /// doesn't.
     /// </summary>
-    Task<string?> QuickTeamLogoUrlAsync(string teamUrl) => Task.FromResult<string?>(null);
+    Task<LeagueTeamQuick?> QuickTeamAsync(string teamUrl) => Task.FromResult<LeagueTeamQuick?>(null);
 }

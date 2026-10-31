@@ -19,7 +19,7 @@ export interface PlayerDto {
   position: string
   height?: number | null
   weight?: number | null
-  dateOfBirth: string
+  dateOfBirth?: string | null // not every child has one on file
   profilePictureUrl?: string | null
   teams: TeamDto[]
   parents: ParentDto[]
