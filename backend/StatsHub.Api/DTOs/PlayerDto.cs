@@ -8,7 +8,7 @@ namespace StatsHub.Api.DTOs
         public string Position { get; set; } = string.Empty;
         public int? Height { get; set; }
         public int? Weight { get; set; }
-        public DateTime DateOfBirth { get; set; }
+        public DateTime? DateOfBirth { get; set; }
         public string? ProfilePictureUrl { get; set; }
         public List<TeamDto> Teams { get; set; } = new List<TeamDto>();
         public List<ParentDto> Parents { get; set; } = new List<ParentDto>();
@@ -28,7 +28,7 @@ namespace StatsHub.Api.DTOs
         public string Position { get; set; } = string.Empty;
         public int? Height { get; set; }
         public int? Weight { get; set; }
-        public DateTime DateOfBirth { get; set; }
+        public DateTime? DateOfBirth { get; set; }
         public string? ProfilePictureUrl { get; set; }
     }
 

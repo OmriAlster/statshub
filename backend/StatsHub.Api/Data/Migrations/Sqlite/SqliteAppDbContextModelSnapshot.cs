@@ -256,7 +256,7 @@ namespace StatsHub.Api.Data.Migrations.Sqlite
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("TEXT");
 
-                    b.Property<DateTime>("DateOfBirth")
+                    b.Property<DateTime?>("DateOfBirth")
                         .HasColumnType("TEXT");
 
                     b.Property<string>("FirstName")

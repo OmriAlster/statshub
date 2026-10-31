@@ -34,6 +34,20 @@ public class GamesAndStatsTests : IClassFixture<StatsHubFactory>
     }
 
     [Fact]
+    public async Task A_game_can_be_created_as_an_away_game()
+    {
+        var (parent, player, team) = await ParentWithPlayerOnTeamAsync();
+
+        var away = await parent.PostAsync<GameDto>("/api/games", new CreateGameDto { TeamId = team.Id, OpponentName = "Eagles", GameDate = DateTime.UtcNow.AddDays(3), Location = "Their gym", IsHomeGame = false });
+        var home = await parent.PostAsync<GameDto>("/api/games", new CreateGameDto { TeamId = team.Id, OpponentName = "Hawks", GameDate = DateTime.UtcNow.AddDays(4), Location = "Gym" });
+
+        Assert.Equal((false, team.Id), (away.IsHomeGame, away.TeamId));
+        Assert.True(home.IsHomeGame); // home unless said otherwise
+        var games = await parent.GetAsync<List<GameDto>>($"/api/games/player/{player.Id}");
+        Assert.False(games.Single(g => g.Id == away.Id).IsHomeGame);
+    }
+
+    [Fact]
     public async Task Editing_a_game_updates_home_away_score_and_status()
     {
         var (parent, _, team) = await ParentWithPlayerOnTeamAsync();

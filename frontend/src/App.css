@@ -6657,3 +6657,56 @@ a.game-card:active {
   box-shadow: var(--shadow-sm);
 }
 
+/* Today's game on the dashboard: lit up, with "Start live" right on it */
+.dash-upcoming-today {
+  background: var(--color-accent-soft);
+  border: 1px solid rgba(255, 122, 26, 0.45);
+  border-radius: var(--radius-md);
+  padding: 0.15rem 0.45rem 0.6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.dash-upcoming-today .dash-upcoming-row:hover { background: transparent; }
+
+.dash-upcoming-today .dash-upcoming-date-tile {
+  background: var(--gradient-accent);
+  border-color: transparent;
+  color: #1a0d00;
+}
+
+.dash-upcoming-today .dash-upcoming-date-tile span { color: #1a0d00; }
+
+.dash-upcoming-tile-today {
+  font-size: 0.6rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.dash-upcoming-today .dash-upcoming-time { color: var(--color-accent-bright); font-weight: 800; }
+
+.dash-upcoming-card .dash-upcoming-start {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  min-height: 44px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: var(--gradient-accent);
+  color: #1a0d00;
+  font: inherit;
+  font-weight: 800;
+  font-size: 0.92rem;
+  box-shadow: var(--glow-accent);
+  cursor: pointer;
+}
+
+.dash-upcoming-card .dash-upcoming-start .icon { width: 16px; height: 16px; stroke: #1a0d00; }
+.dash-upcoming-card .dash-upcoming-start:hover { transform: none; filter: brightness(1.05); }
+.dash-upcoming-start-who { font-weight: 600; }
+
+.field-hint { font-size: 0.75rem; color: var(--color-text-muted); }
+
