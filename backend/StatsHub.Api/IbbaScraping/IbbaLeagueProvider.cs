@@ -204,6 +204,8 @@ public class IbbaLeagueProvider : ILeagueProvider
     // The site's open team data answers in well under a second, against ~3 s
     // for a team page IBBA hasn't cached: its crest, and its newest league
     // that isn't a cup - this season's, once the season has begun.
+    public Task<List<LeagueCup>> GetCupsAsync(string teamUrl) => OpenData().GetCupsAsync(teamUrl);
+
     public async Task<LeagueTeamQuick?> QuickTeamAsync(string teamUrl)
     {
         var openData = OpenData();

@@ -71,4 +71,7 @@ public interface ILeagueProvider
     /// doesn't.
     /// </summary>
     Task<LeagueTeamQuick?> QuickTeamAsync(string teamUrl) => Task.FromResult<LeagueTeamQuick?>(null);
+
+    /// <summary>The cups a team plays in this season, each as its bracket - none when the league publishes none.</summary>
+    Task<List<LeagueCup>> GetCupsAsync(string teamUrl) => Task.FromResult(new List<LeagueCup>());
 }

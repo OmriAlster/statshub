@@ -40,6 +40,14 @@ namespace StatsHub.Api.Controllers
             }
         }
 
+        // A team's cups this season, each as its bracket.
+        [HttpGet("ibba/cups")]
+        public async Task<ActionResult<List<StatsHub.Api.Leagues.LeagueCup>>> GetCups([FromQuery] string teamUrl, [FromQuery] string? league = null)
+        {
+            if (string.IsNullOrWhiteSpace(teamUrl)) return BadRequest(new { message = "teamUrl is required" });
+            return Ok(await _ibbaService.GetCupsAsync(teamUrl, league));
+        }
+
         // Players on the league sites whose name matches - name and address;
         // each one's card is then /ibba/preview.
         [HttpGet("ibba/search")]

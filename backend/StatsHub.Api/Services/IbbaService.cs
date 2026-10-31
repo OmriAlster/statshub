@@ -13,6 +13,7 @@ namespace StatsHub.Api.Services
     {
         Task<IbbaPreviewDto> PreviewAsync(string playerUrl, Guid requestingUserId);
         Task<List<LeaguePlayerHitDto>> SearchPlayersAsync(string name);
+        Task<List<LeagueCup>> GetCupsAsync(string teamUrl, string? leagueKey);
         Task<CreatePlayerFromIbbaResultDto> CreatePlayerFromIbbaAsync(string ibbaPlayerUrl, Guid requestingUserId);
         Task<IbbaLinkStatusDto?> LinkPlayerAsync(Guid playerId, string ibbaPlayerUrl, Guid requestingUserId);
         Task<bool> UnlinkPlayerAsync(Guid playerId, Guid requestingUserId);
@@ -121,6 +122,24 @@ namespace StatsHub.Api.Services
         }
 
         internal const int MinSearchLength = 3;
+
+        // A team's cups this season, as brackets - half an hour in memory (a
+        // bracket changes a few times a season).
+        public async Task<List<LeagueCup>> GetCupsAsync(string teamUrl, string? leagueKey)
+        {
+            var league = _leagues.Get(string.IsNullOrEmpty(leagueKey) ? "ibba" : leagueKey);
+            return await _cache.GetOrCreateAsync($"cups:{league.Key}:{teamUrl}", async entry =>
+            {
+                entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(30);
+                try { return await league.GetCupsAsync(teamUrl); }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Cups for {TeamUrl} failed", teamUrl);
+                    entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(1);
+                    return new List<LeagueCup>();
+                }
+            }) ?? [];
+        }
 
         // A team's crest and this season's league for a found player's card -
         // a day in memory; a failed lookup just means they're not shown.

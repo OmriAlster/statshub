@@ -224,4 +224,41 @@ public class IbbaOpenDataTests
 
         Assert.Equal(("1", 2), (games.Single().Code, calls));
     }
+
+    [Fact]
+    public async Task A_teams_cup_is_found_inside_this_seasons_brackets_and_read_round_by_round()
+    {
+        // A 2-round cup (4 teams): semi-finals in slots 0 and 1, the final in slot 2.
+        // Rows come as a list or as an object; "rounds" as a number or as text - both seen at IBBA.
+        var site = new Site(new()
+        {
+            [$"{Api}/teams?slug=4180-מכבי-חיפה&_embed=wp:featuredmedia&_fields=id,title,link,leagues,_links,_embedded"] =
+                Json($"[{TeamJson(168967, "מכבי חיפה", TeamUrl, [119959])}]"),
+            [$"{Api}/seasons?per_page=10&orderby=id&order=desc&_fields=id,name"] = Json("""[{"id":119888,"name":"2026-2027"},{"id":119878,"name":"-1"}]"""),
+            [$"{Api}/tournaments?seasons=119888&per_page=100&_fields=id,title,link,rounds,data"] = Json("""
+                [{"id":1,"title":{"rendered":"גביע אחר"},"link":"https://ibasketball.co.il/cup/other/","rounds":"1","data":[[{"type":"team","id":"5","index":0}]]},
+                 {"id":2,"title":{"rendered":"גביע המדינה לנערים ב"},"link":"https://ibasketball.co.il/cup/2026-909/","rounds":"2","data":[
+                   [{"type":"team","id":"168967","index":0},{"type":"spacer","rows":2}],
+                   {"1":{"type":"event","id":"900","index":0,"rows":3},"2":{"type":"team","id":"0","index":2}},
+                   [{"type":"team","id":"597672","index":0}],
+                   [{"type":"team","id":"171224","index":1}],
+                   {"1":{"type":"event","id":0,"index":1},"3":{"type":"event","id":0,"index":2},"2":{"type":"team","id":"0","index":2}},
+                   [{"type":"team","id":"170582","index":1}]]}]
+                """),
+            [$"{Api}/teams?include=168967,597672,171224,170582&per_page=100&_embed=wp:featuredmedia&_fields=id,title,link,_links,_embedded"] = Json(
+                $"[{TeamJson(168967, "מכבי חיפה", TeamUrl, [])},{TeamJson(597672, "הפועל נשר", "https://ibasketball.co.il/team/7983-הפועל-נשר/", [], null)},{TeamJson(171224, "הפועל נהריה", "https://ibasketball.co.il/team/6863-הפועל-נהריה/", [], null)},{TeamJson(170582, "הפועל גליל עליון", "https://ibasketball.co.il/team/6202-x/", [], null)}]"),
+            [$"{Api}/events?include=900&per_page=100&_fields=id,date,teams,main_results"] = Json("""[{"id":900,"date":"2026-11-08T18:00:00","teams":[597672,168967],"main_results":["61","70"]}]"""),
+        });
+
+        var cup = Assert.Single(await new IbbaLeagueProvider(new Factory(site)).GetCupsAsync(TeamUrl));
+
+        Assert.Equal(("גביע המדינה לנערים ב", "https://ibasketball.co.il/cup/2026-909/"), (cup.Name, cup.PageUrl));
+        Assert.Equal(["Semi-finals", "Final"], cup.Rounds.Select(r => r.Name).ToArray());
+        var semi = cup.Rounds[0].Games[0]; // the game's own order: Nesher at home
+        Assert.Equal(("הפועל נשר", 61, false), (semi.Home!.Name, semi.Home.Score, semi.Home.Won));
+        Assert.Equal(("מכבי חיפה", 70, true), (semi.Away!.Name, semi.Away.Score, semi.Away.Won));
+        Assert.Equal(new DateTime(2026, 11, 8, 18, 0, 0), semi.LocalDate);
+        Assert.Equal(("הפועל נהריה", "הפועל גליל עליון"), (cup.Rounds[0].Games[1].Home!.Name, cup.Rounds[0].Games[1].Away!.Name)); // no game yet - teams from the bracket
+        Assert.Null(cup.Rounds[1].Games[0].Home); // the final: not decided
+    }
 }

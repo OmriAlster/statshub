@@ -147,6 +147,157 @@ public class IbbaOpenData
         table.Data?.Where(r => r.Key != "0")
             .Sum(r => r.Value.TryGetValue("gp", out var gp) && gp.ValueKind == JsonValueKind.Number ? gp.GetInt32() : 0) ?? 0;
 
+    /// <summary>
+    /// This season's cups a team plays in, each as its bracket. A team isn't
+    /// always listed under the cup it plays (the open data left this season's
+    /// cup off some teams), so every cup of the season is looked at and the
+    /// team found inside its bracket (kept half an hour per team - IbbaService).
+    /// A cup's bracket is a grid of slots: the
+    /// first round's games, then the next round's, and so on to the final
+    /// (2^rounds - 1 in all), each slot with its two teams - known before the
+    /// game itself is created - and the game once it is (date, score).
+    /// </summary>
+    public async Task<List<LeagueCup>> GetCupsAsync(string teamUrl)
+    {
+        var team = await FindTeamAsync(teamUrl);
+        if (team == null) return [];
+        using var timing = RequestTimings.Time("ibba-api-cups");
+
+        var cups = new List<LeagueCup>();
+        foreach (var tournament in await SeasonCupsAsync())
+        {
+            var inIt = tournament.Rows.SelectMany(Cells).Any(c =>
+                c.TryGetValue("type", out var type) && type.GetString() == "team" && c.TryGetValue("id", out var id) && IntOf(id) == team.Id);
+            if (inIt) cups.Add(await ToCupAsync(tournament));
+        }
+        return cups;
+    }
+
+    // Every cup of the current season (the newest season with a name like 2026-2027).
+    private async Task<List<TournamentJson>> SeasonCupsAsync()
+    {
+        var seasons = await GetAsync<List<LeagueJson>>($"{Api}/seasons?per_page=10&orderby=id&order=desc&_fields=id,name") ?? [];
+        var current = seasons.FirstOrDefault(s => System.Text.RegularExpressions.Regex.IsMatch(Decode(s.Name), @"^\d{4}-\d{4}$"));
+        if (current == null) return [];
+        return await GetAsync<List<TournamentJson>>($"{Api}/tournaments?seasons={current.Id}&per_page=100&_fields=id,title,link,rounds,data") ?? [];
+    }
+
+    private async Task<LeagueCup> ToCupAsync(TournamentJson tournament)
+    {
+        var cup = new LeagueCup { Name = Decode(tournament.Title?.Rendered), PageUrl = PageUrl(tournament.Link ?? "") };
+        var rounds = tournament.Rounds;
+        if (rounds < 2) return cup; // not drawn yet
+
+        // Each slot's teams (in the order shown: home first) and its game.
+        var slotTeams = new Dictionary<int, List<int>>();
+        var slotEvents = new Dictionary<int, int>();
+        foreach (var row in tournament.Rows)
+        {
+            foreach (var cell in Cells(row))
+            {
+                if (!cell.TryGetValue("type", out var type) || !cell.TryGetValue("index", out var indexValue)) continue;
+                var index = IntOf(indexValue);
+                var id = cell.TryGetValue("id", out var idValue) ? IntOf(idValue) : 0;
+                if (type.GetString() == "team")
+                {
+                    if (!slotTeams.TryGetValue(index, out var ids)) slotTeams[index] = ids = [];
+                    ids.Add(id);
+                }
+                else if (type.GetString() == "event" && id > 0) slotEvents[index] = id;
+            }
+        }
+
+        var teamIds = slotTeams.Values.SelectMany(t => t).Where(id => id > 0).Distinct().ToList();
+        var teams = teamIds.Count == 0 ? [] : await GetAsync<List<TeamJson>>($"{Api}/teams?include={string.Join(',', teamIds)}&per_page=100&_embed=wp:featuredmedia&_fields=id,title,link,_links,_embedded") ?? [];
+        var teamById = teams.Select(ToInfo).OfType<TeamInfo>().ToDictionary(t => t.Id);
+        var events = slotEvents.Count == 0 ? [] : await GetAsync<List<EventJson>>($"{Api}/events?include={string.Join(',', slotEvents.Values)}&per_page=100&_fields=id,date,teams,main_results") ?? [];
+        var eventById = events.ToDictionary(e => e.Id);
+
+        var offset = 0;
+        for (var round = 0; round < rounds; round++)
+        {
+            var games = 1 << (rounds - 1 - round);
+            var cupRound = new LeagueCupRound { Name = RoundName(games) };
+            for (var slot = offset; slot < offset + games; slot++)
+            {
+                var sides = slotTeams.GetValueOrDefault(slot) ?? [];
+                eventById.TryGetValue(slotEvents.GetValueOrDefault(slot), out var game);
+                // The game's own order of teams (and its scores) when it exists.
+                var order = game?.Teams is { Count: 2 } t ? t : sides;
+                var scores = game?.MainResults ?? [];
+                LeagueCupSide? Side(int i)
+                {
+                    var id = i < order.Count ? order[i] : 0;
+                    if (!teamById.TryGetValue(id, out var info)) return null;
+                    return new LeagueCupSide { Name = info.Name, TeamUrl = info.TeamUrl, LogoUrl = info.CrestUrl, Score = i < scores.Count ? IntOrNull(scores[i]) : null };
+                }
+                var (home, away) = (Side(0), Side(1));
+                if (home?.Score is int h && away?.Score is int a && h != a) (h > a ? home : away)!.Won = true;
+                cupRound.Games.Add(new LeagueCupGame
+                {
+                    Home = home,
+                    Away = away,
+                    LocalDate = game?.Date is string d && DateTime.TryParse(d, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var date) ? date : null,
+                });
+            }
+            cup.Rounds.Add(cupRound);
+            offset += games;
+        }
+        return cup;
+    }
+
+    private static string RoundName(int games) => games switch
+    {
+        1 => "Final",
+        2 => "Semi-finals",
+        4 => "Quarter-finals",
+        _ => $"Round of {games * 2}",
+    };
+
+    // A bracket row is a list or an object of its cells (the site's grid, either shape).
+    private static IEnumerable<Dictionary<string, JsonElement>> Cells(JsonElement row)
+    {
+        var cells = row.ValueKind == JsonValueKind.Array ? row.EnumerateArray()
+            : row.ValueKind == JsonValueKind.Object ? row.EnumerateObject().Select(p => p.Value) : [];
+        foreach (var cell in cells)
+            if (cell.ValueKind == JsonValueKind.Object)
+                yield return cell.EnumerateObject().ToDictionary(p => p.Name, p => p.Value);
+    }
+
+    private static int IntOf(JsonElement value) =>
+        value.ValueKind == JsonValueKind.Number ? value.GetInt32()
+        : value.ValueKind == JsonValueKind.String && int.TryParse(value.GetString(), out var n) ? n : 0;
+
+    private static int? IntOrNull(JsonElement value) =>
+        value.ValueKind == JsonValueKind.Number ? value.GetInt32()
+        : value.ValueKind == JsonValueKind.String && int.TryParse(value.GetString(), out var n) ? n : null;
+
+    private sealed class TournamentJson
+    {
+        public int Id { get; set; }
+        public RenderedText? Title { get; set; }
+        public string? Link { get; set; }
+        [JsonPropertyName("rounds")] public JsonElement RoundsValue { get; set; } // a number, or the same as text
+        [JsonIgnore] public int Rounds => IntOf(RoundsValue);
+        // The bracket's rows - a list, or an object of rows by number (both seen).
+        public JsonElement Data { get; set; }
+
+        [JsonIgnore] public IEnumerable<JsonElement> Rows => Data.ValueKind switch
+        {
+            JsonValueKind.Array => Data.EnumerateArray(),
+            JsonValueKind.Object => Data.EnumerateObject().Select(p => p.Value),
+            _ => [],
+        };
+    }
+
+    private sealed class EventJson
+    {
+        public int Id { get; set; }
+        public string? Date { get; set; }
+        public List<int>? Teams { get; set; }
+        [JsonPropertyName("main_results")] public List<JsonElement>? MainResults { get; set; }
+    }
+
     private async Task<T?> GetAsync<T>(string url) where T : class
     {
         try
