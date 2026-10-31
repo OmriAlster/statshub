@@ -246,6 +246,66 @@ public class IbbaOpenData
         return cup;
     }
 
+    /// <summary>
+    /// The players' lines of a game, by player id - across both teams. A
+    /// game's address is its code (/match/781683/). Empty when the league
+    /// published none (youth leagues), null when the game isn't there.
+    /// </summary>
+    public async Task<Dictionary<string, Dictionary<string, JsonElement>>?> GetGameLinesAsync(string gameCode)
+    {
+        using var timing = RequestTimings.Time("ibba-api-game");
+        var games = await GetAsync<List<GameLinesJson>>($"{Api}/events?slug={Uri.EscapeDataString(gameCode)}&_fields=id,performance");
+        var game = games?.FirstOrDefault();
+        if (game == null) return null;
+
+        var lines = new Dictionary<string, Dictionary<string, JsonElement>>();
+        if (game.Performance.ValueKind != JsonValueKind.Object) return lines;
+        foreach (var team in game.Performance.EnumerateObject())
+        {
+            if (team.Value.ValueKind != JsonValueKind.Object) continue;
+            foreach (var player in team.Value.EnumerateObject())
+            {
+                // "0" is the team's totals; a player has points or minutes on record.
+                if (player.Name == "0" || player.Value.ValueKind != JsonValueKind.Object) continue;
+                var line = player.Value.EnumerateObject().ToDictionary(p => p.Name, p => p.Value);
+                if (line.ContainsKey("pts")) lines[player.Name] = line;
+            }
+        }
+        return lines;
+    }
+
+    // The league's columns: fgm/fga are two-pointers (pts = 2*fgm + 3*threepm + ftm).
+    public static LeagueBoxScore ToBoxScore(Dictionary<string, JsonElement> line)
+    {
+        int N(string key) => line.TryGetValue(key, out var v) ? IntOrNull(v) ?? 0 : 0;
+        var minutes = line.TryGetValue("min", out var min) && min.ValueKind == JsonValueKind.String && min.GetString() is { } text && text.Contains(':')
+            ? int.TryParse(text.Split(':')[0], out var m) ? m : 0
+            : N("mins");
+        return new LeagueBoxScore
+        {
+            TwoPointersMade = N("fgm"),
+            TwoPointersAttempted = N("fga"),
+            ThreePointersMade = N("threepm"),
+            ThreePointersAttempted = N("threepa"),
+            FreeThrowsMade = N("ftm"),
+            FreeThrowsAttempted = N("fta"),
+            OffensiveRebounds = N("off"),
+            DefensiveRebounds = N("def"),
+            Assists = N("ast"),
+            Steals = N("stl"),
+            Blocks = N("blk"),
+            Turnovers = N("to"),
+            Fouls = N("pf"),
+            Minutes = minutes,
+        };
+    }
+
+    private sealed class GameLinesJson
+    {
+        public int Id { get; set; }
+        public JsonElement Performance { get; set; }
+    }
+
     private static string RoundName(int games) => games switch
     {
         1 => "Final",

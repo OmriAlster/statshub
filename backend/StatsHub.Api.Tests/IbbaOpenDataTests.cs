@@ -261,4 +261,23 @@ public class IbbaOpenDataTests
         Assert.Equal(("הפועל נהריה", "הפועל גליל עליון"), (cup.Rounds[0].Games[1].Home!.Name, cup.Rounds[0].Games[1].Away!.Name)); // no game yet - teams from the bracket
         Assert.Null(cup.Rounds[1].Games[0].Home); // the final: not decided
     }
+
+    [Fact]
+    public async Task A_players_line_in_a_game_is_read_by_the_games_code_and_the_players_site_id()
+    {
+        var site = new Site(new()
+        {
+            [$"{Api}/events?slug=781683&_fields=id,performance"] = Json("""
+                [{"id":1507691,"performance":{"746534":{"0":{"pts":53},"859506":{"pts":14,"fgm":4,"fga":9,"threepm":1,"threepa":3,"ftm":3,"fta":4,"off":1,"def":5,"ast":3,"stl":2,"blk":0,"to":2,"pf":3,"min":"24:43"},"111":{"pts":2}}}}]
+                """),
+            [$"{Api}/events?slug=999999&_fields=id,performance"] = Json("""[{"id":5,"performance":[]}]"""),
+            [PlayerUrl] = () => new StringContent("<html><body class='sp_player postid-859506 single'><h1>נרי פלד</h1></body></html>"),
+        });
+
+        var lines = await new IbbaLeagueProvider(new Factory(site)).GetBoxScoresAsync(PlayerUrl, ["781683", "999999"]);
+
+        var line = Assert.Single(lines).Value; // the youth game published none
+        Assert.Equal((4, 9, 1, 3, 3, 4), (line.TwoPointersMade, line.TwoPointersAttempted, line.ThreePointersMade, line.ThreePointersAttempted, line.FreeThrowsMade, line.FreeThrowsAttempted));
+        Assert.Equal((1, 5, 3, 2, 0, 2, 3, 24), (line.OffensiveRebounds, line.DefensiveRebounds, line.Assists, line.Steals, line.Blocks, line.Turnovers, line.Fouls, line.Minutes));
+    }
 }

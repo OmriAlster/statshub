@@ -72,6 +72,14 @@ public interface ILeagueProvider
     /// </summary>
     Task<LeagueTeamQuick?> QuickTeamAsync(string teamUrl) => Task.FromResult<LeagueTeamQuick?>(null);
 
+    /// <summary>
+    /// The player's line in each of these games (by the games' codes), where
+    /// the league published one - many leagues (youth ones) don't. Games
+    /// without one are left out.
+    /// </summary>
+    Task<Dictionary<string, LeagueBoxScore>> GetBoxScoresAsync(string playerUrl, IReadOnlyCollection<string> gameCodes) =>
+        Task.FromResult(new Dictionary<string, LeagueBoxScore>());
+
     /// <summary>The cups a team plays in this season, each as its bracket - none when the league publishes none.</summary>
     Task<List<LeagueCup>> GetCupsAsync(string teamUrl) => Task.FromResult(new List<LeagueCup>());
 }

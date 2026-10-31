@@ -206,6 +206,28 @@ public class IbbaLeagueProvider : ILeagueProvider
     // that isn't a cup - this season's, once the season has begun.
     public Task<List<LeagueCup>> GetCupsAsync(string teamUrl) => OpenData().GetCupsAsync(teamUrl);
 
+    // Each game's published lines (the open data's game - its address is its
+    // code), and the player's own id from their page, read only when some
+    // game has lines at all.
+    public async Task<Dictionary<string, LeagueBoxScore>> GetBoxScoresAsync(string playerUrl, IReadOnlyCollection<string> gameCodes)
+    {
+        var openData = OpenData();
+        var withLines = new Dictionary<string, Dictionary<string, Dictionary<string, System.Text.Json.JsonElement>>>();
+        foreach (var code in gameCodes)
+        {
+            var lines = await openData.GetGameLinesAsync(code);
+            if (lines is { Count: > 0 }) withLines[code] = lines;
+        }
+        if (withLines.Count == 0) return [];
+
+        var playerId = await new IbbaPlayerScraper(Http()).GetPlayerSiteIdAsync(playerUrl);
+        if (playerId == null) return [];
+        return withLines
+            .Select(g => (Code: g.Key, Line: g.Value.GetValueOrDefault(playerId)))
+            .Where(g => g.Line != null)
+            .ToDictionary(g => g.Code, g => IbbaOpenData.ToBoxScore(g.Line!));
+    }
+
     public async Task<LeagueTeamQuick?> QuickTeamAsync(string teamUrl)
     {
         var openData = OpenData();

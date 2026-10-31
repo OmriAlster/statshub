@@ -19,6 +19,15 @@ public class IbbaPlayerScraper
     /// League URL/name per team is resolved separately by IbbaTeamScraper (from that
     /// team's own page), since רשאי teams don't get a league link here on the player page.
     /// </summary>
+    // The site's own id for the player - the page's body says "postid-859506";
+    // a game's published lines are by this id.
+    public async Task<string?> GetPlayerSiteIdAsync(string playerUrl)
+    {
+        var html = await _http.GetStringAsync(playerUrl);
+        var match = Regex.Match(html, @"postid-(\d+)");
+        return match.Success ? match.Groups[1].Value : null;
+    }
+
     public async Task<LeaguePlayer> GetPlayerInfoAsync(string playerUrl)
     {
         var html = await _http.GetStringAsync(playerUrl);

@@ -39,6 +39,25 @@ public static class LeagueSeason
 /// <summary>What a found player's card shows of a team the app hasn't synced this season.</summary>
 public record LeagueTeamQuick(string? CrestUrl, string? LeagueName, string? LeagueUrl);
 
+/// <summary>A player's line in one game, as the league published it.</summary>
+public class LeagueBoxScore
+{
+    public int TwoPointersMade { get; set; }
+    public int TwoPointersAttempted { get; set; }
+    public int ThreePointersMade { get; set; }
+    public int ThreePointersAttempted { get; set; }
+    public int FreeThrowsMade { get; set; }
+    public int FreeThrowsAttempted { get; set; }
+    public int OffensiveRebounds { get; set; }
+    public int DefensiveRebounds { get; set; }
+    public int Assists { get; set; }
+    public int Steals { get; set; }
+    public int Blocks { get; set; }
+    public int Turnovers { get; set; }
+    public int Fouls { get; set; }
+    public int Minutes { get; set; }
+}
+
 /// <summary>A cup this season, as its bracket: rounds of games, first round first.</summary>
 public class LeagueCup
 {

@@ -78,6 +78,10 @@ public class SecondLeagueTests : IClassFixture<SecondLeagueTests.Factory>
         public Task<string?> FindTeamLogoUrlAsync(string teamUrl, string teamName) => Task.FromResult<string?>(null);
         public string TeamIdFromUrl(string teamUrl) => teamUrl.Split('/').Last();
 
+        // Its top league publishes players' lines - game 783912 has one for every demo player.
+        public Task<Dictionary<string, LeagueBoxScore>> GetBoxScoresAsync(string playerUrl, IReadOnlyCollection<string> gameCodes) =>
+            Task.FromResult(gameCodes.Where(c => c == "783912").ToDictionary(c => c, _ => new LeagueBoxScore { TwoPointersMade = 5, TwoPointersAttempted = 9, ThreePointersMade = 2, ThreePointersAttempted = 4, FreeThrowsMade = 3, FreeThrowsAttempted = 4, DefensiveRebounds = 6, Assists = 4, Minutes = 24 }));
+
         public Task<List<LeaguePlayerHit>> SearchPlayersAsync(string name) => Task.FromResult<List<LeaguePlayerHit>>(
             "Noa Cohen".Contains(name, StringComparison.OrdinalIgnoreCase) ? [new("Noa Cohen", "https://demo-league.test/players/77")] : []);
     }
@@ -208,5 +212,23 @@ public class SecondLeagueTests : IClassFixture<SecondLeagueTests.Factory>
 
         Assert.Null(created.Player.DateOfBirth);
         Assert.Null((await parent.GetAsync<PlayerDto>($"/api/players/{created.Player.Id}")).DateOfBirth);
+    }
+
+    [Fact]
+    public async Task A_finished_game_gets_the_players_line_the_league_published()
+    {
+        var parent = await TestUser.SignInAsync(_factory);
+        var created = await parent.PostAsync<CreatePlayerFromIbbaResultDto>("/api/ibba/players", new { ibbaPlayerUrl = "https://demo-league.test/players/box" });
+        var status = created.Ibba!;
+        for (var i = 0; i < 300 && status.GamesLoading; i++)
+        {
+            await Task.Delay(100);
+            status = await parent.GetAsync<IbbaLinkStatusDto>($"/api/players/{created.Player.Id}/ibba");
+        }
+
+        var games = await parent.GetAsync<List<GameDto>>($"/api/games/player/{created.Player.Id}");
+        var played = games.Single(g => g.Status == "Completed").PlayerStats.Single();
+        Assert.Equal((5 * 2 + 2 * 3 + 3, 6, 4, 24), (played.TotalPoints, played.TotalRebounds, played.Assists, played.MinutesPlayed));
+        Assert.Empty(games.Single(g => g.Status == "Upcoming").PlayerStats); // not played yet - nothing published
     }
 }

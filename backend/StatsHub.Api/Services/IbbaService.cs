@@ -744,6 +744,63 @@ namespace StatsHub.Api.Services
                 if (linked.Contains(teams[i].Team.Id))
                     await _timings.MeasureAsync("db-games", () => UpsertGamesAsync(teams[i].Team, reports[i].Games));
             }
+
+            // Where the league publishes players' lines (its top leagues), the
+            // player's own line in each finished game - no tracking needed.
+            await _timings.MeasureAsync("box-scores", () => FillPublishedBoxScoresAsync(link, league, teams.Where(t => linked.Contains(t.Team.Id)).Select(t => t.Team).ToList()));
+        }
+
+        // This season's finished games of the player's teams that have no line
+        // for the player yet - each looked up once a day at most (most leagues
+        // publish none, and the answer won't change by asking again).
+        private async Task FillPublishedBoxScoresAsync(PlayerIbbaLink link, ILeagueProvider league, List<IbbaTeam> teams)
+        {
+            if (teams.Count == 0) return;
+            var seasonStart = LeagueSeason.StartOf(DateTime.UtcNow);
+            var teamIds = teams.Select(t => t.Id).ToList();
+            var games = await _context.Games
+                .Where(g => g.Provider == league.Key && g.IbbaGameCode != null && g.Status == "Completed" && g.GameDate >= seasonStart
+                    && ((g.HomeTeamId != null && teamIds.Contains(g.HomeTeamId.Value)) || (g.AwayTeamId != null && teamIds.Contains(g.AwayTeamId.Value)))
+                    && !g.GameStats.Any(gs => gs.PlayerId == link.PlayerId))
+                .Select(g => new { g.Id, Code = g.IbbaGameCode! })
+                .ToListAsync();
+            var toAsk = games.Where(g => _cache.Get($"box-checked:{league.Key}:{g.Code}:{link.PlayerId}") == null).ToList();
+            if (toAsk.Count == 0) return;
+
+            Dictionary<string, LeagueBoxScore> lines;
+            try { lines = await league.GetBoxScoresAsync(link.IbbaPlayerUrl, toAsk.Select(g => g.Code).ToList()); }
+            catch (Exception ex)
+            {
+                _logger.LogInformation(ex, "Box scores for link {LinkId} couldn't be read", link.Id);
+                return;
+            }
+            foreach (var g in toAsk)
+                _cache.Set($"box-checked:{league.Key}:{g.Code}:{link.PlayerId}", true, TimeSpan.FromDays(1));
+
+            foreach (var g in toAsk)
+            {
+                if (!lines.TryGetValue(g.Code, out var line)) continue;
+                _context.GameStats.Add(new GameStats
+                {
+                    GameId = g.Id,
+                    PlayerId = link.PlayerId,
+                    FieldGoalsMade = line.TwoPointersMade,
+                    FieldGoalsAttempted = line.TwoPointersAttempted,
+                    ThreePointersMade = line.ThreePointersMade,
+                    ThreePointersAttempted = line.ThreePointersAttempted,
+                    FreeThrowsMade = line.FreeThrowsMade,
+                    FreeThrowsAttempted = line.FreeThrowsAttempted,
+                    OffensiveRebounds = line.OffensiveRebounds,
+                    DefensiveRebounds = line.DefensiveRebounds,
+                    Assists = line.Assists,
+                    Steals = line.Steals,
+                    Blocks = line.Blocks,
+                    Turnovers = line.Turnovers,
+                    Fouls = line.Fouls,
+                    MinutesPlayed = line.Minutes,
+                });
+            }
+            await _context.SaveChangesAsync();
         }
 
         // Makes sure the player is on an app team for each of their IBBA teams,
