@@ -4,6 +4,7 @@ import { formatGameDateTimeFull } from '../utils/formatGameDate'
 import CourtShotChart from './CourtShotChart'
 import GameStatusBadge, { onCourtIn } from './GameStatusBadge'
 import LeagueBadge from './LeagueBadge'
+import NavigateButtons from './NavigateButtons'
 
 interface GameDetailViewProps {
   game: GameDto
@@ -31,6 +32,8 @@ export default function GameDetailView({ game, headerActions }: GameDetailViewPr
         </div>
         {headerActions && <div className="flex gap-1">{headerActions}</div>}
       </div>
+
+      {game.status !== 'Completed' && <NavigateButtons location={game.location} />}
 
       {game.status === 'Completed' ? (
         <div className="game-score">

@@ -25,6 +25,8 @@ import StandingsModal from '../components/StandingsModal'
 import TeamCrest from '../components/TeamCrest'
 import { useElementVisible } from '../hooks/useElementVisible'
 import { countsTowardStats } from '../utils/countedGames'
+import CupBracket from '../components/CupBracket'
+import SeasonTrend from '../components/SeasonTrend'
 import { formatGameDateOnly } from '../utils/formatGameDate'
 import BouncingBall, { Busy } from '../components/BouncingBall'
 import { GameTypeBadge, HomeAway } from '../components/GameBadges'
@@ -157,6 +159,7 @@ function PlayerProfilePanel({ player, prefetched }: { player: PlayerDto; prefetc
   const [error, setError] = useState<string | null>(null)
   const [selectedTeamId, setSelectedTeamId] = useState<string | 'all' | null>(null)
   const [typeFilter, setTypeFilter] = useState<GameTypeFilter>('All')
+  const [cupOpen, setCupOpen] = useState(false)
   const [standingsFor, setStandingsFor] = useState<{ league?: string | null; leagueUrl: string; leagueName: string; teamName: string; teamUrl: string } | null>(null)
 
   useEffect(() => {
@@ -328,8 +331,24 @@ function PlayerProfilePanel({ player, prefetched }: { player: PlayerDto; prefetc
                 {!!selectedTeam.position && selectedTeam.position > 0 && ` · ${selectedTeam.position} of ${selectedTeam.totalTeams}`}
               </button>
             )}
+            {selectedTeam.isIbba && selectedTeam.teamUrl && (
+              <button className="cup-chip" style={{ marginTop: '0.3rem' }} onClick={() => setCupOpen(true)}>
+                🏆 Cup
+              </button>
+            )}
           </div>
         </div>
+      )}
+
+      {cupOpen && selectedTeam?.teamUrl && (
+        <CupBracket
+          teamUrl={selectedTeam.teamUrl}
+          league={selectedTeam.league}
+          teamName={selectedTeam.name}
+          cupGames={gamesForTeam.filter((g) => g.gameType === 'Cup').sort((a, b) => new Date(a.gameDate).getTime() - new Date(b.gameDate).getTime())}
+          playerId={player.id}
+          onClose={() => setCupOpen(false)}
+        />
       )}
 
       <SegmentedControl
@@ -358,7 +377,15 @@ function PlayerProfilePanel({ player, prefetched }: { player: PlayerDto; prefetc
           onEditorClosed={refreshGame}
         />
       )}
-      {tab === 'season' && <SeasonPanel player={player} stats={seasonStats} selectedTeamId={selectedTeamId} typeFilter={activeType} />}
+      {tab === 'season' && (
+        <>
+          <SeasonTrend
+            games={gamesForTeam.filter((g) => (activeType === 'All' ? countsTowardStats(g) : g.gameType === activeType))}
+            playerId={player.id}
+          />
+          <SeasonPanel player={player} stats={seasonStats} selectedTeamId={selectedTeamId} typeFilter={activeType} />
+        </>
+      )}
 
       {standingsFor && (
         <StandingsModal

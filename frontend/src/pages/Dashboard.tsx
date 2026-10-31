@@ -15,6 +15,8 @@ import { GameTypeBadge, HomeAway } from '../components/GameBadges'
 import LeagueBadge from '../components/LeagueBadge'
 import { useGuide } from '../guide/GuideContext'
 import GettingStarted from '../guide/GettingStarted'
+import CalendarButton from '../components/CalendarButton'
+import NavigateButtons from '../components/NavigateButtons'
 
 interface PlayerCard {
   player: PlayerDto
@@ -261,6 +263,7 @@ export default function Dashboard() {
           <svg className="icon"><use href="#i-calendar" /></svg> Upcoming Games
           {upcomingGames.length > 0 && <span className="dash-upcoming-count">{upcomingGames.length}</span>}
         </h3>
+        {!isPlayerRole && upcomingGames.length > 0 && <CalendarButton />}
         {upcomingGames.length === 0 ? (
           <p className="dash-upcoming-empty">No upcoming games scheduled.</p>
         ) : (
@@ -310,6 +313,7 @@ export default function Dashboard() {
                         )}
                       </div>
                     </Link>
+                    {today && <NavigateButtons location={game.location} compact />}
                     {today && !isPlayerRole && (
                       <button type="button" className="dash-upcoming-start" onClick={() => requestLiveStart(game.id, gamePlayers[0].id)}>
                         <svg className="icon" aria-hidden="true"><use href="#i-live" /></svg>

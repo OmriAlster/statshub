@@ -21,6 +21,8 @@ const TIPS = [
 ]
 
 const present = (target: string) => !!document.querySelector(`[data-guide="${target}"]`)
+// A window open on top (a dialog, the live game) - tips wait until it's closed.
+const windowOpen = () => !!document.querySelector('.modal-backdrop, .game-edit-modal-backdrop, .live-overlay.open')
 
 export default function GuideLayer() {
   const guide = useGuide()
@@ -81,7 +83,7 @@ export default function GuideLayer() {
 
   const step = tourStep ? STEPS[tourStep] : null
   const tip = !step && !guide.welcomeOpen && guide.enabled && quietOn !== pathname
-    ? TIPS.find((t) => !guide.seen(t.key) && (t.path === '/' ? pathname === '/' : pathname.startsWith(t.path)) && present(t.target))
+    ? (windowOpen() ? undefined : TIPS.find((t) => !guide.seen(t.key) && (t.path === '/' ? pathname === '/' : pathname.startsWith(t.path)) && present(t.target)))
     : undefined
   const box = useGuideTarget(step ? step.target : tip ? tip.target : null, step?.last)
 
