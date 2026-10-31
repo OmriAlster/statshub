@@ -73,7 +73,7 @@ public class SecondLeagueTests : IClassFixture<SecondLeagueTests.Factory>
         ];
 
         public Task<List<LeagueGame>> LoadTeamGamesAsync(string teamUrl) => Task.FromResult(Games());
-        public Task<(string CanonicalUrl, string Name, string? LogoUrl)?> ResolveTeamByIdAsync(string teamId) => Task.FromResult<(string, string, string?)?>(null);
+        public Task<(string CanonicalUrl, string Name, string? LogoUrl)?> ResolveTeamByIdAsync(string teamId, string? teamName = null) => Task.FromResult<(string, string, string?)?>(null);
         public Task<string?> FindTeamLogoUrlAsync(string teamUrl, string teamName) => Task.FromResult<string?>(null);
         public string TeamIdFromUrl(string teamUrl) => teamUrl.Split('/').Last();
 
