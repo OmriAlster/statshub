@@ -13,6 +13,7 @@ namespace StatsHub.Api.Services
     {
         Task<IbbaPreviewDto> PreviewAsync(string playerUrl, Guid requestingUserId);
         Task<List<LeaguePlayerHitDto>> SearchPlayersAsync(string name);
+        Task<List<LeagueCup>> GetCupsAsync(string teamUrl, string? leagueKey);
         Task<CreatePlayerFromIbbaResultDto> CreatePlayerFromIbbaAsync(string ibbaPlayerUrl, Guid requestingUserId);
         Task<IbbaLinkStatusDto?> LinkPlayerAsync(Guid playerId, string ibbaPlayerUrl, Guid requestingUserId);
         Task<bool> UnlinkPlayerAsync(Guid playerId, Guid requestingUserId);
@@ -56,6 +57,10 @@ namespace StatsHub.Api.Services
         }
 
         private Task<bool> OwnsTeamAsync(Guid teamId, Guid requestingUserId) => _context.CanManageTeamAsync(teamId, requestingUserId);
+
+        // Connecting, syncing, disconnecting and the team choices are a
+        // parent's - a player signed in as themself only sees the link.
+        private Task<bool> CanChangePlayerAsync(Guid playerId, Guid requestingUserId) => _context.CanWritePlayerAsync(playerId, requestingUserId);
 
         // The existing teams (not linked to IBBA) the pop-up offers to add the
         // player's IBBA teams to - one IBBA team at a time, for as long as any
@@ -121,6 +126,24 @@ namespace StatsHub.Api.Services
         }
 
         internal const int MinSearchLength = 3;
+
+        // A team's cups this season, as brackets - half an hour in memory (a
+        // bracket changes a few times a season).
+        public async Task<List<LeagueCup>> GetCupsAsync(string teamUrl, string? leagueKey)
+        {
+            var league = _leagues.Get(string.IsNullOrEmpty(leagueKey) ? "ibba" : leagueKey);
+            return await _cache.GetOrCreateAsync($"cups:{league.Key}:{teamUrl}", async entry =>
+            {
+                entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(30);
+                try { return await league.GetCupsAsync(teamUrl); }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Cups for {TeamUrl} failed", teamUrl);
+                    entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(1);
+                    return new List<LeagueCup>();
+                }
+            }) ?? [];
+        }
 
         // A team's crest and this season's league for a found player's card -
         // a day in memory; a failed lookup just means they're not shown.
@@ -223,7 +246,7 @@ namespace StatsHub.Api.Services
 
         public async Task<IbbaLinkStatusDto?> LinkPlayerAsync(Guid playerId, string ibbaPlayerUrl, Guid requestingUserId)
         {
-            if (!await _playerService.CanAccessPlayerAsync(playerId, requestingUserId)) return null;
+            if (!await CanChangePlayerAsync(playerId, requestingUserId)) return null;
             var league = _leagues.ForPlayerUrl(ibbaPlayerUrl);
             await EnsureNotLinkedElsewhereAsync(ibbaPlayerUrl, requestingUserId, playerId, league.Name);
 
@@ -293,7 +316,7 @@ namespace StatsHub.Api.Services
 
         public async Task<bool> UnlinkPlayerAsync(Guid playerId, Guid requestingUserId)
         {
-            if (!await _playerService.CanAccessPlayerAsync(playerId, requestingUserId)) return false;
+            if (!await CanChangePlayerAsync(playerId, requestingUserId)) return false;
 
             var link = await _context.PlayerIbbaLinks.FirstOrDefaultAsync(l => l.PlayerId == playerId);
             if (link == null) return false;
@@ -308,7 +331,7 @@ namespace StatsHub.Api.Services
 
         public async Task<IbbaLinkStatusDto?> SyncPlayerAsync(Guid playerId, Guid requestingUserId)
         {
-            if (!await _playerService.CanAccessPlayerAsync(playerId, requestingUserId)) return null;
+            if (!await CanChangePlayerAsync(playerId, requestingUserId)) return null;
 
             var link = await _context.PlayerIbbaLinks.FirstOrDefaultAsync(l => l.PlayerId == playerId);
             if (link == null) return null;
@@ -462,7 +485,7 @@ namespace StatsHub.Api.Services
             PlayerIbbaLink? accessibleLink = null;
             foreach (var candidate in candidateLinks)
             {
-                if (await _playerService.CanAccessPlayerAsync(candidate.PlayerId, requestingUserId))
+                if (await CanChangePlayerAsync(candidate.PlayerId, requestingUserId))
                 {
                     accessibleLink = candidate;
                     break;
@@ -725,6 +748,72 @@ namespace StatsHub.Api.Services
                 if (linked.Contains(teams[i].Team.Id))
                     await _timings.MeasureAsync("db-games", () => UpsertGamesAsync(teams[i].Team, reports[i].Games));
             }
+
+            // Where the league publishes players' lines (its top leagues), the
+            // player's own line in each finished game - no tracking needed.
+            await _timings.MeasureAsync("box-scores", () => FillPublishedBoxScoresAsync(link, league, teams.Where(t => linked.Contains(t.Team.Id)).Select(t => t.Team).ToList()));
+        }
+
+        // This season's finished games of the player's teams that have no line
+        // for the player yet - each looked up once a day at most (most leagues
+        // publish none, and the answer won't change by asking again).
+        private async Task FillPublishedBoxScoresAsync(PlayerIbbaLink link, ILeagueProvider league, List<IbbaTeam> teams)
+        {
+            teams = teams.Where(t => league.PublishesBoxScores(t.LeagueName)).ToList();
+            if (teams.Count == 0) return;
+            var seasonStart = LeagueSeason.StartOf(DateTime.UtcNow);
+            var teamIds = teams.Select(t => t.Id).ToList();
+            var games = await _context.Games
+                .Where(g => g.Provider == league.Key && g.IbbaGameCode != null && g.Status == "Completed" && g.GameDate >= seasonStart
+                    && ((g.HomeTeamId != null && teamIds.Contains(g.HomeTeamId.Value)) || (g.AwayTeamId != null && teamIds.Contains(g.AwayTeamId.Value)))
+                    && !g.GameStats.Any(gs => gs.PlayerId == link.PlayerId))
+                .Select(g => new { g.Id, Code = g.IbbaGameCode!, g.GameDate })
+                .ToListAsync();
+            var toAsk = games.Where(g => _cache.Get($"box-checked:{league.Key}:{g.Code}:{link.PlayerId}") == null).ToList();
+            if (toAsk.Count == 0) return;
+
+            // The first game is the one asked whether the league publishes at
+            // all - the newest that's had time for its line (3 days, as below);
+            // yesterday's may simply not be up yet.
+            var settledBefore = DateTime.UtcNow.AddDays(-3);
+            var order = toAsk.OrderByDescending(g => g.GameDate < settledBefore).ThenByDescending(g => g.GameDate).Select(g => g.Code).ToList();
+            Dictionary<string, LeagueBoxScore> lines;
+            try { lines = await league.GetBoxScoresAsync(link.IbbaPlayerUrl, order); }
+            catch (Exception ex)
+            {
+                _logger.LogInformation(ex, "Box scores for link {LinkId} couldn't be read", link.Id);
+                return;
+            }
+            // A line comes within a day or two of the game, if at all: a game
+            // still without one 3 days on isn't asked about for a month.
+            foreach (var g in toAsk)
+                _cache.Set($"box-checked:{league.Key}:{g.Code}:{link.PlayerId}", true,
+                    g.GameDate < settledBefore ? TimeSpan.FromDays(30) : TimeSpan.FromDays(1));
+
+            foreach (var g in toAsk)
+            {
+                if (!lines.TryGetValue(g.Code, out var line)) continue;
+                _context.GameStats.Add(new GameStats
+                {
+                    GameId = g.Id,
+                    PlayerId = link.PlayerId,
+                    FieldGoalsMade = line.TwoPointersMade,
+                    FieldGoalsAttempted = line.TwoPointersAttempted,
+                    ThreePointersMade = line.ThreePointersMade,
+                    ThreePointersAttempted = line.ThreePointersAttempted,
+                    FreeThrowsMade = line.FreeThrowsMade,
+                    FreeThrowsAttempted = line.FreeThrowsAttempted,
+                    OffensiveRebounds = line.OffensiveRebounds,
+                    DefensiveRebounds = line.DefensiveRebounds,
+                    Assists = line.Assists,
+                    Steals = line.Steals,
+                    Blocks = line.Blocks,
+                    Turnovers = line.Turnovers,
+                    Fouls = line.Fouls,
+                    MinutesPlayed = line.Minutes,
+                });
+            }
+            await _context.SaveChangesAsync();
         }
 
         // Makes sure the player is on an app team for each of their IBBA teams,
@@ -807,7 +896,7 @@ namespace StatsHub.Api.Services
         // The parent chose "create a new team" for an IBBA team in the pop-up.
         public async Task<IbbaLinkStatusDto?> CreateTeamForIbbaTeamAsync(Guid ibbaTeamId, Guid playerId, Guid requestingUserId)
         {
-            if (!await _playerService.CanAccessPlayerAsync(playerId, requestingUserId)) return null;
+            if (!await CanChangePlayerAsync(playerId, requestingUserId)) return null;
 
             var link = await _context.PlayerIbbaLinks
                 .Include(l => l.Teams).ThenInclude(pit => pit.IbbaTeam)

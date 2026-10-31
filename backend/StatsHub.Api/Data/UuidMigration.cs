@@ -49,6 +49,10 @@ namespace StatsHub.Api.Data
 
         public const string BackupSchema = "pre_uuid_backup";
 
+        // Tables added after the conversion: no numeric-id database has them,
+        // so there's nothing to carry over - they're made empty with the rest.
+        private static readonly string[] AddedSince = { "PlayerGoals" };
+
         // Tables from older versions that nothing uses any more.
         private static readonly string[] Leftovers = { "IbbaTeamLinks", "IbbaStandings", "IbbaTeamCrests" };
 
@@ -157,7 +161,7 @@ namespace StatsHub.Api.Data
         private static void CheckEveryTableIsCovered(AppDbContext db)
         {
             var modelTables = db.Model.GetEntityTypes().Select(e => e.GetTableName()!).ToHashSet();
-            var covered = Tables.Select(t => t.Table).ToHashSet();
+            var covered = Tables.Select(t => t.Table).Concat(AddedSince).ToHashSet();
             if (!modelTables.SetEquals(covered))
                 throw new InvalidOperationException($"UUID migration doesn't cover every table: model has {string.Join(", ", modelTables.Except(covered))}, list has {string.Join(", ", covered.Except(modelTables))}.");
         }

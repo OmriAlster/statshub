@@ -16,6 +16,12 @@ namespace StatsHub.Api.Data
         public static Expression<Func<Team, bool>> TeamManagedBy(Guid userId) =>
             t => t.Season.UserId == userId || t.PlayerTeams.Any(pt => pt.Player.Parents.Any(pp => pp.UserId == userId));
 
+        // A team is seen by whoever manages it, and by a player on its roster
+        // signed in as themself - their games show; changing them stays the
+        // managers'.
+        public static Expression<Func<Team, bool>> TeamSeenBy(Guid userId) =>
+            t => t.Season.UserId == userId || t.PlayerTeams.Any(pt => pt.Player.LinkedUserId == userId || pt.Player.Parents.Any(pp => pp.UserId == userId));
+
         // A player is seen by each of their parents, and by the player
         // themself once their own account is linked.
         public static Expression<Func<Player, bool>> PlayerVisibleTo(Guid userId) =>

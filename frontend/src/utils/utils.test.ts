@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { makeGame, makePlayer } from '../test/fixtures'
-import { countsTowardStats } from './countedGames'
+import { countsTowardStats, playedGames } from './countedGames'
+import { LeagueSeason } from './season'
+import { shotZones, zoneHeat } from './shotZones'
 import { formatGameDateOnly, formatGameDateTimeFull, formatGameTime } from './formatGameDate'
 import { collectUpcomingGames } from './upcomingGames'
 
@@ -53,5 +55,39 @@ describe('Dashboard upcoming games', () => {
     ])
     expect(upcoming).toHaveLength(1)
     expect(upcoming[0].players.map((p) => p.firstName)).toEqual(['Older', 'Younger'])
+  })
+})
+
+describe('player profile helpers', () => {
+  it('played games are league and cup games with a result, oldest first', () => {
+    const games = [
+      makeGame({ id: 'b', status: 'Completed', teamScore: 60, opponentScore: 50, gameDate: '2026-10-20T16:00:00Z' }),
+      makeGame({ id: 'a', status: 'Completed', teamScore: 40, opponentScore: 50, gameDate: '2026-10-10T16:00:00Z', gameType: 'Cup' }),
+      makeGame({ id: 'friendly', status: 'Completed', teamScore: 90, opponentScore: 60, gameType: 'Friendly' }),
+      makeGame({ id: 'no-score', status: 'Completed' }),
+      makeGame({ id: 'upcoming' }),
+    ]
+    expect(playedGames(games).map((g) => g.id)).toEqual(['a', 'b'])
+  })
+
+  it('the season runs August to July', () => {
+    expect(LeagueSeason.label(new Date(2026, 10, 1))).toBe('2026-27')
+    expect(LeagueSeason.label(new Date(2027, 6, 31))).toBe('2026-27')
+    expect(LeagueSeason.label(new Date(2027, 7, 1))).toBe('2027-28')
+    expect(LeagueSeason.startOf(new Date(2027, 2, 5))).toEqual(new Date(2026, 7, 1))
+  })
+
+  it('shots are grouped by the area they were taken from', () => {
+    // fractions of the half court: the hoop is at (0.5, 0.085)
+    const zones = shotZones([
+      { x: 0.5, y: 0.15, made: true }, // under the basket
+      { x: 0.5, y: 0.2, made: false },
+      { x: 0.03, y: 0.1, made: true }, // left corner three
+      { x: 0.5, y: 0.9, made: false }, // top of the arc three
+    ])
+    const by = Object.fromEntries(zones.map((z) => [z.key, `${z.made}/${z.tried}`]))
+    expect(by).toEqual({ paint: '1/2', lc3: '1/1', top3: '0/1' })
+    expect(zoneHeat({ key: 'paint', label: 'Paint', x: 0, y: 0, made: 1, tried: 2 })).toBe('hot')
+    expect(zoneHeat({ key: 'top3', label: '', x: 0, y: 0, made: 1, tried: 4 })).toBe('cold')
   })
 })

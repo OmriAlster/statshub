@@ -1,3 +1,4 @@
+using StatsHub.Api.Leagues;
 using Microsoft.EntityFrameworkCore;
 using StatsHub.Api.Data;
 using StatsHub.Api.DTOs;
@@ -15,6 +16,7 @@ namespace StatsHub.Api.Services
         Task<GameDto> CreateGameAsync(CreateGameDto dto, Guid requestingUserId);
         Task<GameDto?> UpdateGameAsync(Guid id, UpdateGameDto dto, Guid requestingUserId, Guid? viewingPlayerId = null);
         Task<bool> DeleteGameAsync(Guid id, Guid requestingUserId);
+        Task<MatchupDto?> GetMatchupAsync(Guid gameId, Guid requestingUserId, Guid playerId);
 
         // Called right before a Team is deleted (player removal, or a direct
         // team delete) - removes only the games that are exclusively this
@@ -52,8 +54,11 @@ namespace StatsHub.Api.Services
         // could be read from the wrong side. When the caller says which
         // player's page it's on, that player's own team wins; otherwise the
         // lowest id, so the pick is at least stable.
-        private async Task<Team?> FindAccessibleOwnTeamAsync(Game game, Guid requestingUserId, Guid? viewingPlayerId = null)
+        // reading: also a team the user plays on (signed in as the player) -
+        // for showing a game; changing one needs a team they manage.
+        private async Task<Team?> FindAccessibleOwnTeamAsync(Game game, Guid requestingUserId, Guid? viewingPlayerId = null, bool reading = false)
         {
+            var allowed = reading ? AccessRules.TeamSeenBy(requestingUserId) : AccessRules.TeamManagedBy(requestingUserId);
             if (game.IbbaGameCode == null)
             {
                 var teamId = game.HomeTeamId ?? game.AwayTeamId;
@@ -61,7 +66,7 @@ namespace StatsHub.Api.Services
 
                 return await _context.Teams.Include(t => t.IbbaTeam)
                     .Where(t => t.Id == teamId.Value)
-                    .FirstOrDefaultAsync(AccessRules.TeamManagedBy(requestingUserId));
+                    .FirstOrDefaultAsync(allowed);
             }
 
             var sideIds = new[] { game.HomeTeamId, game.AwayTeamId }
@@ -70,7 +75,7 @@ namespace StatsHub.Api.Services
 
             return await _context.Teams.Include(t => t.IbbaTeam)
                 .Where(t => t.IbbaTeamId != null && sideIds.Contains(t.IbbaTeamId.Value))
-                .Where(AccessRules.TeamManagedBy(requestingUserId))
+                .Where(allowed)
                 .OrderByDescending(t => viewingPlayerId != null && t.PlayerTeams.Any(pt => pt.PlayerId == viewingPlayerId))
                 .ThenBy(t => t.Id)
                 .FirstOrDefaultAsync();
@@ -108,7 +113,7 @@ namespace StatsHub.Api.Services
 
             if (game == null) return null;
 
-            var ownTeam = await FindAccessibleOwnTeamAsync(game, requestingUserId, viewingPlayerId);
+            var ownTeam = await FindAccessibleOwnTeamAsync(game, requestingUserId, viewingPlayerId, reading: true);
             if (ownTeam == null)
             {
                 // Not a team owner - only reachable via a stats-only fallback
@@ -334,7 +339,118 @@ namespace StatsHub.Api.Services
                 var (teamScore, opponentScore) = ResolvePerspectiveScores(game, ownTeam);
                 var result = (teamScore ?? 0) > (opponentScore ?? 0) ? "W" : "L";
                 await Notify("Final score", $"{result} {teamScore}-{opponentScore} vs {opponentName}");
+                await NotifySeasonHighsAsync(game, opponentName);
             }
+        }
+
+        // A player's best of the season so far - points, rebounds or assists -
+        // tells everyone following them (parents, and the player's own login).
+        // Counted like every other stat: this season, no friendlies, and only
+        // after a few games, so a first game isn't "a season high".
+        private const int GamesBeforeSeasonHighs = 2;
+
+        private async Task NotifySeasonHighsAsync(Game game, string opponentName)
+        {
+            if (game.GameType == Game.FriendlyGameType) return;
+            var seasonStart = LeagueSeason.StartOf(game.GameDate);
+            var lines = await _context.GameStats
+                .Where(gs => gs.GameId == game.Id)
+                .Include(gs => gs.Player).ThenInclude(p => p.Parents)
+                .ToListAsync();
+
+            foreach (var line in lines)
+            {
+                var earlier = await _context.GameStats
+                    .Where(gs => gs.PlayerId == line.PlayerId && gs.GameId != game.Id && gs.Game.Status == "Completed"
+                        && gs.Game.GameType != Game.FriendlyGameType && gs.Game.GameDate >= seasonStart && gs.Game.GameDate < game.GameDate)
+                    .Select(gs => new
+                    {
+                        Points = gs.FieldGoalsMade * 2 + gs.ThreePointersMade * 3 + gs.FreeThrowsMade,
+                        Rebounds = gs.OffensiveRebounds + gs.DefensiveRebounds,
+                        gs.Assists,
+                    })
+                    .ToListAsync();
+                if (earlier.Count < GamesBeforeSeasonHighs) continue;
+
+                var highs = new List<string>();
+                void Check(int value, int best, string what) { if (value > best && value > 0) highs.Add($"{value} {what} (was {best})"); }
+                Check(line.TotalPoints, earlier.Max(e => e.Points), "points");
+                Check(line.TotalRebounds, earlier.Max(e => e.Rebounds), "rebounds");
+                Check(line.Assists, earlier.Max(e => e.Assists), "assists");
+                if (highs.Count == 0) continue;
+
+                var followers = line.Player.Parents.Select(p => p.UserId)
+                    .Concat(line.Player.LinkedUserId is Guid own ? [own] : [])
+                    .Distinct()
+                    .ToList();
+                await _push.NotifyUsersAsync(followers,
+                    $"🔥 Season high for {line.Player.FirstName}!",
+                    $"{string.Join(", ", highs)} vs {opponentName}",
+                    $"/games/{game.Id}?playerId={line.PlayerId}");
+            }
+        }
+
+        // Before a game: both sides in this season's league table (a game
+        // synced from a league), and this season's earlier games between this
+        // player's team and that opponent, with the player's line in each.
+        public async Task<MatchupDto?> GetMatchupAsync(Guid gameId, Guid requestingUserId, Guid playerId)
+        {
+            var current = await GetGameByIdAsync(gameId, requestingUserId, playerId);
+            if (current == null) return null;
+            var game = await _context.Games.AsNoTracking().FirstAsync(g => g.Id == gameId);
+            var ownTeam = await FindAccessibleOwnTeamAsync(game, requestingUserId, playerId, reading: true);
+            var seasonStart = LeagueSeason.StartOf(DateTime.UtcNow);
+
+            IbbaTeam? ours = null, theirs = null;
+            if (game.IbbaGameCode != null && ownTeam?.IbbaTeamId is Guid ownIbba)
+            {
+                var opponentId = game.HomeTeamId == ownIbba ? game.AwayTeamId : game.HomeTeamId;
+                var ids = new[] { (Guid?)ownIbba, opponentId }.OfType<Guid>().ToList();
+                var sides = await _context.IbbaTeams.AsNoTracking().Where(t => ids.Contains(t.Id)).ToDictionaryAsync(t => t.Id);
+                ours = sides.GetValueOrDefault(ownIbba);
+                theirs = opponentId.HasValue ? sides.GetValueOrDefault(opponentId.Value) : null;
+            }
+
+            // A row only from this season's table (a team kept from last season isn't).
+            MatchupTeamDto? Row(IbbaTeam? t) => t == null || t.LeaguePosition is not > 0 || t.SyncedAt < seasonStart ? null : new MatchupTeamDto
+            {
+                Name = t.Name,
+                LogoUrl = t.LogoUrl,
+                LeagueName = string.IsNullOrEmpty(t.LeagueName) ? null : t.LeagueName,
+                Position = t.LeaguePosition!.Value,
+                TotalTeams = t.LeagueTotalTeams,
+                GamesPlayed = t.GamesPlayed,
+                Wins = t.Wins,
+                Losses = t.Losses,
+                PointsFor = t.PointsFor,
+                PointsAgainst = t.PointsAgainst,
+            };
+
+            static string Key(string name) => name.Trim().ToLowerInvariant();
+            var opponentKey = Key(current.OpponentName);
+            var previous = opponentKey.Length == 0 ? new List<HeadToHeadGameDto>() : (await GetGamesByPlayerAsync(playerId, requestingUserId))
+                .Where(g => g.Id != gameId && g.TeamId == current.TeamId && g.Status == "Completed"
+                    && g.GameDate >= seasonStart && g.GameDate < current.GameDate && Key(g.OpponentName) == opponentKey)
+                .OrderByDescending(g => g.GameDate)
+                .Select(g =>
+                {
+                    var line = g.PlayerStats.FirstOrDefault(s => s.PlayerId == playerId);
+                    return new HeadToHeadGameDto
+                    {
+                        GameId = g.Id,
+                        GameDate = g.GameDate,
+                        GameType = g.GameType,
+                        IsHomeGame = g.IsHomeGame,
+                        TeamScore = g.TeamScore,
+                        OpponentScore = g.OpponentScore,
+                        Points = line?.TotalPoints,
+                        Rebounds = line?.TotalRebounds,
+                        Assists = line?.Assists,
+                    };
+                })
+                .ToList();
+
+            return new MatchupDto { Opponent = Row(theirs), Team = Row(ours), Previous = previous };
         }
 
         private async Task<string> ResolveOpponentNameAsync(Game game, Team ownTeam)

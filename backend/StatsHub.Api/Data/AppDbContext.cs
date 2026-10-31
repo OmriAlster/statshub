@@ -27,6 +27,7 @@ namespace StatsHub.Api.Data
         public DbSet<IbbaTeam> IbbaTeams { get; set; }
         public DbSet<PlayerIbbaTeam> PlayerIbbaTeams { get; set; }
         public DbSet<PushSubscription> PushSubscriptions { get; set; }
+        public DbSet<PlayerGoal> PlayerGoals { get; set; }
 
         // SQLite never validated DateTime.Kind, so call sites across the app
         // freely mix DateTime.UtcNow with Kind-less values (new DateTime(...),
@@ -93,6 +94,14 @@ namespace StatsHub.Api.Data
                 .IsUnique();
 
             // PlayerParent configuration (household access, many-to-many)
+            modelBuilder.Entity<PlayerGoal>()
+                .HasIndex(g => new { g.PlayerId, g.Stat });
+            modelBuilder.Entity<PlayerGoal>()
+                .HasOne(g => g.Player)
+                .WithMany()
+                .HasForeignKey(g => g.PlayerId)
+                .OnDelete(DeleteBehavior.Cascade);
+
             modelBuilder.Entity<PlayerParent>()
                 .HasKey(pp => pp.Id);
             modelBuilder.Entity<PlayerParent>()

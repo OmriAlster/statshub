@@ -224,4 +224,124 @@ public class IbbaOpenDataTests
 
         Assert.Equal(("1", 2), (games.Single().Code, calls));
     }
+
+    [Fact]
+    public async Task A_teams_cup_is_found_inside_this_seasons_brackets_and_read_round_by_round()
+    {
+        // A 2-round cup (4 teams): semi-finals in slots 0 and 1, the final in slot 2.
+        // Rows come as a list or as an object; "rounds" as a number or as text - both seen at IBBA.
+        var site = new Site(new()
+        {
+            [$"{Api}/teams?slug=4180-מכבי-חיפה&_embed=wp:featuredmedia&_fields=id,title,link,leagues,_links,_embedded"] =
+                Json($"[{TeamJson(168967, "מכבי חיפה", TeamUrl, [119959])}]"),
+            [$"{Api}/seasons?per_page=10&orderby=id&order=desc&_fields=id,name"] = Json("""[{"id":119888,"name":"2026-2027"},{"id":119878,"name":"-1"}]"""),
+            [$"{Api}/tournaments?seasons=119888&per_page=100&_fields=id,title,link,rounds,data"] = Json("""
+                [{"id":1,"title":{"rendered":"גביע אחר"},"link":"https://ibasketball.co.il/cup/other/","rounds":"1","data":[[{"type":"team","id":"5","index":0}]]},
+                 {"id":2,"title":{"rendered":"גביע המדינה לנערים ב"},"link":"https://ibasketball.co.il/cup/2026-909/","rounds":"2","data":[
+                   [{"type":"team","id":"168967","index":0},{"type":"spacer","rows":2}],
+                   {"1":{"type":"event","id":"900","index":0,"rows":3},"2":{"type":"team","id":"0","index":2}},
+                   [{"type":"team","id":"597672","index":0}],
+                   [{"type":"team","id":"171224","index":1}],
+                   {"1":{"type":"event","id":0,"index":1},"3":{"type":"event","id":0,"index":2},"2":{"type":"team","id":"0","index":2}},
+                   [{"type":"team","id":"170582","index":1}]]}]
+                """),
+            [$"{Api}/teams?include=168967,597672,171224,170582&per_page=100&_embed=wp:featuredmedia&_fields=id,title,link,_links,_embedded"] = Json(
+                $"[{TeamJson(168967, "מכבי חיפה", TeamUrl, [])},{TeamJson(597672, "הפועל נשר", "https://ibasketball.co.il/team/7983-הפועל-נשר/", [], null)},{TeamJson(171224, "הפועל נהריה", "https://ibasketball.co.il/team/6863-הפועל-נהריה/", [], null)},{TeamJson(170582, "הפועל גליל עליון", "https://ibasketball.co.il/team/6202-x/", [], null)}]"),
+            [$"{Api}/events?include=900&per_page=100&_fields=id,date,teams,main_results"] = Json("""[{"id":900,"date":"2026-11-08T18:00:00","teams":[597672,168967],"main_results":["61","70"]}]"""),
+        });
+
+        var cup = Assert.Single(await new IbbaLeagueProvider(new Factory(site)).GetCupsAsync(TeamUrl));
+
+        Assert.Equal(("גביע המדינה לנערים ב", "https://ibasketball.co.il/cup/2026-909/"), (cup.Name, cup.PageUrl));
+        Assert.Equal(["Semi-finals", "Final"], cup.Rounds.Select(r => r.Name).ToArray());
+        var semi = cup.Rounds[0].Games[0]; // the game's own order: Nesher at home
+        Assert.Equal(("הפועל נשר", 61, false), (semi.Home!.Name, semi.Home.Score, semi.Home.Won));
+        Assert.Equal(("מכבי חיפה", 70, true), (semi.Away!.Name, semi.Away.Score, semi.Away.Won));
+        Assert.Equal(new DateTime(2026, 11, 8, 18, 0, 0), semi.LocalDate);
+        Assert.Equal(("הפועל נהריה", "הפועל גליל עליון"), (cup.Rounds[0].Games[1].Home!.Name, cup.Rounds[0].Games[1].Away!.Name)); // no game yet - teams from the bracket
+        Assert.Null(cup.Rounds[1].Games[0].Home); // the final: not decided
+    }
+
+    [Fact]
+    public async Task A_players_line_in_a_game_is_read_by_the_games_code_and_the_players_site_id()
+    {
+        var site = new Site(new()
+        {
+            [$"{Api}/events?slug=781683&_fields=id,performance"] = Json("""
+                [{"id":1507691,"performance":{"746534":{"0":{"pts":53},"859506":{"pts":14,"fgm":4,"fga":9,"threepm":1,"threepa":3,"ftm":3,"fta":4,"off":1,"def":5,"ast":3,"stl":2,"blk":0,"to":2,"pf":3,"min":"24:43"},"111":{"pts":2}}}}]
+                """),
+            [$"{Api}/events?slug=999999&_fields=id,performance"] = Json("""[{"id":5,"performance":[]}]"""),
+            [PlayerUrl] = () => new StringContent("<html><body class='sp_player postid-859506 single'><h1>נרי פלד</h1></body></html>"),
+        });
+
+        var lines = await new IbbaLeagueProvider(new Factory(site)).GetBoxScoresAsync(PlayerUrl, ["781683", "999999"]);
+
+        var line = Assert.Single(lines).Value; // the youth game published none
+        Assert.Equal((4, 9, 1, 3, 3, 4), (line.TwoPointersMade, line.TwoPointersAttempted, line.ThreePointersMade, line.ThreePointersAttempted, line.FreeThrowsMade, line.FreeThrowsAttempted));
+        Assert.Equal((1, 5, 3, 2, 0, 2, 3, 25), (line.OffensiveRebounds, line.DefensiveRebounds, line.Assists, line.Steals, line.Blocks, line.Turnovers, line.Fouls, line.Minutes)); // 24:43 - 25 minutes
+    }
+
+    [Fact]
+    public async Task A_game_the_APIs_list_leaves_out_is_found_through_its_page_and_hours_minutes_seconds_are_read()
+    {
+        var site = new Site(new()
+        {
+            [$"{Api}/events?slug=780125&_fields=id,performance"] = Json("[]"),
+            ["https://ibasketball.co.il/match/780125/"] = () => new StringContent("<html><body class='sp_event postid-1505450 single'></body></html>"),
+            [$"{Api}/events/1505450?_fields=id,performance"] = Json("""
+                {"id":1505450,"performance":{"168690":{"859506":{"pts":"14","fgm":"1","fga":"6","threepm":"4","threepa":"9","min":"00:34:33","mins":34.55}}}}
+                """),
+            [PlayerUrl] = () => new StringContent("<html><body class='sp_player postid-859506 single'></body></html>"),
+        });
+
+        var lines = await new IbbaLeagueProvider(new Factory(site)).GetBoxScoresAsync(PlayerUrl, ["780125"]);
+
+        var line = Assert.Single(lines).Value;
+        Assert.Equal((1, 6, 4, 9, 35), (line.TwoPointersMade, line.TwoPointersAttempted, line.ThreePointersMade, line.ThreePointersAttempted, line.Minutes));
+    }
+
+    [Fact]
+    public async Task A_league_that_publishes_no_lines_costs_no_game_pages()
+    {
+        var site = new Site(new()
+        {
+            [$"{Api}/events?slug=780300&_fields=id,performance"] = Json("""[{"id":7,"performance":[]}]"""),
+            [$"{Api}/events?slug=780125&_fields=id,performance"] = Json("[]"),
+            [$"{Api}/events?slug=780132&_fields=id,performance"] = Json("[]"),
+        });
+
+        var lines = await new IbbaLeagueProvider(new Factory(site)).GetBoxScoresAsync(PlayerUrl, ["780300", "780125", "780132"]);
+
+        Assert.Empty(lines);
+        Assert.DoesNotContain(site.Requested, u => u.Contains("/match/"));
+    }
+
+    [Fact]
+    public async Task When_the_list_has_none_of_the_games_only_the_newest_ones_page_is_read_to_see_whether_the_league_publishes()
+    {
+        var site = new Site(new()
+        {
+            [$"{Api}/events?slug=780132&_fields=id,performance"] = Json("[]"),
+            [$"{Api}/events?slug=780125&_fields=id,performance"] = Json("[]"),
+            ["https://ibasketball.co.il/match/780132/"] = () => new StringContent("<html><body class='sp_event postid-1505451'></body></html>"),
+            [$"{Api}/events/1505451?_fields=id,performance"] = Json("""{"id":1505451,"performance":[]}"""),
+        });
+
+        var lines = await new IbbaLeagueProvider(new Factory(site)).GetBoxScoresAsync(PlayerUrl, ["780132", "780125"]);
+
+        Assert.Empty(lines);
+        Assert.Equal(["https://ibasketball.co.il/match/780132/"], site.Requested.Where(u => u.Contains("/match/")).ToArray());
+    }
+
+    [Theory]
+    [InlineData("לאומית", true)]
+    [InlineData("ארצית דרום", true)]
+    [InlineData("נוער על צפון", true)]
+    [InlineData("נערות א על", true)]
+    [InlineData("ליגת על", false)]          // the Winner league's lines aren't on IBBA
+    [InlineData("נוער לאומית צפון", false)]
+    [InlineData("נערים ב לאומית צפון", false)]
+    [InlineData(null, false)]
+    public void Only_the_leagues_that_publish_players_lines_are_asked(string? league, bool asked) =>
+        Assert.Equal(asked, new IbbaLeagueProvider(new Factory(new Site(new()))).PublishesBoxScores(league));
 }

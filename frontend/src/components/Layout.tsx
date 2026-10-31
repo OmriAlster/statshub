@@ -39,7 +39,7 @@ export default function Layout({ children }: { children: ReactNode }) {
         {user && (
           <div className="user-info">
             <UserAvatar url={user.profilePictureUrl} initials={initials} />
-            <span>{user.firstName} {user.lastName}</span> {isPlayerRole && <span className="role-badge">Player</span>}
+            <span className="user-name">{user.firstName} {user.lastName}</span> {isPlayerRole && <span className="role-badge">Player</span>}
             <HelpButton />
             <NotificationBell />
             <LogoutMenu onLogout={handleLogout} />

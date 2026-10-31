@@ -39,6 +39,57 @@ public static class LeagueSeason
 /// <summary>What a found player's card shows of a team the app hasn't synced this season.</summary>
 public record LeagueTeamQuick(string? CrestUrl, string? LeagueName, string? LeagueUrl);
 
+/// <summary>A player's line in one game, as the league published it.</summary>
+public class LeagueBoxScore
+{
+    public int TwoPointersMade { get; set; }
+    public int TwoPointersAttempted { get; set; }
+    public int ThreePointersMade { get; set; }
+    public int ThreePointersAttempted { get; set; }
+    public int FreeThrowsMade { get; set; }
+    public int FreeThrowsAttempted { get; set; }
+    public int OffensiveRebounds { get; set; }
+    public int DefensiveRebounds { get; set; }
+    public int Assists { get; set; }
+    public int Steals { get; set; }
+    public int Blocks { get; set; }
+    public int Turnovers { get; set; }
+    public int Fouls { get; set; }
+    public int Minutes { get; set; }
+}
+
+/// <summary>A cup this season, as its bracket: rounds of games, first round first.</summary>
+public class LeagueCup
+{
+    public string Name { get; set; } = "";
+    public string PageUrl { get; set; } = "";
+    public List<LeagueCupRound> Rounds { get; set; } = new();
+}
+
+public class LeagueCupRound
+{
+    public string Name { get; set; } = "";
+    public List<LeagueCupGame> Games { get; set; } = new();
+}
+
+/// <summary>One game of a bracket - its sides empty until the earlier round decides them.</summary>
+public class LeagueCupGame
+{
+    public LeagueCupSide? Home { get; set; }
+    public LeagueCupSide? Away { get; set; }
+    /// <summary>As the league's site shows it (Israel time), when the game is scheduled.</summary>
+    public DateTime? LocalDate { get; set; }
+}
+
+public class LeagueCupSide
+{
+    public string Name { get; set; } = "";
+    public string TeamUrl { get; set; } = "";
+    public string? LogoUrl { get; set; }
+    public int? Score { get; set; }
+    public bool Won { get; set; }
+}
+
 /// <summary>A player a name search found: just who and where - their page has the rest.</summary>
 public record LeaguePlayerHit(string PlayerName, string PlayerUrl);
 

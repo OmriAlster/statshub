@@ -5,6 +5,7 @@ import { api } from '../api/client'
 import { useLiveGameOverlay } from '../live/LiveGameContext'
 import type { GameDto } from '../api/types'
 import GameDetailView from '../components/GameDetailView'
+import MatchupCard from '../components/MatchupCard'
 import BouncingBall, { Busy } from '../components/BouncingBall'
 
 export default function GameDetail() {
@@ -121,6 +122,15 @@ export default function GameDetail() {
           </button>
         }
       />
+
+      {(playerIdParam || game.playerStats[0]?.playerId) && (
+        <MatchupCard
+          gameId={game.id}
+          playerId={(playerIdParam || game.playerStats[0]?.playerId)!}
+          opponentName={game.opponentName}
+          showScouting={game.status !== 'Completed'}
+        />
+      )}
     </div>
   )
 }

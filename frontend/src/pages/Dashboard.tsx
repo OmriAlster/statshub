@@ -15,6 +15,8 @@ import { GameTypeBadge, HomeAway } from '../components/GameBadges'
 import LeagueBadge from '../components/LeagueBadge'
 import { useGuide } from '../guide/GuideContext'
 import GettingStarted from '../guide/GettingStarted'
+import CalendarButton from '../components/CalendarButton'
+import NavigateButtons from '../components/NavigateButtons'
 
 interface PlayerCard {
   player: PlayerDto
@@ -195,7 +197,8 @@ export default function Dashboard() {
                           />
                           <div style={{ minWidth: 0 }}>
                             <div className="pctr-team-name team-name-clamp" title={s.teamName}>{s.teamName}</div>
-                            {ibbaTeam?.ibbaLeagueName && <div className="pctr-league" dir="rtl">{ibbaTeam.ibbaLeagueName}</div>}
+                            {/* The league once - not when the team's name already carries it ("מכבי תל מונד - נוער ארצית שרון"). */}
+                            {ibbaTeam?.ibbaLeagueName && !s.teamName.includes(ibbaTeam.ibbaLeagueName) && <div className="pctr-league" dir="rtl">{ibbaTeam.ibbaLeagueName}</div>}
                           </div>
                         </div>
                         {!!ibbaTeam?.position && ibbaTeam.position > 0 && (
@@ -219,7 +222,7 @@ export default function Dashboard() {
                                 <div className="glance-line opponent-cell">
                                   <span>{last.isHomeGame === false ? '✈️' : '🏠'}</span>
                                   {last.opponentLogoUrl && <img className="opponent-logo-sm" src={last.opponentLogoUrl} alt="" />}
-                                  <span className="truncate">{last.opponentName}</span>
+                                  <span className="truncate" dir="auto">{last.opponentName}</span>
                                 </div>
                                 <span className={`glance-score ${(last.teamScore ?? 0) > (last.opponentScore ?? 0) ? 'win' : 'loss'}`}>
                                   {(last.teamScore ?? 0) > (last.opponentScore ?? 0) ? 'W' : 'L'} {last.teamScore}–{last.opponentScore}
@@ -234,7 +237,7 @@ export default function Dashboard() {
                                 <div className="glance-line opponent-cell">
                                   <span>{next.isHomeGame === false ? '✈️' : '🏠'}</span>
                                   {next.opponentLogoUrl && <img className="opponent-logo-sm" src={next.opponentLogoUrl} alt="" />}
-                                  <span className="truncate">{next.opponentName}</span>
+                                  <span className="truncate" dir="auto">{next.opponentName}</span>
                                 </div>
                                 <span className="glance-score upcoming">
                                   {formatGameDateOnly(next.gameDate)}
@@ -261,6 +264,7 @@ export default function Dashboard() {
           <svg className="icon"><use href="#i-calendar" /></svg> Upcoming Games
           {upcomingGames.length > 0 && <span className="dash-upcoming-count">{upcomingGames.length}</span>}
         </h3>
+        {!isPlayerRole && upcomingGames.length > 0 && <CalendarButton />}
         {upcomingGames.length === 0 ? (
           <p className="dash-upcoming-empty">No upcoming games scheduled.</p>
         ) : (
@@ -291,8 +295,8 @@ export default function Dashboard() {
                           <HomeAway game={game} />
                           <GameTypeBadge game={game} />
                           <span className="dash-upcoming-team">
-                            {game.teamName}
-                            {players.length > 1 && ` · ${gamePlayers.map((p) => p.firstName).join(', ')}`}
+                            <bdi>{game.teamName}</bdi>
+                            {players.length > 1 && <> · <bdi>{gamePlayers.map((p) => p.firstName).join(', ')}</bdi></>}
                           </span>
                         </div>
                       </div>
@@ -310,6 +314,7 @@ export default function Dashboard() {
                         )}
                       </div>
                     </Link>
+                    {today && <NavigateButtons location={game.location} compact />}
                     {today && !isPlayerRole && (
                       <button type="button" className="dash-upcoming-start" onClick={() => requestLiveStart(game.id, gamePlayers[0].id)}>
                         <svg className="icon" aria-hidden="true"><use href="#i-live" /></svg>

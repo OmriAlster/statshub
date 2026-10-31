@@ -4,6 +4,7 @@ import { formatGameDateTimeFull } from '../utils/formatGameDate'
 import CourtShotChart from './CourtShotChart'
 import GameStatusBadge, { onCourtIn } from './GameStatusBadge'
 import LeagueBadge from './LeagueBadge'
+import NavigateButtons from './NavigateButtons'
 
 interface GameDetailViewProps {
   game: GameDto
@@ -25,50 +26,29 @@ export default function GameDetailView({ game, headerActions }: GameDetailViewPr
             <span className={`game-type-badge ${game.gameType.toLowerCase()}`}>{game.gameType}</span>
             {game.isFromIbba && <LeagueBadge league={game.league} />}
           </div>
-          <p>{formatGameDateTimeFull(game.gameDate)} · {game.isHomeGame != null && (
-                <span className="score-home-icon" title={game.isHomeGame ? 'Home' : 'Away'}>{game.isHomeGame ? '🏠' : '✈️'}</span>
-              )} {game.location || 'TBD'}</p>
+          <p>{formatGameDateTimeFull(game.gameDate)}</p>
+          <p className="game-venue">
+            {game.isHomeGame != null && <span className="game-venue-side">{game.isHomeGame ? '🏠 Home' : '✈️ Away'}</span>}
+            <span className="game-venue-place">📍 <bdi>{game.location || 'TBD'}</bdi></span>
+          </p>
         </div>
         {headerActions && <div className="flex gap-1">{headerActions}</div>}
       </div>
 
+      {game.status !== 'Completed' && <NavigateButtons location={game.location} />}
+
       {game.status === 'Completed' ? (
         <div className="game-score">
-          <div className="score-matchup">
-            <div className="score-side">
-              <span className="score-side-name">{game.teamName}</span>
-              {game.teamLogoUrl && <img className="opponent-logo-md" src={game.teamLogoUrl} alt="" />}
-            </div>
-            <div className={`score-display ${won ? 'win' : 'loss'}`}>
-              <span>{game.teamScore}</span>
-              <span className="vs">-</span>
-              <span>{game.opponentScore}</span>
-            </div>
-            <div className="score-side">
-              {game.opponentLogoUrl && <img className="opponent-logo-md" src={game.opponentLogoUrl} alt="" />}
-              <span className="score-side-name">{game.opponentName}</span>
-            </div>
+          <div className="score-board-head">
+            <span className={`score-board-result ${won ? 'win' : 'loss'}`}>{won ? 'Win' : 'Loss'}</span>
+            <span className="score-board-final">Final</span>
           </div>
+          <ScoreBoard game={game} won={won} />
         </div>
       ) : (
         <div className="game-upcoming">
           <p><GameStatusBadge status={game.status} onCourt={onCourtIn(game)} /></p>
-          {(game.teamLogoUrl || game.opponentLogoUrl) && (
-            <div className="score-matchup" style={{ marginTop: '0.6rem' }}>
-              <div className="score-side">
-                {game.isHomeGame != null && (
-                  <span title={game.isHomeGame ? 'Home' : 'Away'}>{game.isHomeGame ? '🏠' : '✈️'}</span>
-                )}
-                {game.teamLogoUrl && <img className="opponent-logo-md" src={game.teamLogoUrl} alt="" />}
-                <span className="score-side-name">{game.teamName}</span>
-              </div>
-              <span className="vs">vs</span>
-              <div className="score-side">
-                {game.opponentLogoUrl && <img className="opponent-logo-md" src={game.opponentLogoUrl} alt="" />}
-                <span className="score-side-name">{game.opponentName}</span>
-              </div>
-            </div>
-          )}
+          <ScoreBoard game={game} />
         </div>
       )}
 
@@ -153,6 +133,28 @@ export default function GameDetailView({ game, headerActions }: GameDetailViewPr
               <CourtShotChart shots={stats.shots!} interactive={false} />
             )}
           </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+// The two teams, a row each - crest, the whole name (two lines if it needs
+// them) and the score once there is one. Side by side, long names were cut
+// to a few letters on a phone.
+function ScoreBoard({ game, won }: { game: GameDto; won?: boolean }) {
+  const played = game.status !== 'Upcoming' && game.teamScore != null
+  const rows = [
+    { name: game.teamName, logo: game.teamLogoUrl, score: game.teamScore, wonRow: won === true },
+    { name: game.opponentName, logo: game.opponentLogoUrl, score: game.opponentScore, wonRow: won === false },
+  ]
+  return (
+    <div className="score-board">
+      {rows.map((r, i) => (
+        <div key={i} className={`score-board-row ${played && r.wonRow ? 'won' : ''}`}>
+          {r.logo ? <img className="score-board-crest" src={r.logo} alt="" /> : <span className="score-board-crest blank" aria-hidden="true" />}
+          <span className="score-board-name" dir="auto">{r.name || 'TBD'}</span>
+          {played && <b className="score-board-score">{r.score}</b>}
         </div>
       ))}
     </div>

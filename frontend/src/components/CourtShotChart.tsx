@@ -1,4 +1,8 @@
 import { useRef } from 'react'
+import { shotZones, zoneHeat } from '../utils/shotZones'
+import { classifyShotValue, COURT } from '../utils/courtGeometry'
+
+const { W, H, HOOP, ARC_R, CORNER_X_LEFT, CORNER_X_RIGHT, CORNER_Y } = COURT
 
 export interface ChartShot {
   id?: string
@@ -14,28 +18,8 @@ interface CourtShotChartProps {
   onCourtTap?: (x: number, y: number, value: 2 | 3) => void
   onRemoveShot?: (id: string) => void
   showLegend?: boolean
-}
-
-// Half-court geometry, in a fixed viewBox. Kept in pixel units here and
-// normalized to 0..1 only at the component boundary (props/callbacks),
-// so the math for the 3PT arc stays simple ordinary-circle geometry.
-const W = 500
-const H = 470
-const HOOP = { x: 250, y: 40 }
-const ARC_R = 215
-const CORNER_X_LEFT = 40
-const CORNER_X_RIGHT = W - CORNER_X_LEFT
-const CORNER_DX = HOOP.x - CORNER_X_LEFT
-const CORNER_Y = HOOP.y + Math.sqrt(ARC_R * ARC_R - CORNER_DX * CORNER_DX)
-
-export function classifyShotValue(px: number, py: number): 2 | 3 {
-  const dx = px - HOOP.x
-  const dy = py - HOOP.y
-  if (py <= CORNER_Y) {
-    return Math.abs(dx) > CORNER_DX ? 3 : 2
-  }
-  const dist = Math.sqrt(dx * dx + dy * dy)
-  return dist > ARC_R ? 3 : 2
+  // 'zones': each area's made / tried as a colored bubble instead of each shot
+  view?: 'shots' | 'zones'
 }
 
 function arcPoints(steps = 48): string {
@@ -53,6 +37,7 @@ function arcPoints(steps = 48): string {
 
 const ARC_PATH_POINTS = arcPoints()
 
+
 export default function CourtShotChart({
   shots,
   interactive = false,
@@ -60,7 +45,10 @@ export default function CourtShotChart({
   onCourtTap,
   onRemoveShot,
   showLegend = true,
+  view = 'shots',
 }: CourtShotChartProps) {
+  const zones = view === 'zones' ? shotZones(shots) : []
+  const most = Math.max(1, ...zones.map((z) => z.tried))
   const svgRef = useRef<SVGSVGElement>(null)
 
   const handleClick = (e: React.MouseEvent<SVGSVGElement>) => {
@@ -107,7 +95,19 @@ export default function CourtShotChart({
         <line x1={HOOP.x - 30} y1={22} x2={HOOP.x + 30} y2={22} className="court-line backboard" />
         <circle cx={HOOP.x} cy={HOOP.y} r={9} className="court-hoop" />
 
-        {shots.map((shot, i) => {
+        {zones.map((z) => {
+          const r = 16 + 18 * Math.sqrt(z.tried / most)
+          return (
+            <g key={z.key} className={`zone-bubble ${zoneHeat(z)}`}>
+              <title>{`${z.label}: ${z.made} of ${z.tried}`}</title>
+              <circle cx={z.x} cy={z.y} r={r} />
+              <text x={z.x} y={z.y - 2} textAnchor="middle" className="zone-pct">{Math.round((z.made / z.tried) * 100)}%</text>
+              <text x={z.x} y={z.y + 14} textAnchor="middle" className="zone-count">{z.made}/{z.tried}</text>
+            </g>
+          )
+        })}
+
+        {view === 'shots' && shots.map((shot, i) => {
           const cx = shot.x * W
           const cy = shot.y * H
           return (
@@ -143,7 +143,14 @@ export default function CourtShotChart({
         )}
       </svg>
 
-      {showLegend && (
+      {showLegend && view === 'zones' && (
+        <div className="court-legend">
+          <span><i className="legend-dot zone-hot" /> 50%+</span>
+          <span><i className="legend-dot zone-warm" /> 34-49%</span>
+          <span><i className="legend-dot zone-cold" /> under 34%</span>
+        </div>
+      )}
+      {showLegend && view === 'shots' && (
         <div className="court-legend">
           <span><i className="legend-dot made" /> Made</span>
           <span><i className="legend-dot missed" /> Missed</span>
