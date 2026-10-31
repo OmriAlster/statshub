@@ -127,7 +127,7 @@ export default function LeaguePlayerFinder({
           dir="auto"
           autoComplete="off"
           className={isLink ? 'looks-like-link' : undefined}
-          placeholder={`Type the player's name, or paste their ${leagues} link`}
+          placeholder={`Name or ${leagues} link`}
           value={value}
           onChange={(e) => onChange(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') find() }}

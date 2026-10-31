@@ -69,7 +69,7 @@ export default function StandingsModal({ leagueUrl, leagueName, league, highligh
                     <td className="opp" dir="ltr">
                       <span className="standings-team-cell">
                         {r.logoUrl ? <img className="standings-team-logo" src={r.logoUrl} alt="" /> : <span className="standings-team-logo-fallback" />}
-                        {r.teamName}
+                        <span className="standings-team-name" dir="auto">{r.teamName}</span>
                       </span>
                     </td>
                     <td className="num">{r.gamesPlayed}</td>

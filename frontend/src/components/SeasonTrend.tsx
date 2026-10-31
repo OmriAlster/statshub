@@ -3,12 +3,14 @@ import type { GameDto } from '../api/types'
 
 // The season so far, game by game (games with the player's line, oldest
 // first): points per game as a line, how the shooting changed, and the
-// player's bests.
-export default function SeasonTrend({ games, playerId }: { games: GameDto[]; playerId: string }) {
+// player's bests. showTypes: the games are of more than one kind (league,
+// cup) - each dot in its kind's color.
+export default function SeasonTrend({ games, playerId, showTypes = false }: { games: GameDto[]; playerId: string; showTypes?: boolean }) {
   const played = games
     .filter((g) => g.status === 'Completed' && g.playerStats.length > 0)
     .sort((a, b) => new Date(a.gameDate).getTime() - new Date(b.gameDate).getTime())
-  if (played.length < 2) return null
+  if (played.length === 0) return null
+  const kinds = [...new Set(played.map((g) => g.gameType))]
 
   const line = (g: GameDto) => g.playerStats[0]
   const points = played.map((g) => line(g).totalPoints)
@@ -32,7 +34,7 @@ export default function SeasonTrend({ games, playerId }: { games: GameDto[]; pla
   const h = 120
   const pad = 14
   const max = Math.max(...points, 10)
-  const x = (i: number) => pad + (i * (w - pad * 2)) / (points.length - 1)
+  const x = (i: number) => (points.length === 1 ? w / 2 : pad + (i * (w - pad * 2)) / (points.length - 1))
   const y = (p: number) => h - pad - (p / max) * (h - pad * 2)
   const path = points.map((p, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)} ${y(p).toFixed(1)}`).join(' ')
   const best = Math.max(...points)
@@ -52,7 +54,7 @@ export default function SeasonTrend({ games, playerId }: { games: GameDto[]; pla
     <div className="season-trend">
       <section className="trend-card" aria-labelledby="trend-title">
         <div className="trend-head">
-          <h3 id="trend-title">Points, game by game</h3>
+          <h3 id="trend-title">{played.length === 1 ? 'Points' : 'Points, game by game'}</h3>
           {change != null && Math.abs(change) >= 0.5 && (
             <span className={`trend-change ${change > 0 ? 'up' : 'down'}`}>{change > 0 ? '▲' : '▼'} {Math.abs(change).toFixed(1)} last 3</span>
           )}
@@ -62,12 +64,17 @@ export default function SeasonTrend({ games, playerId }: { games: GameDto[]; pla
           <path d={`${path} L${x(points.length - 1)} ${h - pad} L${x(0)} ${h - pad} Z`} className="trend-area" />
           <path d={path} className="trend-line" />
           {points.map((p, i) => (
-            <circle key={i} cx={x(i)} cy={y(p)} r={i === points.length - 1 ? 4.5 : 3} className={i === points.length - 1 ? 'trend-last' : 'trend-dot'}>
+            <circle key={i} cx={x(i)} cy={y(p)} r={i === points.length - 1 ? 4.5 : 3} className={`${i === points.length - 1 ? 'trend-last' : 'trend-dot'}${showTypes ? ` kind-${played[i].gameType.toLowerCase()}` : ''}`}>
               <title>{`${new Date(played[i].gameDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} vs ${played[i].opponentName}: ${p}`}</title>
             </circle>
           ))}
           <text x={x(points.indexOf(best))} y={y(best) - 7} textAnchor="middle" className="trend-best">{best}</text>
         </svg>
+        {showTypes && kinds.length > 1 && (
+          <div className="trend-legend">
+            {kinds.map((k) => <span key={k} className={`kind-${k.toLowerCase()}`}>{k}</span>)}
+          </div>
+        )}
         <div className="trend-axis">
           <span>{new Date(played[0].gameDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
           <span>{new Date(played[played.length - 1].gameDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
@@ -95,5 +102,60 @@ export default function SeasonTrend({ games, playerId }: { games: GameDto[]; pla
         </section>
       )}
     </div>
+  )
+}
+
+// The season by kind of game - league, cup, friendly side by side (friendlies
+// too: shown here, never mixed into the totals). A row opens that kind's view.
+export function CompetitionSplit({ games, onPick }: { games: GameDto[]; onPick: (type: GameDto['gameType']) => void }) {
+  const played = games.filter((g) => g.status === 'Completed' && g.playerStats.length > 0)
+  const rows = (['League', 'Cup', 'Friendly'] as const)
+    .map((type) => {
+      const list = played.filter((g) => g.gameType === type)
+      const sum = (f: (s: GameDto['playerStats'][number]) => number) => list.reduce((t, g) => t + f(g.playerStats[0]), 0)
+      const per = (n: number) => (n / list.length).toFixed(1)
+      const shots = sum((s) => s.fieldGoalsAttempted + s.threePointersAttempted)
+      const made = sum((s) => s.fieldGoalsMade + s.threePointersMade)
+      const wins = list.filter((g) => (g.teamScore ?? 0) > (g.opponentScore ?? 0)).length
+      return {
+        type,
+        games: list.length,
+        record: `${wins}-${list.length - wins}`,
+        ppg: list.length ? per(sum((s) => s.totalPoints)) : '-',
+        rpg: list.length ? per(sum((s) => s.totalRebounds)) : '-',
+        apg: list.length ? per(sum((s) => s.assists)) : '-',
+        fg: shots ? `${Math.round((made / shots) * 100)}%` : '-',
+      }
+    })
+    .filter((r) => r.games > 0)
+  if (rows.length < 2) return null
+
+  return (
+    <section className="trend-card competition-split" aria-labelledby="split-title">
+      <h3 id="split-title">By competition</h3>
+      <div className="split-table">
+        <div className="split-row split-head">
+          <span />
+          <span>GP</span>
+          <span>W-L</span>
+          <span>PPG</span>
+          <span>RPG</span>
+          <span>APG</span>
+          <span>FG%</span>
+        </div>
+        {rows.map((r) => (
+          <button type="button" key={r.type} className="split-row" onClick={() => onPick(r.type)} title={`Only ${r.type.toLowerCase()} games`}>
+            <span className={`split-kind kind-${r.type.toLowerCase()}`}>{r.type}</span>
+            <span>{r.games}</span>
+            <span>{r.record}</span>
+            <b>{r.ppg}</b>
+            <span>{r.rpg}</span>
+            <span>{r.apg}</span>
+            <span>{r.fg}</span>
+          </button>
+        ))}
+      </div>
+      <p className="split-note">Friendlies are shown here, but not counted in the season's totals.</p>
+    </section>
   )
 }

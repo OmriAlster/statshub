@@ -22,8 +22,8 @@ body {
     sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background-color: var(--bg-light);
-  color: var(--text-dark);
+  background-color: var(--color-bg);
+  color: var(--color-text);
 }
 
 #root {

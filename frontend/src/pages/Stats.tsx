@@ -15,7 +15,10 @@ import type {
   UpdateGameStatsDto,
 } from '../api/types'
 import { useAuth } from '../auth/AuthContext'
+import { useGamesView } from '../hooks/useGamesView'
+import GamesViewToggle from '../components/GamesViewToggle'
 import CourtShotChart from '../components/CourtShotChart'
+import { shotZones, zoneHeat } from '../utils/shotZones'
 import { AveragesCard, ScheduleGameCards, StatsGameCards } from '../components/GameCards'
 import GameStatsEditor from '../components/GameStatsEditor'
 import GameStatusBadge, { onCourtIn } from '../components/GameStatusBadge'
@@ -26,7 +29,9 @@ import TeamCrest from '../components/TeamCrest'
 import { useElementVisible } from '../hooks/useElementVisible'
 import { countsTowardStats } from '../utils/countedGames'
 import CupBracket from '../components/CupBracket'
-import SeasonTrend from '../components/SeasonTrend'
+import SeasonTrend, { CompetitionSplit } from '../components/SeasonTrend'
+import { FormCard, GoalsCard, HomeAwayCard, NextGameCard, StreaksCard, TeamShareCard } from '../components/PlayerInsights'
+import { PlayerCardModal, WrappedModal } from '../components/ShareModals'
 import { formatGameDateOnly } from '../utils/formatGameDate'
 import BouncingBall, { Busy } from '../components/BouncingBall'
 import { GameTypeBadge, HomeAway } from '../components/GameBadges'
@@ -151,6 +156,10 @@ function fetchPlayerPanelData(playerId: string): Promise<PlayerPanelData> {
 }
 
 function PlayerProfilePanel({ player, prefetched }: { player: PlayerDto; prefetched?: PlayerPanelPrefetch | null }) {
+  // A player signed in as themself only looks - no editing, scheduling or
+  // deleting games (the server refuses those too).
+  const { user } = useAuth()
+  const readOnly = user?.role === 'Player'
   const [tab, setTab] = useState<'stats' | 'schedule' | 'season'>('stats')
   const [games, setGames] = useState<GameDto[]>([])
   const [ibba, setIbba] = useState<IbbaLinkStatusDto | null>(null)
@@ -160,6 +169,7 @@ function PlayerProfilePanel({ player, prefetched }: { player: PlayerDto; prefetc
   const [selectedTeamId, setSelectedTeamId] = useState<string | 'all' | null>(null)
   const [typeFilter, setTypeFilter] = useState<GameTypeFilter>('All')
   const [cupOpen, setCupOpen] = useState(false)
+  const [sharing, setSharing] = useState<'card' | 'wrapped' | null>(null)
   const [standingsFor, setStandingsFor] = useState<{ league?: string | null; leagueUrl: string; leagueName: string; teamName: string; teamUrl: string } | null>(null)
 
   useEffect(() => {
@@ -320,10 +330,10 @@ function PlayerProfilePanel({ player, prefetched }: { player: PlayerDto; prefetc
           />
           <div>
             <div className="pctr-team-name team-name-clamp" title={selectedTeam.name}>{selectedTeam.name}</div>
+            <div className="team-chip-row">
             {selectedTeam.leagueName && (
               <button
                 className="league-chip"
-                style={{ marginTop: '0.3rem' }}
                 onClick={() => setStandingsFor({ league: selectedTeam.league, leagueUrl: selectedTeam.leagueUrl!, leagueName: selectedTeam.leagueName ?? '', teamName: selectedTeam.name, teamUrl: selectedTeam.teamUrl ?? '' })}
               >
                 <svg className="icon"><use href="#i-trophy" /></svg>
@@ -332,13 +342,20 @@ function PlayerProfilePanel({ player, prefetched }: { player: PlayerDto; prefetc
               </button>
             )}
             {selectedTeam.isIbba && selectedTeam.teamUrl && (
-              <button className="cup-chip" style={{ marginTop: '0.3rem' }} onClick={() => setCupOpen(true)}>
-                🏆 Cup
+              <button className="cup-chip" onClick={() => setCupOpen(true)}>
+                <svg className="icon"><use href="#i-trophy" /></svg>
+                Cup
               </button>
             )}
+            </div>
           </div>
         </div>
       )}
+
+      {sharing === 'card' && (
+        <PlayerCardModal player={player} teams={selectedTeam ? [selectedTeam] : teamList} games={gamesForTeam} onClose={() => setSharing(null)} />
+      )}
+      {sharing === 'wrapped' && <WrappedModal player={player} games={gamesForTeam} onClose={() => setSharing(null)} />}
 
       {cupOpen && selectedTeam?.teamUrl && (
         <CupBracket
@@ -364,7 +381,16 @@ function PlayerProfilePanel({ player, prefetched }: { player: PlayerDto; prefetc
 
       {tab !== 'schedule' && <GameTypeChips counts={typeCounts} value={activeType} onChange={setTypeFilter} />}
 
-      {tab === 'stats' && <StatsPanel games={gamesForTeam} playerId={player.id} typeFilter={activeType} />}
+      {tab === 'stats' && (
+        <>
+          <StatsPanel games={gamesForTeam} playerId={player.id} typeFilter={activeType} />
+          <div className="insight-grid">
+            <NextGameCard games={gamesForTeam} playerId={player.id} />
+            <FormCard games={gamesForTeam} />
+            <HomeAwayCard games={gamesForTeam} playerId={player.id} />
+          </div>
+        </>
+      )}
       {tab === 'schedule' && (
         <SchedulePanel
           player={player}
@@ -375,6 +401,7 @@ function PlayerProfilePanel({ player, prefetched }: { player: PlayerDto; prefetc
           onGameDeleted={removeGame}
           onGameCreated={addGame}
           onEditorClosed={refreshGame}
+          readOnly={readOnly}
         />
       )}
       {tab === 'season' && (
@@ -382,10 +409,24 @@ function PlayerProfilePanel({ player, prefetched }: { player: PlayerDto; prefetc
           <SeasonTrend
             games={gamesForTeam.filter((g) => (activeType === 'All' ? countsTowardStats(g) : g.gameType === activeType))}
             playerId={player.id}
+            showTypes={activeType === 'All'}
           />
           <SeasonPanel player={player} stats={seasonStats} selectedTeamId={selectedTeamId} typeFilter={activeType} />
+          {activeType === 'All' && <CompetitionSplit games={gamesForTeam} onPick={setTypeFilter} />}
+          <div className="insight-grid">
+            <StreaksCard games={activeType === 'All' ? gamesForTeam : gamesForTeam.filter((g) => g.gameType === activeType)} playerId={player.id} />
+            <TeamShareCard games={activeType === 'All' ? gamesForTeam : gamesForTeam.filter((g) => g.gameType === activeType)} playerId={player.id} />
+            <GoalsCard games={gamesForTeam} playerId={player.id} readOnly={readOnly} />
+          </div>
         </>
       )}
+
+      <div className="profile-actions profile-actions-bottom">
+        <button type="button" className="profile-action" onClick={() => setSharing('card')}>🃏 Player card</button>
+        {gamesForTeam.some((g) => g.status === 'Completed') && (
+          <button type="button" className="profile-action" onClick={() => setSharing('wrapped')}>🎉 In numbers</button>
+        )}
+      </div>
 
       {standingsFor && (
         <StandingsModal
@@ -446,9 +487,10 @@ function StatsPanel({ games, playerId, typeFilter }: { games: GameDto[]; playerI
   const [wrapRef, wrapVisible] = useElementVisible<HTMLDivElement>()
   const [footRef, footVisible] = useElementVisible<HTMLTableSectionElement>()
   const showFloatingAvg = !!averages && wrapVisible && !footVisible
+  const [view, setView] = useGamesView()
 
   return (
-    <div>
+    <div className={view === 'table' ? 'games-view-table' : undefined}>
       <div className="season-summary">
         <div className="summary-stat">
           <span className="summary-value">{averages?.count ?? 0}</span>
@@ -469,6 +511,7 @@ function StatsPanel({ games, playerId, typeFilter }: { games: GameDto[]; playerI
         <p>No completed games yet.</p>
       ) : (
         <>
+        <GamesViewToggle view={view} onChange={setView} />
         <StatsGameCards games={completedGames} isCounted={isCounted} linkFor={(game) => `/games/${game.id}?playerId=${playerId}`} />
         {averages && <AveragesCard averages={averages} />}
         <div className="games-table-wrap desktop-only" ref={wrapRef}>
@@ -505,7 +548,7 @@ function StatsPanel({ games, playerId, typeFilter }: { games: GameDto[]; playerI
                     </td>
                     <td>
                       <Link to={`/games/${game.id}?playerId=${playerId}`} className="games-table-date-link">
-                        {formatGameDateOnly(game.gameDate)}
+                        <GameDateCell date={game.gameDate} />
                       </Link>
                     </td>
                     <td>
@@ -534,7 +577,9 @@ function StatsPanel({ games, playerId, typeFilter }: { games: GameDto[]; playerI
             {averages && (
               <tfoot ref={footRef}>
                 <tr className="avg-row">
-                  <td colSpan={3}>Avg</td>
+                  <td>Avg</td>
+                  <td />
+                  <td />
                   <td className="num">&mdash;</td>
                   <td className="num">{averages.pts}</td>
                   <td className="num">{averages.fgm}/{averages.fga}</td>
@@ -578,6 +623,7 @@ function SchedulePanel({
   onGameDeleted,
   onGameCreated,
   onEditorClosed,
+  readOnly = false,
 }: {
   player: PlayerDto
   games: GameDto[]
@@ -587,6 +633,7 @@ function SchedulePanel({
   onGameDeleted: (id: string) => void
   onGameCreated: (g: GameDto) => void
   onEditorClosed: (gameId: string) => void
+  readOnly?: boolean
 }) {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
@@ -597,6 +644,7 @@ function SchedulePanel({
     [games]
   )
   const editingGame = sorted.find((g) => g.id === editingId) ?? null
+  const [view, setView] = useGamesView()
 
   const deleteGame = async (game: GameDto) => {
     if (!window.confirm(`Delete this game vs ${game.opponentName}? This removes all of its stats and can't be undone.`)) return
@@ -612,14 +660,16 @@ function SchedulePanel({
   }
 
   return (
-    <div>
-      <div className="flex gap-1" style={{ marginBottom: '0.85rem' }}>
-        <button className="add-team-btn" onClick={() => setShowAddForm((v) => !v)}>
-          {showAddForm ? 'Cancel' : '+ Schedule Game'}
-        </button>
-      </div>
+    <div className={view === 'table' ? 'games-view-table' : undefined}>
+      {!readOnly && (
+        <div className="flex gap-1" style={{ marginBottom: '0.85rem' }}>
+          <button className="add-team-btn" onClick={() => setShowAddForm((v) => !v)}>
+            {showAddForm ? 'Cancel' : '+ Schedule Game'}
+          </button>
+        </div>
+      )}
 
-      {showAddForm && (
+      {!readOnly && showAddForm && (
         <ScheduleNewGamePanel
           teamList={teamList}
           selectedTeamId={selectedTeamId}
@@ -632,9 +682,11 @@ function SchedulePanel({
         <p>No games scheduled yet.</p>
       ) : (
       <>
+      <GamesViewToggle view={view} onChange={setView} />
       <ScheduleGameCards
         games={sorted}
-        actions={(game) => (
+        linkFor={readOnly ? (game) => `/games/${game.id}?playerId=${player.id}` : undefined}
+        actions={readOnly ? undefined : (game) => (
           <>
             <button className="edit-btn" title="Edit game & stats" aria-label="Edit game" onClick={() => setEditingId(editingId === game.id ? null : game.id)}>
               <svg className="icon"><use href="#i-edit" /></svg>
@@ -667,10 +719,10 @@ function SchedulePanel({
                   <td>
                     <span className="opponent-cell">
                       {game.opponentLogoUrl && <img className="opponent-logo-sm" src={game.opponentLogoUrl} alt="" />}
-                      <span>{game.opponentName}</span>
+                      {readOnly ? <Link to={`/games/${game.id}?playerId=${player.id}`}>{game.opponentName}</Link> : <span>{game.opponentName}</span>}
                     </span>
                   </td>
-                  <td>{formatGameDateOnly(game.gameDate)}</td>
+                  <td><GameDateCell date={game.gameDate} /></td>
                   <td>
                     <span className="type-cell">
                       <HomeAway game={game} iconOnly />
@@ -685,7 +737,7 @@ function SchedulePanel({
                     <td className="games-table-status"><GameStatusBadge status={game.status} onCourt={onCourtIn(game)} /></td>
                   )}
                   <td>
-                    <div className="flex gap-1">
+                    {!readOnly && <div className="flex gap-1">
                       <button className="edit-btn" title="Edit game & stats" onClick={() => setEditingId(editingId === game.id ? null : game.id)}>
                         <svg className="icon"><use href="#i-edit" /></svg>
                       </button>
@@ -699,7 +751,7 @@ function SchedulePanel({
                           🗑️
                         </button>
                       )}
-                    </div>
+                    </div>}
                   </td>
                 </tr>
               </Fragment>
@@ -710,7 +762,7 @@ function SchedulePanel({
       </div>
       </>
       )}
-      {editingGame && (
+      {!readOnly && editingGame && (
         <ScheduleEditPanel
           player={player}
           game={editingGame}
@@ -1182,6 +1234,7 @@ function SeasonPanel({
 }) {
   const [showTotals, setShowTotals] = useState(false)
   const [shots, setShots] = useState<ShotDto[]>([])
+  const [shotView, setShotView] = useState<'shots' | 'zones'>('shots')
   // One game type picked: the season line for just those games, from the server.
   const [typeStats, setTypeStats] = useState<{ type: GameTypeFilter; stats: PlayerTeamStatsDto[] } | null>(null)
   useEffect(() => {
@@ -1298,11 +1351,22 @@ function SeasonPanel({
           </div>
 
           <div className="season-chart-section">
-            <h4>🎯 {selected.teamName} Shot Chart ({shots.length} shots)</h4>
+            <div className="shot-chart-head">
+              <h4>🎯 Shot chart · <bdi>{selected.teamName}</bdi> ({shots.length} shots)</h4>
+              {shots.length > 0 && (
+                <div className="game-type-toggle" role="group" aria-label="Shot chart view">
+                  <button type="button" className={`toggle-option ${shotView === 'shots' ? 'active' : ''}`} onClick={() => setShotView('shots')}>Shots</button>
+                  <button type="button" className={`toggle-option ${shotView === 'zones' ? 'active' : ''}`} onClick={() => setShotView('zones')}>Hot zones</button>
+                </div>
+              )}
+            </div>
             {shots.length === 0 ? (
               <p className="no-shots-note">No shots logged for this team yet.</p>
             ) : (
-              <CourtShotChart shots={shots} interactive={false} />
+              <>
+                <CourtShotChart shots={shots} interactive={false} view={shotView} />
+                {shotView === 'zones' && <ZoneSummary shots={shots} />}
+              </>
             )}
           </div>
         </div>
@@ -1359,5 +1423,29 @@ function GameTypeChips({ counts, value, onChange }: { counts: Record<GameTypeFil
         </button>
       ))}
     </div>
+  )
+}
+
+// The hottest and coldest areas in words, under the zones view (areas with
+// at least 3 shots - one make from one try says nothing).
+function ZoneSummary({ shots }: { shots: ShotDto[] }) {
+  const zones = shotZones(shots).filter((z) => z.tried >= 3).sort((a, b) => b.made / b.tried - a.made / a.tried)
+  if (zones.length < 2) return null
+  const [hot, cold] = [zones[0], zones[zones.length - 1]]
+  const pct = (z: (typeof zones)[number]) => Math.round((z.made / z.tried) * 100)
+  return (
+    <p className="zone-summary">
+      Hottest: <b className={`zone-${zoneHeat(hot)}`}>{hot.label} {pct(hot)}%</b> ({hot.made}/{hot.tried}) · Coldest: <b className={`zone-${zoneHeat(cold)}`}>{cold.label} {pct(cold)}%</b> ({cold.made}/{cold.tried})
+    </p>
+  )
+}
+
+// A table's date - in full, or short ("23/10/26") in a phone's table.
+function GameDateCell({ date }: { date: string }) {
+  return (
+    <>
+      <span className="date-long">{formatGameDateOnly(date)}</span>
+      <span className="date-short">{new Date(date).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: '2-digit' })}</span>
+    </>
   )
 }

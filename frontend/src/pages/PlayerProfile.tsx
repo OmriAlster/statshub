@@ -103,6 +103,10 @@ export default function PlayerProfile() {
       setLoading(true)
       if (isPlayerRole && user?.linkedPlayer) {
         setPlayers([user.linkedPlayer])
+        // Their IBBA link, to show (a parent's to change).
+        const me = user.linkedPlayer.id
+        const link = await api.get<IbbaLinkStatusDto>(`/players/${me}/ibba`).then((res) => res.data).catch(() => null)
+        setIbbaLinks({ [me]: link })
       } else {
         // (No separate team list anymore - "add an existing team" is gone,
         // teams are created here or linked from IBBA.)
@@ -579,7 +583,8 @@ export default function PlayerProfile() {
                             {!!ibbaTeam.position && ibbaTeam.position > 0 && ` · ${ibbaTeam.position} of ${ibbaTeam.totalTeams}`}
                           </button>
                         )}
-                        {!isPlayerRole ? (
+                        {/* The number shows on the crest's badge; a parent edits it here. */}
+                        {!isPlayerRole && (
                           <div className="tcv2-jersey-row">
                             <label htmlFor={`jersey-${player.id}-${t.id}`}>Jersey</label>
                             <input
@@ -594,8 +599,6 @@ export default function PlayerProfile() {
                               onBlur={() => commitJerseyEdit(player.id, t.id)}
                             />
                           </div>
-                        ) : (
-                          <span className="player-card-number">#{t.jerseyNumber}</span>
                         )}
                       </div>
                       {!isPlayerRole && (
@@ -653,6 +656,7 @@ export default function PlayerProfile() {
               )}
             </div>
 
+            {(!isPlayerRole || ibbaLinks[player.id]) && (
             <div className="ibba-connect-box">
               {ibbaLinks[player.id] ? (
                 <>
@@ -672,7 +676,7 @@ export default function PlayerProfile() {
                   )}
                   {/* The player's IBBA teams show once, in the team list above (with
                       their league and standings) - here only what needs a decision. */}
-                  {(() => {
+                  {!isPlayerRole && (() => {
                     const pending = ibbaLinks[player.id]!.teams.filter((t) => !t.linkedTeamId).length
                     return pending > 0 ? (
                       <div className="ibba-pending-row">
@@ -681,6 +685,7 @@ export default function PlayerProfile() {
                       </div>
                     ) : null
                   })()}
+                  {!isPlayerRole && (
                   <div className="flex gap-1" style={{ marginTop: '0.75rem' }}>
                     <button className="add-team-btn" disabled={ibbaBusy[player.id]} onClick={() => syncIbba(player.id)}>
                       {ibbaBusy[player.id] ? <Busy>Syncing…</Busy> : '🔄 Sync Now'}
@@ -689,6 +694,7 @@ export default function PlayerProfile() {
                       Disconnect from {ibbaLinks[player.id]!.leagueName}
                     </button>
                   </div>
+                  )}
                 </>
               ) : (
                 <>
@@ -729,6 +735,7 @@ export default function PlayerProfile() {
                 </>
               )}
             </div>
+            )}
 
             <div className="team-section">
               <p className="profile-section-label">Connected Parents</p>
