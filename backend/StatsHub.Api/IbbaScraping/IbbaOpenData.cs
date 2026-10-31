@@ -250,12 +250,17 @@ public class IbbaOpenData
     /// The players' lines of a game, by player id - across both teams. A
     /// game's address is its code (/match/781683/). Empty when the league
     /// published none (youth leagues), null when the game isn't there.
+    /// viaPage: when the API's list leaves the game out, find it through its
+    /// page (slower - asked only once the league is known to publish lines).
     /// </summary>
-    public async Task<Dictionary<string, Dictionary<string, JsonElement>>?> GetGameLinesAsync(string gameCode)
+    public async Task<Dictionary<string, Dictionary<string, JsonElement>>?> GetGameLinesAsync(string gameCode, bool viaPage = true)
     {
         using var timing = RequestTimings.Time("ibba-api-game");
         var games = await GetAsync<List<GameLinesJson>>($"{Api}/events?slug={Uri.EscapeDataString(gameCode)}&_fields=id,performance");
-        var game = games?.FirstOrDefault();
+        // The API's game lists leave some finished games out (a team's first
+        // weeks - seen October 2026) that it still serves by id; the game's
+        // page names its id (postid-NNNN).
+        var game = games?.FirstOrDefault() ?? (viaPage ? await GameByPageAsync(gameCode) : null);
         if (game == null) return null;
 
         var lines = new Dictionary<string, Dictionary<string, JsonElement>>();
@@ -274,13 +279,28 @@ public class IbbaOpenData
         return lines;
     }
 
+    // A game's id never changes - its page is read once.
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, string> EventIdByCode = new();
+
+    private async Task<GameLinesJson?> GameByPageAsync(string gameCode)
+    {
+        if (!EventIdByCode.TryGetValue(gameCode, out var eventId))
+        {
+            string page;
+            try { page = await _http.GetStringAsync($"https://ibasketball.co.il/match/{Uri.EscapeDataString(gameCode)}/"); }
+            catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException) { return null; }
+            var id = System.Text.RegularExpressions.Regex.Match(page, @"postid-(\d+)");
+            if (!id.Success) return null;
+            eventId = EventIdByCode[gameCode] = id.Groups[1].Value;
+        }
+        return await GetAsync<GameLinesJson>($"{Api}/events/{eventId}?_fields=id,performance");
+    }
+
     // The league's columns: fgm/fga are two-pointers (pts = 2*fgm + 3*threepm + ftm).
     public static LeagueBoxScore ToBoxScore(Dictionary<string, JsonElement> line)
     {
         int N(string key) => line.TryGetValue(key, out var v) ? IntOrNull(v) ?? 0 : 0;
-        var minutes = line.TryGetValue("min", out var min) && min.ValueKind == JsonValueKind.String && min.GetString() is { } text && text.Contains(':')
-            ? int.TryParse(text.Split(':')[0], out var m) ? m : 0
-            : N("mins");
+        var minutes = line.TryGetValue("min", out var min) && min.ValueKind == JsonValueKind.String ? MinutesOf(min.GetString()) : N("mins");
         return new LeagueBoxScore
         {
             TwoPointersMade = N("fgm"),
@@ -322,6 +342,17 @@ public class IbbaOpenData
         foreach (var cell in cells)
             if (cell.ValueKind == JsonValueKind.Object)
                 yield return cell.EnumerateObject().ToDictionary(p => p.Name, p => p.Value);
+    }
+
+    // Time played as the league writes it - "00:30:47" (h:m:s) or "30:47" -
+    // in whole minutes, rounded.
+    private static int MinutesOf(string? text)
+    {
+        var parts = (text ?? "").Split(':');
+        if (parts.Length < 2 || parts.Any(p => !int.TryParse(p, out _))) return 0;
+        var n = parts.Select(int.Parse).ToArray();
+        var (h, m, s) = n.Length == 3 ? (n[0], n[1], n[2]) : (0, n[0], n[1]);
+        return h * 60 + m + (s >= 30 ? 1 : 0);
     }
 
     private static int IntOf(JsonElement value) =>

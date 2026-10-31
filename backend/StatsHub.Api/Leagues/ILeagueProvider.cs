@@ -80,6 +80,9 @@ public interface ILeagueProvider
     Task<Dictionary<string, LeagueBoxScore>> GetBoxScoresAsync(string playerUrl, IReadOnlyCollection<string> gameCodes) =>
         Task.FromResult(new Dictionary<string, LeagueBoxScore>());
 
+    /// <summary>Whether this league (by its name) publishes players' lines at all - the rest aren't asked.</summary>
+    bool PublishesBoxScores(string? leagueName) => true;
+
     /// <summary>The cups a team plays in this season, each as its bracket - none when the league publishes none.</summary>
     Task<List<LeagueCup>> GetCupsAsync(string teamUrl) => Task.FromResult(new List<LeagueCup>());
 }

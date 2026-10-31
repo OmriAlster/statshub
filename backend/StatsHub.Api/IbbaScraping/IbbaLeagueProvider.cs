@@ -208,21 +208,47 @@ public class IbbaLeagueProvider : ILeagueProvider
 
     // Each game's published lines (the open data's game - its address is its
     // code), and the player's own id from their page, read only when some
-    // game has lines at all.
+    // game has lines at all. Most leagues publish none, so a game the API's
+    // list leaves out is looked up through its page only once the league is
+    // known to publish: another game has lines, or - when the list has none
+    // of the games - the first one's page shows lines. The first code is the
+    // newest game that's had time for its line (the caller orders them).
+    // The leagues IBBA publishes players' lines for - checked October 2026
+    // across this season's games: every other league (youth below the top
+    // tier, district leagues, cups) had none, and so did the men's top
+    // league (its lines live on the Winner league's own site).
+    private static readonly HashSet<string> LeaguesWithLines =
+        ["לאומית", "ארצית צפון", "ארצית דרום", "נוער על צפון", "נוער על דרום", "ליגת על נשים", "לאומית נשים", "נערות א על"];
+
+    public bool PublishesBoxScores(string? leagueName) => leagueName != null && LeaguesWithLines.Contains(leagueName.Trim());
+
     public async Task<Dictionary<string, LeagueBoxScore>> GetBoxScoresAsync(string playerUrl, IReadOnlyCollection<string> gameCodes)
     {
         var openData = OpenData();
-        var withLines = new Dictionary<string, Dictionary<string, Dictionary<string, System.Text.Json.JsonElement>>>();
-        foreach (var code in gameCodes)
+        var codes = gameCodes.ToList();
+        var listed = new System.Collections.Concurrent.ConcurrentDictionary<string, Dictionary<string, Dictionary<string, System.Text.Json.JsonElement>>?>();
+        await Parallel.ForEachAsync(codes, new ParallelOptions { MaxDegreeOfParallelism = 4 }, async (code, _) =>
+            listed[code] = await openData.GetGameLinesAsync(code, viaPage: false));
+
+        var withLines = listed.Where(g => g.Value is { Count: > 0 }).ToDictionary(g => g.Key, g => g.Value!);
+        var unlisted = codes.Where(c => listed[c] == null).ToList();
+        if (withLines.Count == 0 && unlisted.Count == codes.Count && unlisted.Count > 0)
         {
-            var lines = await openData.GetGameLinesAsync(code);
-            if (lines is { Count: > 0 }) withLines[code] = lines;
+            var newest = await openData.GetGameLinesAsync(unlisted[0]);
+            unlisted.RemoveAt(0);
+            if (newest is { Count: > 0 }) withLines[codes[0]] = newest;
         }
         if (withLines.Count == 0) return [];
 
+        var found = new System.Collections.Concurrent.ConcurrentDictionary<string, Dictionary<string, Dictionary<string, System.Text.Json.JsonElement>>>(withLines);
+        await Parallel.ForEachAsync(unlisted, new ParallelOptions { MaxDegreeOfParallelism = 4 }, async (code, _) =>
+        {
+            if (await openData.GetGameLinesAsync(code) is { Count: > 0 } lines) found[code] = lines;
+        });
+
         var playerId = await new IbbaPlayerScraper(Http()).GetPlayerSiteIdAsync(playerUrl);
         if (playerId == null) return [];
-        return withLines
+        return found
             .Select(g => (Code: g.Key, Line: g.Value.GetValueOrDefault(playerId)))
             .Where(g => g.Line != null)
             .ToDictionary(g => g.Code, g => IbbaOpenData.ToBoxScore(g.Line!));

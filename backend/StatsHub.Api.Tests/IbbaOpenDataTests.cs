@@ -278,6 +278,70 @@ public class IbbaOpenDataTests
 
         var line = Assert.Single(lines).Value; // the youth game published none
         Assert.Equal((4, 9, 1, 3, 3, 4), (line.TwoPointersMade, line.TwoPointersAttempted, line.ThreePointersMade, line.ThreePointersAttempted, line.FreeThrowsMade, line.FreeThrowsAttempted));
-        Assert.Equal((1, 5, 3, 2, 0, 2, 3, 24), (line.OffensiveRebounds, line.DefensiveRebounds, line.Assists, line.Steals, line.Blocks, line.Turnovers, line.Fouls, line.Minutes));
+        Assert.Equal((1, 5, 3, 2, 0, 2, 3, 25), (line.OffensiveRebounds, line.DefensiveRebounds, line.Assists, line.Steals, line.Blocks, line.Turnovers, line.Fouls, line.Minutes)); // 24:43 - 25 minutes
     }
+
+    [Fact]
+    public async Task A_game_the_APIs_list_leaves_out_is_found_through_its_page_and_hours_minutes_seconds_are_read()
+    {
+        var site = new Site(new()
+        {
+            [$"{Api}/events?slug=780125&_fields=id,performance"] = Json("[]"),
+            ["https://ibasketball.co.il/match/780125/"] = () => new StringContent("<html><body class='sp_event postid-1505450 single'></body></html>"),
+            [$"{Api}/events/1505450?_fields=id,performance"] = Json("""
+                {"id":1505450,"performance":{"168690":{"859506":{"pts":"14","fgm":"1","fga":"6","threepm":"4","threepa":"9","min":"00:34:33","mins":34.55}}}}
+                """),
+            [PlayerUrl] = () => new StringContent("<html><body class='sp_player postid-859506 single'></body></html>"),
+        });
+
+        var lines = await new IbbaLeagueProvider(new Factory(site)).GetBoxScoresAsync(PlayerUrl, ["780125"]);
+
+        var line = Assert.Single(lines).Value;
+        Assert.Equal((1, 6, 4, 9, 35), (line.TwoPointersMade, line.TwoPointersAttempted, line.ThreePointersMade, line.ThreePointersAttempted, line.Minutes));
+    }
+
+    [Fact]
+    public async Task A_league_that_publishes_no_lines_costs_no_game_pages()
+    {
+        var site = new Site(new()
+        {
+            [$"{Api}/events?slug=780300&_fields=id,performance"] = Json("""[{"id":7,"performance":[]}]"""),
+            [$"{Api}/events?slug=780125&_fields=id,performance"] = Json("[]"),
+            [$"{Api}/events?slug=780132&_fields=id,performance"] = Json("[]"),
+        });
+
+        var lines = await new IbbaLeagueProvider(new Factory(site)).GetBoxScoresAsync(PlayerUrl, ["780300", "780125", "780132"]);
+
+        Assert.Empty(lines);
+        Assert.DoesNotContain(site.Requested, u => u.Contains("/match/"));
+    }
+
+    [Fact]
+    public async Task When_the_list_has_none_of_the_games_only_the_newest_ones_page_is_read_to_see_whether_the_league_publishes()
+    {
+        var site = new Site(new()
+        {
+            [$"{Api}/events?slug=780132&_fields=id,performance"] = Json("[]"),
+            [$"{Api}/events?slug=780125&_fields=id,performance"] = Json("[]"),
+            ["https://ibasketball.co.il/match/780132/"] = () => new StringContent("<html><body class='sp_event postid-1505451'></body></html>"),
+            [$"{Api}/events/1505451?_fields=id,performance"] = Json("""{"id":1505451,"performance":[]}"""),
+        });
+
+        var lines = await new IbbaLeagueProvider(new Factory(site)).GetBoxScoresAsync(PlayerUrl, ["780132", "780125"]);
+
+        Assert.Empty(lines);
+        Assert.Equal(["https://ibasketball.co.il/match/780132/"], site.Requested.Where(u => u.Contains("/match/")).ToArray());
+    }
+
+    [Theory]
+    [InlineData("לאומית", true)]
+    [InlineData("ארצית דרום", true)]
+    [InlineData("נוער על צפון", true)]
+    [InlineData("נערות א על", true)]
+    [InlineData("ליגת על", false)]          // the Winner league's lines aren't on IBBA
+    [InlineData("נוער לאומית צפון", false)]
+    [InlineData("נערים ב לאומית צפון", false)]
+    [InlineData(null, false)]
+    public void Only_the_leagues_that_publish_players_lines_are_asked(string? league, bool asked) =>
+        Assert.Equal(asked, new IbbaLeagueProvider(new Factory(new Site(new()))).PublishesBoxScores(league));
 }
