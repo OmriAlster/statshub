@@ -6710,3 +6710,211 @@ a.game-card:active {
 
 .field-hint { font-size: 0.75rem; color: var(--color-text-muted); }
 
+/* ---- First-run guide ---- */
+.guide-layer { position: fixed; inset: 0; z-index: 2000; pointer-events: none; }
+
+/* The spotlight: everything around the real button dims; the page still works. */
+.guide-spot {
+  position: fixed;
+  border-radius: 14px;
+  box-shadow: 0 0 0 2px var(--color-accent), 0 0 0 9999px rgba(5, 6, 12, 0.66);
+  transition: top 0.35s ease, left 0.35s ease, width 0.35s ease, height 0.35s ease;
+  pointer-events: none;
+}
+
+.guide-tip {
+  position: fixed;
+  pointer-events: auto;
+  background: #fff;
+  color: #10121e;
+  border-radius: 16px;
+  padding: 0.85rem 1rem;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  transition: top 0.35s ease, left 0.35s ease;
+}
+
+.guide-tip strong { font-size: 0.95rem; }
+.guide-tip p { margin: 0; font-size: 0.85rem; line-height: 1.45; color: #3b3f5c; }
+
+.guide-tip-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-top: 0.25rem;
+  font-size: 0.78rem;
+  color: #6b6f8f;
+}
+
+.guide-tip-actions { display: inline-flex; align-items: center; gap: 0.4rem; }
+
+.guide-tip .guide-skip,
+.guide-tip .guide-next {
+  border: none;
+  box-shadow: none;
+  border-radius: 999px;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  min-height: 34px;
+}
+
+.guide-tip .guide-skip { background: transparent; color: #6b6f8f; padding: 0 0.5rem; }
+.guide-tip .guide-next { background: var(--color-accent); color: #1a0d00; padding: 0 0.95rem; }
+.guide-tip .guide-skip:hover,
+.guide-tip .guide-next:hover { transform: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .guide-spot, .guide-tip { transition: none; }
+}
+
+/* Welcome: a sheet from the bottom on a phone, a card on a computer. */
+.guide-welcome-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  background: rgba(5, 6, 12, 0.78);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.guide-welcome {
+  width: 100%;
+  max-width: 440px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-strong);
+  border-radius: 26px 26px 0 0;
+  padding: 1.6rem 1.35rem 1.4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+@media (min-width: 700px) {
+  .guide-welcome-backdrop { align-items: center; }
+  .guide-welcome { border-radius: 26px; }
+}
+
+.guide-welcome h2 { margin: 0; font-family: var(--font-display); font-size: 1.5rem; }
+.guide-welcome p { margin: 0; color: var(--color-text-muted); line-height: 1.5; }
+
+.guide-steps { list-style: none; margin: 0.2rem 0; padding: 0; display: flex; flex-direction: column; gap: 0.6rem; }
+.guide-steps li { display: flex; align-items: center; gap: 0.7rem; font-weight: 600; }
+.guide-steps span {
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  border: 2px solid var(--color-border-strong);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.8rem;
+}
+
+.guide-welcome .guide-start {
+  min-height: 48px;
+  border: none;
+  border-radius: var(--radius-md);
+  background: var(--gradient-accent);
+  color: #1a0d00;
+  font-weight: 800;
+  font-size: 1rem;
+  box-shadow: var(--glow-accent);
+  cursor: pointer;
+}
+
+.guide-welcome .guide-later {
+  min-height: 40px;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  color: var(--color-text-muted);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* Getting started - the three first steps on the dashboard */
+.getting-started {
+  background: var(--color-surface-alt);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: 1rem 1.15rem;
+  margin-bottom: 1.25rem;
+}
+
+.getting-started-head { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
+.getting-started-head h3 { margin: 0; font-size: 1rem; }
+.getting-started-head h3 span { color: var(--color-text-muted); font-weight: 500; }
+
+.getting-started .getting-started-close {
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-muted);
+  box-shadow: none;
+  cursor: pointer;
+}
+
+.getting-started ol { list-style: none; margin: 0.75rem 0 0; padding: 0; display: flex; flex-direction: column; gap: 0.6rem; }
+.getting-started li { display: flex; align-items: flex-start; gap: 0.7rem; }
+.getting-started li.done .getting-started-text > span:first-child { color: var(--color-text-muted); text-decoration: line-through; }
+
+.getting-started-mark {
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  border: 2px solid var(--color-border-strong);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.getting-started li.done .getting-started-mark { background: var(--color-success); border-color: var(--color-success); color: #062016; }
+
+.getting-started-text { display: flex; flex-direction: column; gap: 0.15rem; font-weight: 600; }
+.getting-started-hint { font-size: 0.82rem; font-weight: 400; color: var(--color-text-muted); }
+.getting-started-hint a { color: var(--color-accent-bright); }
+
+.getting-started .getting-started-link {
+  background: none;
+  border: none;
+  box-shadow: none;
+  padding: 0;
+  color: var(--color-text-muted);
+  text-decoration: underline;
+  font: inherit;
+  cursor: pointer;
+}
+
+/* "?" next to the notifications bell */
+.help-btn {
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  border: 1px solid var(--color-border-strong);
+  background: transparent;
+  color: var(--color-text);
+  font-weight: 800;
+  font-size: 0.95rem;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.help-btn:hover { border-color: var(--color-accent); }
