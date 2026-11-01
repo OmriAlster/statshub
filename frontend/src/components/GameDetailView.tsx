@@ -5,7 +5,7 @@ import CourtShotChart from './CourtShotChart'
 import GameStatusBadge, { onCourtIn } from './GameStatusBadge'
 import LeagueBadge from './LeagueBadge'
 import NavigateButtons from './NavigateButtons'
-import { madeOf, sheetMismatch, show, showPct } from '../utils/statLines'
+import { madeOf, sheetMismatch, sheetOff, show, showPct } from '../utils/statLines'
 import { SheetDiffTable } from './SheetMismatch'
 
 interface GameDetailViewProps {
@@ -60,7 +60,9 @@ export default function GameDetailView({ game, headerActions }: GameDetailViewPr
         </div>
       )}
 
-      {game.playerStats.map((stats) => (
+      {game.playerStats.map((stats) => {
+        const off = sheetOff(stats)
+        return (
         <div key={stats.id} className="stats-card-enhanced" style={{ marginTop: '1.75rem' }}>
           <div className="player-header-enhanced">
             <div className="player-info">
@@ -76,7 +78,7 @@ export default function GameDetailView({ game, headerActions }: GameDetailViewPr
           <div className="primary-stats">
             <h4>Box Score</h4>
             <div className="stats-grid-enhanced">
-              <div className="stat-box-enhanced featured">
+              <div className={`stat-box-enhanced featured ${off('points')}`}>
                 <span className="stat-value">{stats.totalPoints}</span>
                 <span className="stat-label">PTS</span>
               </div>
@@ -101,7 +103,7 @@ export default function GameDetailView({ game, headerActions }: GameDetailViewPr
                 <span className="stat-value">{show(stats.turnovers)}</span>
                 <span className="stat-label">TO</span>
               </div>
-              <div className="stat-box-enhanced">
+              <div className={`stat-box-enhanced ${off('fouls')}`}>
                 <span className="stat-value">{stats.fouls}</span>
                 <span className="stat-label">FOULS</span>
               </div>
@@ -112,17 +114,17 @@ export default function GameDetailView({ game, headerActions }: GameDetailViewPr
             <h4>Shooting</h4>
             <div className="percentage-bars">
               <div className="percentage-item">
-                <div className="percentage-label">2PT {madeOf(stats.fieldGoalsMade, stats.fieldGoalsAttempted)}</div>
+                <div className={`percentage-label ${off('two')}`}>2PT {madeOf(stats.fieldGoalsMade, stats.fieldGoalsAttempted)}</div>
                 <div className="percentage-bar"><div className="percentage-fill" style={{ width: `${stats.fieldGoalPercentage ?? 0}%` }} /></div>
                 <span className="percentage-value">{showPct(stats.fieldGoalPercentage)}</span>
               </div>
               <div className="percentage-item">
-                <div className="percentage-label">3PT {madeOf(stats.threePointersMade, stats.threePointersAttempted)}</div>
+                <div className={`percentage-label ${off('three')}`}>3PT {madeOf(stats.threePointersMade, stats.threePointersAttempted)}</div>
                 <div className="percentage-bar"><div className="percentage-fill" style={{ width: `${stats.threePointPercentage ?? 0}%` }} /></div>
                 <span className="percentage-value">{showPct(stats.threePointPercentage)}</span>
               </div>
               <div className="percentage-item">
-                <div className="percentage-label">FT {madeOf(stats.freeThrowsMade, stats.freeThrowsAttempted)}</div>
+                <div className={`percentage-label ${off('ft')}`}>FT {madeOf(stats.freeThrowsMade, stats.freeThrowsAttempted)}</div>
                 <div className="percentage-bar"><div className="percentage-fill" style={{ width: `${stats.freeThrowPercentage ?? 0}%` }} /></div>
                 <span className="percentage-value">{showPct(stats.freeThrowPercentage)}</span>
               </div>
@@ -138,7 +140,8 @@ export default function GameDetailView({ game, headerActions }: GameDetailViewPr
             )}
           </div>
         </div>
-      ))}
+        )
+      })}
     </div>
   )
 }

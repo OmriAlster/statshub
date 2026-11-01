@@ -37,7 +37,7 @@ import BouncingBall, { Busy } from '../components/BouncingBall'
 import { GameTypeBadge, HomeAway } from '../components/GameBadges'
 import Modal from '../components/Modal'
 import { LeagueMark, LeagueName } from '../components/LeagueBadge'
-import { average, madeAverage, madeOf, show, showPct } from '../utils/statLines'
+import { average, madeAverage, madeOf, sheetOff, show, showPct } from '../utils/statLines'
 import SheetMismatch from '../components/SheetMismatch'
 
 export default function Stats() {
@@ -540,6 +540,7 @@ function StatsPanel({ games, playerId, typeFilter }: { games: GameDto[]; playerI
                 const stats = game.playerStats[0]
                 const won = (game.teamScore ?? 0) > (game.opponentScore ?? 0)
                 const counted = isCounted(game)
+                const off = sheetOff(stats)
                 return (
                   <tr key={game.id} className={counted ? '' : 'not-counted-row'} title={counted ? undefined : 'Friendly - not counted in stats'}>
                     <td>
@@ -561,12 +562,12 @@ function StatsPanel({ games, playerId, typeFilter }: { games: GameDto[]; playerI
                       </span>
                     </td>
                     <td className={`num ${won ? 'win' : 'loss'}`}>
-                      {game.teamScore}&ndash;{game.opponentScore}
+                      <span className="score-cell">{game.teamScore}&ndash;{game.opponentScore}<SheetMismatch stats={stats} /></span>
                     </td>
-                    <td className="num">{stats?.totalPoints ?? '-'}<SheetMismatch stats={stats} /></td>
-                    <td className="num">{stats ? madeOf(stats.fieldGoalsMade, stats.fieldGoalsAttempted) : '-'}</td>
-                    <td className="num">{stats ? madeOf(stats.threePointersMade, stats.threePointersAttempted) : '-'}</td>
-                    <td className="num">{stats ? madeOf(stats.freeThrowsMade, stats.freeThrowsAttempted) : '-'}</td>
+                    <td className={`num ${off('points')}`}>{stats?.totalPoints ?? '-'}</td>
+                    <td className={`num ${off('two')}`}>{stats ? madeOf(stats.fieldGoalsMade, stats.fieldGoalsAttempted) : '-'}</td>
+                    <td className={`num ${off('three')}`}>{stats ? madeOf(stats.threePointersMade, stats.threePointersAttempted) : '-'}</td>
+                    <td className={`num ${off('ft')}`}>{stats ? madeOf(stats.freeThrowsMade, stats.freeThrowsAttempted) : '-'}</td>
                     <td className="num">{stats?.totalRebounds ?? '-'}</td>
                     <td className="num">{stats?.assists ?? '-'}</td>
                     <td className="num">{stats?.steals ?? '-'}</td>

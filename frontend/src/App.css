@@ -2339,11 +2339,23 @@ select:focus {
 .sheet-mismatch {
   position: relative;
   display: inline-flex;
-  vertical-align: middle;
-  margin-inline-start: 0.3rem;
+  align-items: center;
   font-family: var(--font-sans);
   font-weight: 600;
   line-height: 1.3;
+}
+
+/* A card's result with its "!" - one centred row. */
+.game-card-end {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.score-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
 }
 
 .sheet-mismatch-icon {
@@ -2373,7 +2385,7 @@ select:focus {
   position: absolute;
   z-index: 30;
   top: calc(100% + 0.4rem);
-  inset-inline-start: -0.5rem;
+  inset-inline-end: -0.25rem;
   display: grid;
   gap: 0.45rem;
   min-width: 13rem;
@@ -5805,32 +5817,6 @@ a.game-card:active {
   color: var(--color-text-faint);
 }
 
-/* The "!" popup sits inside a card's points - none of the card's number and
-   label styling applies to it. */
-.game-card-stats .sheet-mismatch-pop b {
-  font: 600 0.85rem/1.3 var(--font-sans);
-  color: var(--color-text);
-}
-
-.game-card-stats .sheet-mismatch span {
-  font-size: 0.8rem;
-  font-weight: inherit;
-  letter-spacing: normal;
-  color: inherit;
-}
-
-.game-card-stats .sheet-mismatch .sheet-mismatch-icon {
-  font-size: 0.75rem;
-  font-weight: 800;
-  color: #1a1400;
-}
-
-.game-card-stats .sheet-diff-row.head span {
-  font-size: 0.7rem;
-  letter-spacing: 0.05em;
-  color: var(--color-text-faint);
-}
-
 .game-card-shooting {
   display: flex;
   justify-content: space-around;
@@ -7676,3 +7662,38 @@ a.insight-card:hover { border-color: var(--color-accent); }
 .lab-number .lab-source { display: block; margin-top: 0.15rem; }
 .lab-comp { display: inline-block; padding: 0.1rem 0.5rem; border-radius: var(--radius-pill); font-size: 0.7rem; font-weight: 800; background: var(--color-info-soft); color: var(--color-info); }
 .lab-comp.cup { background: var(--color-gold-soft); color: var(--color-gold); }
+
+/* Kept last: it must win over each stat's own colour. */
+/* A number IBBA's scoresheet disagrees with. */
+.sheet-off,
+.sheet-off b,
+.percentage-label.sheet-off,
+.game-card-shooting .sheet-off b,
+.stat-box-enhanced.featured.sheet-off .stat-value,
+.game-card-stats .sheet-off b,
+.game-card-stats .gcs-pts.sheet-off b,
+.stat-box-enhanced.sheet-off .stat-value,
+.games-table td.sheet-off {
+  color: var(--color-gold);
+}
+
+/* ...on a soft yellow ground, so it doesn't pass for the points' own orange. */
+.game-card-stats .sheet-off,
+.game-card-shooting .sheet-off,
+.percentage-label.sheet-off,
+.games-table td.sheet-off {
+  background: var(--color-gold-soft);
+  border-radius: 6px;
+}
+
+.game-card-shooting .sheet-off,
+.percentage-label.sheet-off {
+  padding: 0 0.35rem;
+  justify-self: start;
+}
+
+.stat-box-enhanced.sheet-off {
+  background: var(--color-gold-soft);
+  border-color: var(--color-gold);
+  box-shadow: 0 0 0 1px var(--color-gold-soft);
+}

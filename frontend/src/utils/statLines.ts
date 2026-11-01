@@ -41,7 +41,8 @@ export function shooting<T>(items: T[], made: (item: T) => number, tried: (item:
 export const fieldGoalAttempts = (l: GameStatsDto) =>
   l.fieldGoalsAttempted === null || l.threePointersAttempted === null ? null : l.fieldGoalsAttempted + l.threePointersAttempted
 
-export interface SheetRow { label: string; recorded: number; sheet: number; differs: boolean }
+export type SheetStat = 'points' | 'two' | 'three' | 'ft' | 'fouls'
+export interface SheetRow { stat: SheetStat; label: string; recorded: number; sheet: number; differs: boolean }
 
 // The recorded numbers next to IBBA's scoresheet, when they don't match: the
 // scoring, and the fouls when any were recorded (0 is usually "not tracked").
@@ -51,12 +52,18 @@ export function sheetMismatch(stats: GameStatsDto | undefined): SheetRow[] | nul
   const sheet = stats?.scoresheet
   if (!stats || !sheet || stats.source) return null
   const rows = [
-    { label: 'Points', recorded: stats.totalPoints, sheet: sheet.points, counts: true },
-    { label: '2PT made', recorded: stats.fieldGoalsMade, sheet: sheet.twoPointers, counts: true },
-    { label: '3PT made', recorded: stats.threePointersMade, sheet: sheet.threePointers, counts: true },
-    { label: 'FT made', recorded: stats.freeThrowsMade, sheet: sheet.freeThrows, counts: true },
-    { label: 'Fouls', recorded: stats.fouls, sheet: sheet.fouls, counts: stats.fouls > 0 },
+    { stat: 'points' as const, label: 'Points', recorded: stats.totalPoints, sheet: sheet.points, counts: true },
+    { stat: 'two' as const, label: '2PT made', recorded: stats.fieldGoalsMade, sheet: sheet.twoPointers, counts: true },
+    { stat: 'three' as const, label: '3PT made', recorded: stats.threePointersMade, sheet: sheet.threePointers, counts: true },
+    { stat: 'ft' as const, label: 'FT made', recorded: stats.freeThrowsMade, sheet: sheet.freeThrows, counts: true },
+    { stat: 'fouls' as const, label: 'Fouls', recorded: stats.fouls, sheet: sheet.fouls, counts: stats.fouls > 0 },
   ]
   if (!rows.some((r) => r.counts && r.recorded !== r.sheet)) return null
-  return rows.map(({ label, recorded, sheet: onSheet }) => ({ label, recorded, sheet: onSheet, differs: recorded !== onSheet }))
+  return rows.map(({ stat, label, recorded, sheet: onSheet }) => ({ stat, label, recorded, sheet: onSheet, differs: recorded !== onSheet }))
+}
+
+// The class that marks a stat IBBA's scoresheet disagrees with ("" when it doesn't).
+export function sheetOff(stats: GameStatsDto | undefined) {
+  const differs = new Set((sheetMismatch(stats) ?? []).filter((r) => r.differs).map((r) => r.stat))
+  return (stat: SheetStat) => (differs.has(stat) ? 'sheet-off' : '')
 }
