@@ -5,6 +5,7 @@ import { countsTowardStats } from '../utils/countedGames'
 import { formatGameTime } from '../utils/formatGameDate'
 import GameStatusBadge, { onCourtIn } from './GameStatusBadge'
 import { GameTypeBadge, HomeAway } from './GameBadges'
+import { madeOf, show } from '../utils/statLines'
 
 // Phone layout for the Stats and Schedule tables: a 5-13 column table can't
 // fit a phone screen (only Opponent and Date were visible, everything else
@@ -95,16 +96,17 @@ export function StatsGameCards({
                 <>
                   <div className="game-card-stats">
                     <div className="gcs-pts"><b>{stats.totalPoints}</b><span>PTS</span></div>
-                    <div><b>{stats.totalRebounds}</b><span>REB</span></div>
-                    <div><b>{stats.assists}</b><span>AST</span></div>
-                    <div><b>{stats.steals}</b><span>STL</span></div>
-                    <div><b>{stats.blocks}</b><span>BLK</span></div>
-                    <div><b>{stats.turnovers}</b><span>TO</span></div>
+                    <div><b>{show(stats.totalRebounds)}</b><span>REB</span></div>
+                    <div><b>{show(stats.assists)}</b><span>AST</span></div>
+                    <div><b>{show(stats.steals)}</b><span>STL</span></div>
+                    <div><b>{show(stats.blocks)}</b><span>BLK</span></div>
+                    <div><b>{show(stats.turnovers)}</b><span>TO</span></div>
                   </div>
                   <div className="game-card-shooting">
-                    <span>2PT <b>{stats.fieldGoalsMade}/{stats.fieldGoalsAttempted}</b></span>
-                    <span>3PT <b>{stats.threePointersMade}/{stats.threePointersAttempted}</b></span>
-                    <span>FT <b>{stats.freeThrowsMade}/{stats.freeThrowsAttempted}</b></span>
+                    <span>2PT <b>{madeOf(stats.fieldGoalsMade, stats.fieldGoalsAttempted)}</b></span>
+                    <span>3PT <b>{madeOf(stats.threePointersMade, stats.threePointersAttempted)}</b></span>
+                    <span>FT <b>{madeOf(stats.freeThrowsMade, stats.freeThrowsAttempted)}</b></span>
+                    {stats.source && <span className="stats-source">{stats.source === 'scoresheet' ? 'Scoresheet' : 'IBBA'}</span>}
                   </div>
                 </>
               ) : (

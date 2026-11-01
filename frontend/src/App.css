@@ -2305,6 +2305,47 @@ select:focus {
   font-size: 0.9rem;
 }
 
+/* Where a game's stats came from (IBBA's scoresheet or box score), and the
+   scoresheet's own line next to the parent's numbers. */
+.sheet-note {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0.9rem 0 1.1rem;
+  padding: 0.65rem 0.85rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-info-soft);
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+}
+
+.sheet-note p {
+  margin: 0;
+}
+
+.sheet-note b {
+  color: var(--color-text);
+}
+
+.sheet-note.differs {
+  background: var(--color-gold-soft);
+  border-color: var(--color-gold);
+}
+
+.sheet-note .sheet-warning {
+  color: var(--color-danger);
+}
+
+.stats-source {
+  margin-inline-start: auto;
+  padding: 0 0.45rem;
+  border-radius: var(--radius-pill);
+  background: var(--color-info-soft);
+  color: var(--color-info);
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+
 .games-badge {
   background: var(--color-success-soft);
   color: var(--color-success);

@@ -159,6 +159,9 @@ namespace StatsHub.Api.Data.Migrations.Sqlite
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("SwishMatchId")
+                        .HasColumnType("TEXT");
+
                     b.Property<int?>("TeamScore")
                         .HasColumnType("INTEGER");
 
@@ -184,19 +187,19 @@ namespace StatsHub.Api.Data.Migrations.Sqlite
                         .ValueGeneratedOnAdd()
                         .HasColumnType("TEXT");
 
-                    b.Property<int>("Assists")
+                    b.Property<int?>("Assists")
                         .HasColumnType("INTEGER");
 
-                    b.Property<int>("Blocks")
+                    b.Property<int?>("Blocks")
                         .HasColumnType("INTEGER");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("TEXT");
 
-                    b.Property<int>("DefensiveRebounds")
+                    b.Property<int?>("DefensiveRebounds")
                         .HasColumnType("INTEGER");
 
-                    b.Property<int>("FieldGoalsAttempted")
+                    b.Property<int?>("FieldGoalsAttempted")
                         .HasColumnType("INTEGER");
 
                     b.Property<int>("FieldGoalsMade")
@@ -205,7 +208,7 @@ namespace StatsHub.Api.Data.Migrations.Sqlite
                     b.Property<int>("Fouls")
                         .HasColumnType("INTEGER");
 
-                    b.Property<int>("FreeThrowsAttempted")
+                    b.Property<int?>("FreeThrowsAttempted")
                         .HasColumnType("INTEGER");
 
                     b.Property<int>("FreeThrowsMade")
@@ -214,10 +217,10 @@ namespace StatsHub.Api.Data.Migrations.Sqlite
                     b.Property<Guid>("GameId")
                         .HasColumnType("TEXT");
 
-                    b.Property<int>("MinutesPlayed")
+                    b.Property<int?>("MinutesPlayed")
                         .HasColumnType("INTEGER");
 
-                    b.Property<int>("OffensiveRebounds")
+                    b.Property<int?>("OffensiveRebounds")
                         .HasColumnType("INTEGER");
 
                     b.Property<bool?>("OnCourt")
@@ -226,16 +229,19 @@ namespace StatsHub.Api.Data.Migrations.Sqlite
                     b.Property<Guid>("PlayerId")
                         .HasColumnType("TEXT");
 
-                    b.Property<int>("Steals")
+                    b.Property<string>("Source")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("Steals")
                         .HasColumnType("INTEGER");
 
-                    b.Property<int>("ThreePointersAttempted")
+                    b.Property<int?>("ThreePointersAttempted")
                         .HasColumnType("INTEGER");
 
                     b.Property<int>("ThreePointersMade")
                         .HasColumnType("INTEGER");
 
-                    b.Property<int>("Turnovers")
+                    b.Property<int?>("Turnovers")
                         .HasColumnType("INTEGER");
 
                     b.Property<DateTime>("UpdatedAt")
@@ -460,6 +466,9 @@ namespace StatsHub.Api.Data.Migrations.Sqlite
                         .HasColumnType("TEXT")
                         .HasDefaultValue("ibba");
 
+                    b.Property<string>("ScoresheetCode")
+                        .HasColumnType("TEXT");
+
                     b.HasKey("Id");
 
                     b.HasIndex("PlayerId")
@@ -524,6 +533,11 @@ namespace StatsHub.Api.Data.Migrations.Sqlite
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("TEXT");
 
+                    b.Property<bool>("JerseyFromScoresheet")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(false);
+
                     b.Property<int>("JerseyNumber")
                         .HasColumnType("INTEGER");
 
@@ -575,6 +589,68 @@ namespace StatsHub.Api.Data.Migrations.Sqlite
                     b.HasIndex("UserId");
 
                     b.ToTable("PushSubscriptions");
+                });
+
+            modelBuilder.Entity("StatsHub.Api.Models.ScoresheetLine", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Fouls")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("FreeThrows")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("GameId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Number")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("Played")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("PlayerId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Points")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("SheetErrors")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("SheetValid")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("Starter")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("ThreePointers")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("TwoPointers")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PlayerId");
+
+                    b.HasIndex("GameId", "PlayerId")
+                        .IsUnique();
+
+                    b.ToTable("ScoresheetLines");
                 });
 
             modelBuilder.Entity("StatsHub.Api.Models.Season", b =>
@@ -939,6 +1015,25 @@ namespace StatsHub.Api.Data.Migrations.Sqlite
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("StatsHub.Api.Models.ScoresheetLine", b =>
+                {
+                    b.HasOne("StatsHub.Api.Models.Game", "Game")
+                        .WithMany("ScoresheetLines")
+                        .HasForeignKey("GameId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("StatsHub.Api.Models.Player", "Player")
+                        .WithMany()
+                        .HasForeignKey("PlayerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Game");
+
+                    b.Navigation("Player");
+                });
+
             modelBuilder.Entity("StatsHub.Api.Models.Season", b =>
                 {
                     b.HasOne("StatsHub.Api.Models.User", "User")
@@ -1007,6 +1102,8 @@ namespace StatsHub.Api.Data.Migrations.Sqlite
             modelBuilder.Entity("StatsHub.Api.Models.Game", b =>
                 {
                     b.Navigation("GameStats");
+
+                    b.Navigation("ScoresheetLines");
                 });
 
             modelBuilder.Entity("StatsHub.Api.Models.GameStats", b =>

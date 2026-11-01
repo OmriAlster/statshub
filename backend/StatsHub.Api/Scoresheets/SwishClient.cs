@@ -23,8 +23,10 @@ public sealed class SwishClient
 
     private (DateTime At, List<SwishCompetition> Items)? _competitions;
     private readonly ConcurrentDictionary<string, (DateTime At, SwishCalendar Calendar)> _calendars = new();
-    // A finished game's sheet doesn't change: kept for the life of the process.
-    private readonly ConcurrentDictionary<string, ParsedScoresheet?> _sheets = new();
+    // A finished game's sheet doesn't change: kept a day once there is one (what's read from
+    // it is saved anyway). "No sheet yet" isn't kept - it's asked again until one comes.
+    private readonly ConcurrentDictionary<string, (DateTime At, ParsedScoresheet Sheet)> _sheets = new();
+    private static readonly TimeSpan SheetFor = TimeSpan.FromDays(1);
 
     public SwishClient(IHttpClientFactory http, IConfiguration config, ILogger<SwishClient> log)
     {
@@ -63,7 +65,9 @@ public sealed class SwishClient
     // The game's scoresheet, read - null when the game has none.
     public async Task<ParsedScoresheet?> ScoresheetAsync(string matchId, CancellationToken ct)
     {
-        if (_sheets.TryGetValue(matchId, out var known)) return known;
+        if (_sheets.TryGetValue(matchId, out var known) && DateTime.UtcNow - known.At < SheetFor) return known.Sheet;
+        foreach (var stale in _sheets.Where(e => DateTime.UtcNow - e.Value.At >= SheetFor).Select(e => e.Key).ToList())
+            _sheets.TryRemove(stale, out _);
         var match = await GetAsync<SwishMatch>("match?id=" + Uri.EscapeDataString(matchId), ct);
         ParsedScoresheet? sheet = null;
         if (!string.IsNullOrWhiteSpace(match.ScoresheetUrl))
@@ -78,7 +82,7 @@ public sealed class SwishClient
                 _log.LogWarning(ex, "Could not read the scoresheet of Swish match {MatchId}", matchId);
             }
         }
-        _sheets[matchId] = sheet;
+        if (sheet != null) _sheets[matchId] = (DateTime.UtcNow, sheet);
         return sheet;
     }
 }

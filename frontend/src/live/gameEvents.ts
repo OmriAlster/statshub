@@ -33,19 +33,24 @@ export const EVENT_ICONS: Record<EventType, string> = {
   FOUL: 'i-foul',
 }
 
-export function computeStatsFromEvents(events: GameEvent[], minutesPlayed: number) {
+// A stat the saved line didn't have (null - a scoresheet's line has only the
+// made shots and fouls) stays unrecorded - left out, so the server keeps it
+// null - until something of its kind is tapped in.
+export function computeStatsFromEvents(events: GameEvent[], minutesPlayed: number | null, saved?: Partial<GameStatsDto>) {
   const count = (types: EventType[]) => events.filter((e) => types.includes(e.type)).length
+  const known = (value: number, types: EventType[], before: number | null | undefined) =>
+    before === null && count(types) === 0 ? undefined : value
   return {
     freeThrowsMade: count(['FT_MAKE']),
-    freeThrowsAttempted: count(['FT_MAKE', 'FT_MISS']),
-    offensiveRebounds: count(['OREB']),
-    defensiveRebounds: count(['DREB']),
-    assists: count(['AST']),
-    steals: count(['STL']),
-    blocks: count(['BLK']),
-    turnovers: count(['TO']),
+    freeThrowsAttempted: known(count(['FT_MAKE', 'FT_MISS']), ['FT_MISS'], saved?.freeThrowsAttempted),
+    offensiveRebounds: known(count(['OREB']), ['OREB'], saved?.offensiveRebounds),
+    defensiveRebounds: known(count(['DREB']), ['DREB'], saved?.defensiveRebounds),
+    assists: known(count(['AST']), ['AST'], saved?.assists),
+    steals: known(count(['STL']), ['STL'], saved?.steals),
+    blocks: known(count(['BLK']), ['BLK'], saved?.blocks),
+    turnovers: known(count(['TO']), ['TO'], saved?.turnovers),
     fouls: count(['FOUL']),
-    minutesPlayed,
+    minutesPlayed: minutesPlayed ?? undefined,
   }
 }
 
@@ -63,13 +68,13 @@ function seedId() {
 // they all seed into Q1 and only new edits get accurate quarters.
 export function seedEventsFromStats(stats: GameStatsDto): GameEvent[] {
   const events: GameEvent[] = []
-  const push = (type: EventType, n: number) => {
-    for (let i = 0; i < n; i++) {
+  const push = (type: EventType, n: number | null) => {
+    for (let i = 0; i < (n ?? 0); i++) {
       events.push({ id: seedId(), type, quarter: 1, display: EVENT_LABELS[type] })
     }
   }
   push('FT_MAKE', stats.freeThrowsMade)
-  push('FT_MISS', Math.max(0, stats.freeThrowsAttempted - stats.freeThrowsMade))
+  push('FT_MISS', stats.freeThrowsAttempted === null ? 0 : Math.max(0, stats.freeThrowsAttempted - stats.freeThrowsMade))
   push('OREB', stats.offensiveRebounds)
   push('DREB', stats.defensiveRebounds)
   push('AST', stats.assists)

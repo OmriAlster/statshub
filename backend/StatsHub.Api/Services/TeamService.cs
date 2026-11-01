@@ -137,6 +137,7 @@ namespace StatsHub.Api.Services
             if (membership == null) return false;
 
             membership.JerseyNumber = jerseyNumber;
+            membership.JerseyFromScoresheet = false;
             await _context.SaveChangesAsync();
             return true;
         }

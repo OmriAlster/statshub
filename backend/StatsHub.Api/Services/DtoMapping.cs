@@ -81,7 +81,24 @@ namespace StatsHub.Api.Services
                 IsFromIbba = isIbba,
                 League = game.Provider,
                 CanRecordLive = canRecordLive,
-                PlayerStats = game.GameStats.Select(ToDto).ToList()
+                PlayerStats = game.GameStats.Select(gs =>
+                {
+                    var dto = gs.ToDto();
+                    var line = game.ScoresheetLines.FirstOrDefault(l => l.PlayerId == gs.PlayerId);
+                    if (line != null) dto.Scoresheet = new ScoresheetLineDto
+                    {
+                        Number = line.Number,
+                        Starter = line.Starter,
+                        Points = line.Points,
+                        FreeThrows = line.FreeThrows,
+                        TwoPointers = line.TwoPointers,
+                        ThreePointers = line.ThreePointers,
+                        Fouls = line.Fouls,
+                        SheetValid = line.SheetValid,
+                        SheetErrors = line.SheetErrors,
+                    };
+                    return dto;
+                }).ToList()
             };
         }
 
@@ -92,6 +109,7 @@ namespace StatsHub.Api.Services
             GameId = gs.GameId,
             PlayerId = gs.PlayerId,
             PlayerName = $"{gs.Player.FirstName} {gs.Player.LastName}",
+            Source = gs.Source,
             FieldGoalsMade = gs.FieldGoalsMade,
             FieldGoalsAttempted = gs.FieldGoalsAttempted,
             FieldGoalPercentage = gs.FieldGoalPercentage,

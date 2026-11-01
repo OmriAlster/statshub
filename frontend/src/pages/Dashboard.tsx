@@ -17,6 +17,7 @@ import { useGuide } from '../guide/GuideContext'
 import GettingStarted from '../guide/GettingStarted'
 import CalendarButton from '../components/CalendarButton'
 import NavigateButtons from '../components/NavigateButtons'
+import { show } from '../utils/statLines'
 
 interface PlayerCard {
   player: PlayerDto
@@ -211,8 +212,8 @@ export default function Dashboard() {
                       </div>
                       <div className="pctr-stats">
                         <div><b>{s.pointsPerGame}</b><span>PPG</span></div>
-                        <div><b>{s.reboundsPerGame}</b><span>RPG</span></div>
-                        <div><b>{s.assistsPerGame}</b><span>APG</span></div>
+                        <div><b>{show(s.reboundsPerGame)}</b><span>RPG</span></div>
+                        <div><b>{show(s.assistsPerGame)}</b><span>APG</span></div>
                       </div>
                       {(last || next) && (
                         <div className="glance-grid">

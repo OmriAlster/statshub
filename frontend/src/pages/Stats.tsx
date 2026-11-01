@@ -37,6 +37,7 @@ import BouncingBall, { Busy } from '../components/BouncingBall'
 import { GameTypeBadge, HomeAway } from '../components/GameBadges'
 import Modal from '../components/Modal'
 import { LeagueMark, LeagueName } from '../components/LeagueBadge'
+import { average, madeOf, show, showPct } from '../utils/statLines'
 
 export default function Stats() {
   const { user } = useAuth()
@@ -468,16 +469,16 @@ function StatsPanel({ games, playerId, typeFilter }: { games: GameDto[]; playerI
           count: gamesWithStats.length,
           pts: ppg,
           fgm: avg((g) => g.playerStats[0]?.fieldGoalsMade ?? 0).toFixed(1),
-          fga: avg((g) => g.playerStats[0]?.fieldGoalsAttempted ?? 0).toFixed(1),
+          fga: show(average(gamesWithStats, (g) => g.playerStats[0]?.fieldGoalsAttempted), 1),
           tpm: avg((g) => g.playerStats[0]?.threePointersMade ?? 0).toFixed(1),
-          tpa: avg((g) => g.playerStats[0]?.threePointersAttempted ?? 0).toFixed(1),
+          tpa: show(average(gamesWithStats, (g) => g.playerStats[0]?.threePointersAttempted), 1),
           ftm: avg((g) => g.playerStats[0]?.freeThrowsMade ?? 0).toFixed(1),
-          fta: avg((g) => g.playerStats[0]?.freeThrowsAttempted ?? 0).toFixed(1),
-          reb: avg((g) => g.playerStats[0]?.totalRebounds ?? 0).toFixed(1),
-          ast: avg((g) => g.playerStats[0]?.assists ?? 0).toFixed(1),
-          stl: avg((g) => g.playerStats[0]?.steals ?? 0).toFixed(1),
-          blk: avg((g) => g.playerStats[0]?.blocks ?? 0).toFixed(1),
-          to: avg((g) => g.playerStats[0]?.turnovers ?? 0).toFixed(1),
+          fta: show(average(gamesWithStats, (g) => g.playerStats[0]?.freeThrowsAttempted), 1),
+          reb: show(average(gamesWithStats, (g) => g.playerStats[0]?.totalRebounds), 1),
+          ast: show(average(gamesWithStats, (g) => g.playerStats[0]?.assists), 1),
+          stl: show(average(gamesWithStats, (g) => g.playerStats[0]?.steals), 1),
+          blk: show(average(gamesWithStats, (g) => g.playerStats[0]?.blocks), 1),
+          to: show(average(gamesWithStats, (g) => g.playerStats[0]?.turnovers), 1),
         }
       : null
 
@@ -562,9 +563,9 @@ function StatsPanel({ games, playerId, typeFilter }: { games: GameDto[]; playerI
                       {game.teamScore}&ndash;{game.opponentScore}
                     </td>
                     <td className="num">{stats?.totalPoints ?? '-'}</td>
-                    <td className="num">{stats ? `${stats.fieldGoalsMade}/${stats.fieldGoalsAttempted}` : '-'}</td>
-                    <td className="num">{stats ? `${stats.threePointersMade}/${stats.threePointersAttempted}` : '-'}</td>
-                    <td className="num">{stats ? `${stats.freeThrowsMade}/${stats.freeThrowsAttempted}` : '-'}</td>
+                    <td className="num">{stats ? madeOf(stats.fieldGoalsMade, stats.fieldGoalsAttempted) : '-'}</td>
+                    <td className="num">{stats ? madeOf(stats.threePointersMade, stats.threePointersAttempted) : '-'}</td>
+                    <td className="num">{stats ? madeOf(stats.freeThrowsMade, stats.freeThrowsAttempted) : '-'}</td>
                     <td className="num">{stats?.totalRebounds ?? '-'}</td>
                     <td className="num">{stats?.assists ?? '-'}</td>
                     <td className="num">{stats?.steals ?? '-'}</td>
@@ -1138,20 +1139,20 @@ function QuickStatsForm({
   onSaved: (stats: GameStatsDto) => void
 }) {
   const [form, setForm] = useState({
-    fieldGoalsMade: String(initialStats.fieldGoalsMade),
-    fieldGoalsAttempted: String(initialStats.fieldGoalsAttempted),
-    threePointersMade: String(initialStats.threePointersMade),
-    threePointersAttempted: String(initialStats.threePointersAttempted),
-    freeThrowsMade: String(initialStats.freeThrowsMade),
-    freeThrowsAttempted: String(initialStats.freeThrowsAttempted),
-    offensiveRebounds: String(initialStats.offensiveRebounds),
-    defensiveRebounds: String(initialStats.defensiveRebounds),
-    assists: String(initialStats.assists),
-    steals: String(initialStats.steals),
-    blocks: String(initialStats.blocks),
-    turnovers: String(initialStats.turnovers),
-    fouls: String(initialStats.fouls),
-    minutesPlayed: String(initialStats.minutesPlayed),
+    fieldGoalsMade: String(initialStats.fieldGoalsMade ?? ''),
+    fieldGoalsAttempted: String(initialStats.fieldGoalsAttempted ?? ''),
+    threePointersMade: String(initialStats.threePointersMade ?? ''),
+    threePointersAttempted: String(initialStats.threePointersAttempted ?? ''),
+    freeThrowsMade: String(initialStats.freeThrowsMade ?? ''),
+    freeThrowsAttempted: String(initialStats.freeThrowsAttempted ?? ''),
+    offensiveRebounds: String(initialStats.offensiveRebounds ?? ''),
+    defensiveRebounds: String(initialStats.defensiveRebounds ?? ''),
+    assists: String(initialStats.assists ?? ''),
+    steals: String(initialStats.steals ?? ''),
+    blocks: String(initialStats.blocks ?? ''),
+    turnovers: String(initialStats.turnovers ?? ''),
+    fouls: String(initialStats.fouls ?? ''),
+    minutesPlayed: String(initialStats.minutesPlayed ?? ''),
   })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -1168,7 +1169,8 @@ function QuickStatsForm({
   )
 
   const save = async () => {
-    if (!(Number(form.minutesPlayed) > 0)) {
+    // Minutes a scoresheet left unrecorded may stay that way.
+    if (!(Number(form.minutesPlayed) > 0) && !(initialStats.minutesPlayed === null && form.minutesPlayed === '')) {
       setError('Enter minutes played before saving - a game with no minutes reads as not actually played.')
       return
     }
@@ -1176,7 +1178,10 @@ function QuickStatsForm({
     setError(null)
     try {
       const dto: UpdateGameStatsDto = Object.fromEntries(
-        Object.entries(form).map(([k, v]) => [k, Number(v) || 0])
+        Object.entries(form)
+          // An unrecorded stat left empty stays unrecorded.
+          .filter(([k, v]) => !(v === '' && initialStats[k as keyof typeof form] === null))
+          .map(([k, v]) => [k, Number(v) || 0])
       )
       const { data } = await api.put<GameStatsDto>(`/gamestats/${statsId}`, dto)
       onSaved(data)
@@ -1302,29 +1307,29 @@ function SeasonPanel({
                 <span className="stat-detail">{showTotals ? `${selected.pointsPerGame.toFixed(1)}/game` : `${selected.totalPoints} total`}</span>
               </div>
               <div className="stat-box-enhanced">
-                <span className="stat-value">{showTotals ? selected.totalRebounds : selected.reboundsPerGame.toFixed(1)}</span>
+                <span className="stat-value">{showTotals ? show(selected.totalRebounds) : show(selected.reboundsPerGame, 1)}</span>
                 <span className="stat-label">{showTotals ? 'REB' : 'RPG'}</span>
-                <span className="stat-detail">{showTotals ? `${selected.reboundsPerGame.toFixed(1)}/game` : `${selected.totalRebounds} total`}</span>
+                <span className="stat-detail">{showTotals ? `${show(selected.reboundsPerGame, 1)}/game` : `${show(selected.totalRebounds)} total`}</span>
               </div>
               <div className="stat-box-enhanced">
-                <span className="stat-value">{showTotals ? selected.totalAssists : selected.assistsPerGame.toFixed(1)}</span>
+                <span className="stat-value">{showTotals ? show(selected.totalAssists) : show(selected.assistsPerGame, 1)}</span>
                 <span className="stat-label">{showTotals ? 'AST' : 'APG'}</span>
-                <span className="stat-detail">{showTotals ? `${selected.assistsPerGame.toFixed(1)}/game` : `${selected.totalAssists} total`}</span>
+                <span className="stat-detail">{showTotals ? `${show(selected.assistsPerGame, 1)}/game` : `${show(selected.totalAssists)} total`}</span>
               </div>
               <div className="stat-box-enhanced">
-                <span className="stat-value">{showTotals ? selected.totalSteals : selected.stealsPerGame.toFixed(1)}</span>
+                <span className="stat-value">{showTotals ? show(selected.totalSteals) : show(selected.stealsPerGame, 1)}</span>
                 <span className="stat-label">{showTotals ? 'STL' : 'STL/G'}</span>
-                <span className="stat-detail">{showTotals ? `${selected.stealsPerGame.toFixed(1)}/game` : `${selected.totalSteals} total`}</span>
+                <span className="stat-detail">{showTotals ? `${show(selected.stealsPerGame, 1)}/game` : `${show(selected.totalSteals)} total`}</span>
               </div>
               <div className="stat-box-enhanced">
-                <span className="stat-value">{showTotals ? selected.totalBlocks : selected.blocksPerGame.toFixed(1)}</span>
+                <span className="stat-value">{showTotals ? show(selected.totalBlocks) : show(selected.blocksPerGame, 1)}</span>
                 <span className="stat-label">{showTotals ? 'BLK' : 'BLK/G'}</span>
-                <span className="stat-detail">{showTotals ? `${selected.blocksPerGame.toFixed(1)}/game` : `${selected.totalBlocks} total`}</span>
+                <span className="stat-detail">{showTotals ? `${show(selected.blocksPerGame, 1)}/game` : `${show(selected.totalBlocks)} total`}</span>
               </div>
               <div className="stat-box-enhanced">
-                <span className="stat-value">{showTotals ? selected.totalTurnovers : selected.turnoversPerGame.toFixed(1)}</span>
+                <span className="stat-value">{showTotals ? show(selected.totalTurnovers) : show(selected.turnoversPerGame, 1)}</span>
                 <span className="stat-label">{showTotals ? 'TO' : 'TO/G'}</span>
-                <span className="stat-detail">{showTotals ? `${selected.turnoversPerGame.toFixed(1)}/game` : `${selected.totalTurnovers} total`}</span>
+                <span className="stat-detail">{showTotals ? `${show(selected.turnoversPerGame, 1)}/game` : `${show(selected.totalTurnovers)} total`}</span>
               </div>
             </div>
           </div>
@@ -1334,18 +1339,18 @@ function SeasonPanel({
             <div className="percentage-bars">
               <div className="percentage-item">
                 <div className="percentage-label">Field Goal %</div>
-                <div className="percentage-bar"><div className="percentage-fill" style={{ width: `${selected.fieldGoalPercentage}%` }} /></div>
-                <span className="percentage-value">{selected.fieldGoalPercentage}%</span>
+                <div className="percentage-bar"><div className="percentage-fill" style={{ width: `${selected.fieldGoalPercentage ?? 0}%` }} /></div>
+                <span className="percentage-value">{showPct(selected.fieldGoalPercentage)}</span>
               </div>
               <div className="percentage-item">
                 <div className="percentage-label">3-Point %</div>
-                <div className="percentage-bar"><div className="percentage-fill" style={{ width: `${selected.threePointPercentage}%` }} /></div>
-                <span className="percentage-value">{selected.threePointPercentage}%</span>
+                <div className="percentage-bar"><div className="percentage-fill" style={{ width: `${selected.threePointPercentage ?? 0}%` }} /></div>
+                <span className="percentage-value">{showPct(selected.threePointPercentage)}</span>
               </div>
               <div className="percentage-item">
                 <div className="percentage-label">Free Throw %</div>
-                <div className="percentage-bar"><div className="percentage-fill" style={{ width: `${selected.freeThrowPercentage}%` }} /></div>
-                <span className="percentage-value">{selected.freeThrowPercentage}%</span>
+                <div className="percentage-bar"><div className="percentage-fill" style={{ width: `${selected.freeThrowPercentage ?? 0}%` }} /></div>
+                <span className="percentage-value">{showPct(selected.freeThrowPercentage)}</span>
               </div>
             </div>
           </div>

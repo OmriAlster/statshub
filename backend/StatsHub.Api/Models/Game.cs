@@ -64,7 +64,12 @@ namespace StatsHub.Api.Models
         public int? HomeScore { get; set; }
         public int? AwayScore { get; set; }
 
+        // The game's id at Swish, where its scoresheet is - set once the game
+        // is found there.
+        public string? SwishMatchId { get; set; }
+
         // Navigation properties
         public ICollection<GameStats> GameStats { get; set; } = new List<GameStats>();
+        public ICollection<ScoresheetLine> ScoresheetLines { get; set; } = new List<ScoresheetLine>();
     }
 }

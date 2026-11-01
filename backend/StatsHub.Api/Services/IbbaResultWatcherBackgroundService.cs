@@ -7,7 +7,8 @@ namespace StatsHub.Api.Services
     // every 15 minutes, each followed IBBA team with a game that should be
     // over (and no result yet) has its games re-read - so the score and the
     // "Final score" push arrive within about a quarter of an hour of IBBA
-    // posting them. Only those teams, one at a time.
+    // posting them. Only those teams, one at a time. Then, for a day after a
+    // game, its scoresheet: the player's line as soon as the sheet is up.
     public class IbbaResultWatcherBackgroundService : BackgroundService
     {
         private static readonly TimeSpan Interval = TimeSpan.FromMinutes(15);
@@ -46,6 +47,35 @@ namespace StatsHub.Api.Services
         }
 
         private async Task CheckAsync(CancellationToken stoppingToken)
+        {
+            await CheckResultsAsync(stoppingToken);
+            await CheckScoresheetsAsync(stoppingToken);
+        }
+
+        private async Task CheckScoresheetsAsync(CancellationToken stoppingToken)
+        {
+            List<Guid> linkIds;
+            using (var scope = _scopeFactory.CreateScope())
+                linkIds = await scope.ServiceProvider.GetRequiredService<IScoresheetStatsService>().LinksAwaitingScoresheetsAsync(DateTime.UtcNow);
+            if (linkIds.Count == 0) return;
+
+            _logger.LogInformation("Checking Swish for the scoresheets of {Count} players", linkIds.Count);
+            foreach (var linkId in linkIds)
+            {
+                try
+                {
+                    using var scope = _scopeFactory.CreateScope();
+                    await scope.ServiceProvider.GetRequiredService<IScoresheetStatsService>().FillAsync(linkId, stoppingToken);
+                }
+                catch (Exception ex) when (!stoppingToken.IsCancellationRequested)
+                {
+                    _logger.LogWarning(ex, "Scoresheet check failed for link {LinkId}", linkId);
+                }
+            }
+            MemoryRelief.ReleaseSoon();
+        }
+
+        private async Task CheckResultsAsync(CancellationToken stoppingToken)
         {
             List<Guid> teamIds;
             using (var scope = _scopeFactory.CreateScope())

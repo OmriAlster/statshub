@@ -35,6 +35,7 @@ namespace StatsHub.Api.Services
         private readonly IPlayerService _playerService;
         private readonly LeagueProviders _leagues;
         private readonly IPushNotificationService _push;
+        private readonly IScoresheetStatsService _scoresheets;
         private readonly ILogger<IbbaService> _logger;
         private readonly IServiceScopeFactory _scopeFactory;
         private readonly ISeasonService _seasonService;
@@ -42,8 +43,9 @@ namespace StatsHub.Api.Services
         private readonly IbbaSyncTracker _syncTracker;
         private readonly IMemoryCache _cache;
 
-        public IbbaService(AppDbContext context, IPlayerService playerService, LeagueProviders leagues, IPushNotificationService push, ILogger<IbbaService> logger, IServiceScopeFactory scopeFactory, ISeasonService seasonService, RequestTimings timings, IbbaSyncTracker syncTracker, IMemoryCache cache)
+        public IbbaService(AppDbContext context, IPlayerService playerService, LeagueProviders leagues, IPushNotificationService push, ILogger<IbbaService> logger, IServiceScopeFactory scopeFactory, ISeasonService seasonService, RequestTimings timings, IbbaSyncTracker syncTracker, IMemoryCache cache, IScoresheetStatsService scoresheets)
         {
+            _scoresheets = scoresheets;
             _cache = cache;
             _timings = timings;
             _syncTracker = syncTracker;
@@ -752,6 +754,18 @@ namespace StatsHub.Api.Services
             // Where the league publishes players' lines (its top leagues), the
             // player's own line in each finished game - no tracking needed.
             await _timings.MeasureAsync("box-scores", () => FillPublishedBoxScoresAsync(link, league, teams.Where(t => linked.Contains(t.Team.Id)).Select(t => t.Team).ToList()));
+
+            // Everywhere else, the game's scoresheet (and the jersey number from
+            // it) - best-effort: the sync itself has already succeeded.
+            try
+            {
+                await _context.SaveChangesAsync();
+                await _timings.MeasureAsync("scoresheets", () => _scoresheets.FillAsync(link.Id));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Scoresheets for link {LinkId} couldn't be read", link.Id);
+            }
         }
 
         // This season's finished games of the player's teams that have no line
@@ -797,6 +811,7 @@ namespace StatsHub.Api.Services
                 {
                     GameId = g.Id,
                     PlayerId = link.PlayerId,
+                    Source = GameStats.BoxScoreSource,
                     FieldGoalsMade = line.TwoPointersMade,
                     FieldGoalsAttempted = line.TwoPointersAttempted,
                     ThreePointersMade = line.ThreePointersMade,

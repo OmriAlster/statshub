@@ -43,10 +43,10 @@ export default function GameStatsEditor({ gameStatsId, initialStats }: GameStats
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gameStatsId])
 
-  const persistStats = (nextEvents: GameEvent[], nextMinutes: number) => {
+  const persistStats = (nextEvents: GameEvent[], nextMinutes: number | null) => {
     if (saveTimer.current) window.clearTimeout(saveTimer.current)
     saveTimer.current = window.setTimeout(() => {
-      api.put(`/gamestats/${gameStatsId}`, computeStatsFromEvents(nextEvents, nextMinutes)).catch(() => {
+      api.put(`/gamestats/${gameStatsId}`, computeStatsFromEvents(nextEvents, nextMinutes, initialStats)).catch(() => {
         setError('Could not save the last stat - check your connection.')
       })
     }, 500)
@@ -308,7 +308,7 @@ export default function GameStatsEditor({ gameStatsId, initialStats }: GameStats
             type="number"
             min={0}
             max={48}
-            value={minutesPlayed}
+            value={minutesPlayed ?? ''}
             onChange={(e) => updateMinutesPlayed(Number(e.target.value))}
             aria-label="Minutes played"
           />

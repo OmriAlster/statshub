@@ -121,12 +121,13 @@ namespace StatsHub.Api.Services
         {
             if (value == 3)
             {
-                gameStats.ThreePointersAttempted = Math.Max(0, gameStats.ThreePointersAttempted + direction);
+                // Attempts not recorded (a scoresheet's line) start from the made ones.
+                gameStats.ThreePointersAttempted = Math.Max(0, (gameStats.ThreePointersAttempted ?? gameStats.ThreePointersMade) + direction);
                 if (made) gameStats.ThreePointersMade = Math.Max(0, gameStats.ThreePointersMade + direction);
             }
             else
             {
-                gameStats.FieldGoalsAttempted = Math.Max(0, gameStats.FieldGoalsAttempted + direction);
+                gameStats.FieldGoalsAttempted = Math.Max(0, (gameStats.FieldGoalsAttempted ?? gameStats.FieldGoalsMade) + direction);
                 if (made) gameStats.FieldGoalsMade = Math.Max(0, gameStats.FieldGoalsMade + direction);
             }
         }

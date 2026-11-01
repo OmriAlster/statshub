@@ -36,6 +36,21 @@ describe('live-game events -> box score', () => {
     expect(new Set(events.map((e) => e.id)).size).toBe(events.length) // undo/delete rely on unique ids
   })
 
+  it("a scoresheet's unrecorded stats stay unrecorded until something of their kind is tapped", () => {
+    const sheet = makeStats({
+      source: 'scoresheet', freeThrowsMade: 2, freeThrowsAttempted: null, offensiveRebounds: null, defensiveRebounds: null,
+      assists: null, steals: null, blocks: null, turnovers: null, fouls: 1, minutesPlayed: null,
+    })
+    const events = [...seedEventsFromStats(sheet), event('AST')]
+    const stats = computeStatsFromEvents(events, sheet.minutesPlayed, sheet)
+
+    expect(stats.freeThrowsMade).toBe(2)
+    expect(stats.assists).toBe(1) // tapped - recorded now
+    for (const key of ['freeThrowsAttempted', 'offensiveRebounds', 'steals', 'minutesPlayed'] as const) expect(stats[key]).toBeUndefined()
+    // A missed free throw makes the attempts known.
+    expect(computeStatsFromEvents([...events, event('FT_MISS')], null, sheet).freeThrowsAttempted).toBe(3)
+  })
+
   it('more made than attempted free throws does not create negative misses', () => {
     const events = seedEventsFromStats(makeStats({ freeThrowsMade: 4, freeThrowsAttempted: 2 }))
     expect(events.filter((e) => e.type === 'FT_MISS')).toHaveLength(0)

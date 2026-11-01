@@ -15,6 +15,7 @@ import { formatGameDateOnly } from '../utils/formatGameDate'
 import BouncingBall from '../components/BouncingBall'
 import { GameTypeBadge, HomeAway } from '../components/GameBadges'
 import { useLiveGames } from '../live/liveUpdates'
+import { average, madeOf, show, showPct } from '../utils/statLines'
 
 export default function SharedPlayerView() {
   const { token, gameId } = useParams<{ token: string; gameId?: string }>()
@@ -197,16 +198,16 @@ function SharedStatsPanel({ games }: { games: GameDto[] }) {
           count: gamesWithStats.length,
           pts: ppg,
           fgm: avg((g) => g.playerStats[0]?.fieldGoalsMade ?? 0).toFixed(1),
-          fga: avg((g) => g.playerStats[0]?.fieldGoalsAttempted ?? 0).toFixed(1),
+          fga: show(average(gamesWithStats, (g) => g.playerStats[0]?.fieldGoalsAttempted), 1),
           tpm: avg((g) => g.playerStats[0]?.threePointersMade ?? 0).toFixed(1),
-          tpa: avg((g) => g.playerStats[0]?.threePointersAttempted ?? 0).toFixed(1),
+          tpa: show(average(gamesWithStats, (g) => g.playerStats[0]?.threePointersAttempted), 1),
           ftm: avg((g) => g.playerStats[0]?.freeThrowsMade ?? 0).toFixed(1),
-          fta: avg((g) => g.playerStats[0]?.freeThrowsAttempted ?? 0).toFixed(1),
-          reb: avg((g) => g.playerStats[0]?.totalRebounds ?? 0).toFixed(1),
-          ast: avg((g) => g.playerStats[0]?.assists ?? 0).toFixed(1),
-          stl: avg((g) => g.playerStats[0]?.steals ?? 0).toFixed(1),
-          blk: avg((g) => g.playerStats[0]?.blocks ?? 0).toFixed(1),
-          to: avg((g) => g.playerStats[0]?.turnovers ?? 0).toFixed(1),
+          fta: show(average(gamesWithStats, (g) => g.playerStats[0]?.freeThrowsAttempted), 1),
+          reb: show(average(gamesWithStats, (g) => g.playerStats[0]?.totalRebounds), 1),
+          ast: show(average(gamesWithStats, (g) => g.playerStats[0]?.assists), 1),
+          stl: show(average(gamesWithStats, (g) => g.playerStats[0]?.steals), 1),
+          blk: show(average(gamesWithStats, (g) => g.playerStats[0]?.blocks), 1),
+          to: show(average(gamesWithStats, (g) => g.playerStats[0]?.turnovers), 1),
         }
       : null
     return { completedGames, wins, losses, ppg, averages }
@@ -266,9 +267,9 @@ function SharedStatsPanel({ games }: { games: GameDto[] }) {
                   <GameRow key={game.id} game={game}>
                     <td className={`num ${won ? 'win' : 'loss'}`}>{game.teamScore}&ndash;{game.opponentScore}</td>
                     <td className="num">{stats?.totalPoints ?? '-'}</td>
-                    <td className="num">{stats ? `${stats.fieldGoalsMade}/${stats.fieldGoalsAttempted}` : '-'}</td>
-                    <td className="num">{stats ? `${stats.threePointersMade}/${stats.threePointersAttempted}` : '-'}</td>
-                    <td className="num">{stats ? `${stats.freeThrowsMade}/${stats.freeThrowsAttempted}` : '-'}</td>
+                    <td className="num">{stats ? madeOf(stats.fieldGoalsMade, stats.fieldGoalsAttempted) : '-'}</td>
+                    <td className="num">{stats ? madeOf(stats.threePointersMade, stats.threePointersAttempted) : '-'}</td>
+                    <td className="num">{stats ? madeOf(stats.freeThrowsMade, stats.freeThrowsAttempted) : '-'}</td>
                     <td className="num">{stats?.totalRebounds ?? '-'}</td>
                     <td className="num">{stats?.assists ?? '-'}</td>
                     <td className="num">{stats?.steals ?? '-'}</td>
@@ -433,23 +434,23 @@ function SharedSeasonPanel({ team, games }: { team: SharedTeamDto; games: GameDt
                 <span className="stat-label">{showTotals ? 'PTS' : 'PPG'}</span>
               </div>
               <div className="stat-box-enhanced">
-                <span className="stat-value">{showTotals ? team.totalRebounds : team.reboundsPerGame.toFixed(1)}</span>
+                <span className="stat-value">{showTotals ? show(team.totalRebounds) : show(team.reboundsPerGame, 1)}</span>
                 <span className="stat-label">{showTotals ? 'REB' : 'RPG'}</span>
               </div>
               <div className="stat-box-enhanced">
-                <span className="stat-value">{showTotals ? team.totalAssists : team.assistsPerGame.toFixed(1)}</span>
+                <span className="stat-value">{showTotals ? show(team.totalAssists) : show(team.assistsPerGame, 1)}</span>
                 <span className="stat-label">{showTotals ? 'AST' : 'APG'}</span>
               </div>
               <div className="stat-box-enhanced">
-                <span className="stat-value">{showTotals ? team.totalSteals : team.stealsPerGame.toFixed(1)}</span>
+                <span className="stat-value">{showTotals ? show(team.totalSteals) : show(team.stealsPerGame, 1)}</span>
                 <span className="stat-label">{showTotals ? 'STL' : 'STL/G'}</span>
               </div>
               <div className="stat-box-enhanced">
-                <span className="stat-value">{showTotals ? team.totalBlocks : team.blocksPerGame.toFixed(1)}</span>
+                <span className="stat-value">{showTotals ? show(team.totalBlocks) : show(team.blocksPerGame, 1)}</span>
                 <span className="stat-label">{showTotals ? 'BLK' : 'BLK/G'}</span>
               </div>
               <div className="stat-box-enhanced">
-                <span className="stat-value">{showTotals ? team.totalTurnovers : team.turnoversPerGame.toFixed(1)}</span>
+                <span className="stat-value">{showTotals ? show(team.totalTurnovers) : show(team.turnoversPerGame, 1)}</span>
                 <span className="stat-label">{showTotals ? 'TO' : 'TO/G'}</span>
               </div>
             </div>
@@ -460,18 +461,18 @@ function SharedSeasonPanel({ team, games }: { team: SharedTeamDto; games: GameDt
             <div className="percentage-bars">
               <div className="percentage-item">
                 <div className="percentage-label">Field Goal %</div>
-                <div className="percentage-bar"><div className="percentage-fill" style={{ width: `${team.fieldGoalPercentage}%` }} /></div>
-                <span className="percentage-value">{team.fieldGoalPercentage}%</span>
+                <div className="percentage-bar"><div className="percentage-fill" style={{ width: `${team.fieldGoalPercentage ?? 0}%` }} /></div>
+                <span className="percentage-value">{showPct(team.fieldGoalPercentage)}</span>
               </div>
               <div className="percentage-item">
                 <div className="percentage-label">3-Point %</div>
-                <div className="percentage-bar"><div className="percentage-fill" style={{ width: `${team.threePointPercentage}%` }} /></div>
-                <span className="percentage-value">{team.threePointPercentage}%</span>
+                <div className="percentage-bar"><div className="percentage-fill" style={{ width: `${team.threePointPercentage ?? 0}%` }} /></div>
+                <span className="percentage-value">{showPct(team.threePointPercentage)}</span>
               </div>
               <div className="percentage-item">
                 <div className="percentage-label">Free Throw %</div>
-                <div className="percentage-bar"><div className="percentage-fill" style={{ width: `${team.freeThrowPercentage}%` }} /></div>
-                <span className="percentage-value">{team.freeThrowPercentage}%</span>
+                <div className="percentage-bar"><div className="percentage-fill" style={{ width: `${team.freeThrowPercentage ?? 0}%` }} /></div>
+                <span className="percentage-value">{showPct(team.freeThrowPercentage)}</span>
               </div>
             </div>
           </div>

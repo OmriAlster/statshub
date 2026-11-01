@@ -190,6 +190,7 @@ builder.Services.AddSingleton<StatsHub.Api.Leagues.LeagueProviders>();
 // Swish scoresheets (key: SWISH_API_KEY) - see Scoresheets/SwishClient.cs
 builder.Services.AddSingleton<StatsHub.Api.Scoresheets.SwishClient>();
 builder.Services.AddHttpClient(StatsHub.Api.Scoresheets.SwishClient.HttpClientName, client => client.Timeout = TimeSpan.FromSeconds(60));
+builder.Services.AddScoped<IScoresheetStatsService, ScoresheetStatsService>();
 builder.Services.AddScoped<IPushNotificationService, PushNotificationService>();
 builder.Services.AddHostedService<GameReminderBackgroundService>();
 builder.Services.AddHostedService<IbbaNightlySyncBackgroundService>();

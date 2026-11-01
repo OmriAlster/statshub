@@ -109,6 +109,7 @@ namespace StatsHub.Api.Services
                 .ThenInclude(gs => gs.Player)
                 .Include(g => g.GameStats)
                 .ThenInclude(gs => gs.Shots)
+                .Include(g => g.ScoresheetLines)
                 .FirstOrDefaultAsync(g => g.Id == id);
 
             if (game == null) return null;
@@ -366,17 +367,24 @@ namespace StatsHub.Api.Services
                     .Select(gs => new
                     {
                         Points = gs.FieldGoalsMade * 2 + gs.ThreePointersMade * 3 + gs.FreeThrowsMade,
-                        Rebounds = gs.OffensiveRebounds + gs.DefensiveRebounds,
+                        Rebounds = gs.OffensiveRebounds == null && gs.DefensiveRebounds == null ? (int?)null : (gs.OffensiveRebounds ?? 0) + (gs.DefensiveRebounds ?? 0),
                         gs.Assists,
                     })
                     .ToListAsync();
                 if (earlier.Count < GamesBeforeSeasonHighs) continue;
 
                 var highs = new List<string>();
-                void Check(int value, int best, string what) { if (value > best && value > 0) highs.Add($"{value} {what} (was {best})"); }
-                Check(line.TotalPoints, earlier.Max(e => e.Points), "points");
-                Check(line.TotalRebounds, earlier.Max(e => e.Rebounds), "rebounds");
-                Check(line.Assists, earlier.Max(e => e.Assists), "assists");
+                // A stat counts only where it was recorded - in this game and in
+                // at least GamesBeforeSeasonHighs earlier ones.
+                void Check(int? value, IEnumerable<int?> before, string what)
+                {
+                    var known = before.OfType<int>().ToList();
+                    if (value is not int v || known.Count < GamesBeforeSeasonHighs) return;
+                    if (v > known.Max() && v > 0) highs.Add($"{v} {what} (was {known.Max()})");
+                }
+                Check(line.TotalPoints, earlier.Select(e => (int?)e.Points), "points");
+                Check(line.TotalRebounds, earlier.Select(e => e.Rebounds), "rebounds");
+                Check(line.Assists, earlier.Select(e => e.Assists), "assists");
                 if (highs.Count == 0) continue;
 
                 var followers = line.Player.Parents.Select(p => p.UserId)
