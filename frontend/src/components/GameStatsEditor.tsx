@@ -18,16 +18,20 @@ interface ActionLogEntry {
   at: number
 }
 
+export type SaveState = 'saving' | 'saved' | 'error'
+
 interface GameStatsEditorProps {
   gameStatsId: string
   initialStats: GameStatsDto
+  // Told as each change is saved - the edit window shows it.
+  onSaveState?: (state: SaveState) => void
 }
 
 // The same tap-the-court-and-tap-a-stat recorder used for a live game,
 // reused here to edit a game's box score after the fact - the only real
 // difference is there's no "end game" step asking for a final score,
 // since a past game's score is edited separately as a game field.
-export default function GameStatsEditor({ gameStatsId, initialStats }: GameStatsEditorProps) {
+export default function GameStatsEditor({ gameStatsId, initialStats, onSaveState }: GameStatsEditorProps) {
   const [events, setEvents] = useState<GameEvent[]>(() => seedEventsFromStats(initialStats))
   const [shots, setShots] = useState<ShotDto[]>([])
   const [actionLog, setActionLog] = useState<ActionLogEntry[]>([])
@@ -46,8 +50,10 @@ export default function GameStatsEditor({ gameStatsId, initialStats }: GameStats
 
   const persistStats = (nextEvents: GameEvent[], nextMinutes: number | null) => {
     if (saveTimer.current) window.clearTimeout(saveTimer.current)
+    onSaveState?.('saving')
     saveTimer.current = window.setTimeout(() => {
-      api.put(`/gamestats/${gameStatsId}`, computeStatsFromEvents(nextEvents, nextMinutes, initialStats)).catch(() => {
+      api.put(`/gamestats/${gameStatsId}`, computeStatsFromEvents(nextEvents, nextMinutes, initialStats)).then(() => onSaveState?.('saved')).catch(() => {
+        onSaveState?.('error')
         setError('Could not save the last stat - check your connection.')
       })
     }, 500)
@@ -107,6 +113,7 @@ export default function GameStatsEditor({ gameStatsId, initialStats }: GameStats
   const confirmShot = async (made: boolean) => {
     if (!pendingShot) return
     setLoggingShot(true)
+    onSaveState?.('saving')
     try {
       const { data } = await api.post<ShotDto>('/shots', {
         gameStatsId,
@@ -119,7 +126,9 @@ export default function GameStatsEditor({ gameStatsId, initialStats }: GameStats
       setShots((prev) => [...prev, data])
       setActionLog((prev) => [...prev, { kind: 'shot', id: data.id, at: Date.now() }])
       setPendingShot(null)
+      onSaveState?.('saved')
     } catch {
+      onSaveState?.('error')
       setError('Could not log that shot - check your connection.')
     } finally {
       setLoggingShot(false)
@@ -131,10 +140,13 @@ export default function GameStatsEditor({ gameStatsId, initialStats }: GameStats
 
   const removeShot = async (id: string) => {
     try {
+      onSaveState?.('saving')
       await api.delete(`/shots/${id}`)
       setShots((prev) => prev.filter((s) => s.id !== id))
       setActionLog((prev) => prev.filter((a) => !(a.kind === 'shot' && a.id === id)))
+      onSaveState?.('saved')
     } catch {
+      onSaveState?.('error')
       setError('Could not remove that shot.')
     }
   }

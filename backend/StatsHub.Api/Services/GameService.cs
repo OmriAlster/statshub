@@ -543,8 +543,26 @@ namespace StatsHub.Api.Services
         private async Task<List<GameDto>> MapGamesToDtoAsync(List<Game> games, Func<Game, Team?> resolveViewTeam, Guid requestingUserId)
         {
             var ibbaTeams = await _context.LoadIbbaTeamsAsync(games);
-            return games.Select(g => DtoMapping.ToGameDto(g, resolveViewTeam(g), ibbaTeams,
+            var dtos = games.Select(g => DtoMapping.ToGameDto(g, resolveViewTeam(g), ibbaTeams,
                 canRecordLive: !g.LiveTrackedByUserId.HasValue || g.LiveTrackedByUserId.Value == requestingUserId)).ToList();
+
+            // A game's scoresheet lines only for the players this user follows -
+            // a shared IBBA game has other families' kids on it too.
+            var linePlayers = dtos.SelectMany(d => d.Scoresheets).Select(l => l.PlayerId).Distinct().ToList();
+            if (linePlayers.Count > 0)
+            {
+                var readable = (await _context.Players
+                    .Where(p => linePlayers.Contains(p.Id) && (p.LinkedUserId == requestingUserId || p.Parents.Any(pp => pp.UserId == requestingUserId)))
+                    .Select(p => p.Id)
+                    .ToListAsync()).ToHashSet();
+                foreach (var dto in dtos)
+                {
+                    dto.Scoresheets = dto.Scoresheets.Where(l => readable.Contains(l.PlayerId)).ToList();
+                    foreach (var line in dto.PlayerStats.Where(s => s.Scoresheet != null && !readable.Contains(s.PlayerId)))
+                        line.Scoresheet = null;
+                }
+            }
+            return dtos;
         }
     }
 }

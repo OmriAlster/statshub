@@ -162,6 +162,28 @@ public class ScoresheetStatsTests : IClassFixture<ScoresheetStatsTests.Factory>
     }
 
     [Fact]
+    public async Task Another_family_sees_the_game_but_not_the_players_sheet_line()
+    {
+        var s = await SeedAsync();
+        await FillAsync(s.LinkId);
+        // Another parent whose kid is on the same IBBA team.
+        var other = await TestUser.SignInAsync(_factory);
+        var kid = await other.CreatePlayerAsync();
+        var team = await other.CreateTeamWithPlayerAsync(kid.Id);
+        await _factory.WithDbAsync(async db =>
+        {
+            var ownIbbaTeamId = (await db.Teams.FindAsync(s.TeamId))!.IbbaTeamId;
+            (await db.Teams.FindAsync(team.Id))!.IbbaTeamId = ownIbbaTeamId;
+            await db.SaveChangesAsync();
+        });
+
+        var game = await other.GetAsync<GameDto>($"/api/games/{s.GameId}");
+
+        Assert.Empty(game.Scoresheets);
+        Assert.All(game.PlayerStats, line => Assert.Null(line.Scoresheet));
+    }
+
+    [Fact]
     public async Task With_no_games_there_are_no_points_per_game()
     {
         var parent = await TestUser.SignInAsync(_factory);

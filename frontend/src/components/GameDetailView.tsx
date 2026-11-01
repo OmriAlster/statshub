@@ -60,6 +60,13 @@ export default function GameDetailView({ game, headerActions }: GameDetailViewPr
         </div>
       )}
 
+      {(game.scoresheets ?? []).filter((l) => !game.playerStats.some((s) => s.playerId === l.playerId)).map((l) => (
+        <div key={l.playerId} className="sheet-note differs" style={{ marginTop: '1.75rem' }}>
+          <p><span className="sheet-mismatch-icon static" aria-hidden="true">!</span> <b>No stats recorded - IBBA's scoresheet has them</b></p>
+          <p>#{l.number} · {l.points} pts · {l.twoPointers}×2 · {l.threePointers}×3 · {l.freeThrows} FT · {l.fouls} foul{l.fouls === 1 ? '' : 's'}. Edit the game to use them.</p>
+        </div>
+      ))}
+
       {game.playerStats.map((stats) => {
         const off = sheetOff(stats)
         return (

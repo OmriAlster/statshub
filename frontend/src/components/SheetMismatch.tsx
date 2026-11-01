@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type SyntheticEvent } from 'react'
-import type { GameStatsDto } from '../api/types'
+import type { GameDto, GameStatsDto } from '../api/types'
 import { sheetMismatch, type SheetRow } from '../utils/statLines'
+import { Busy } from './BouncingBall'
 
 // What was recorded next to IBBA's scoresheet, differences marked.
 export function SheetDiffTable({ rows }: { rows: SheetRow[] }) {
@@ -16,12 +17,22 @@ export function SheetDiffTable({ rows }: { rows: SheetRow[] }) {
   )
 }
 
-// A "!" on a game whose recorded numbers don't match IBBA's scoresheet - tap
-// it for the differences. Sits inside game links, so it never navigates.
-export default function SheetMismatch({ stats }: { stats: GameStatsDto | undefined }) {
+// A "!" on a game IBBA's scoresheet has something to say about: the recorded
+// numbers don't match it, or nothing is recorded and the sheet has the
+// player's line - with a way to use it. Tap it for the details; it sits
+// inside game links, so it never navigates.
+export default function SheetMismatch({ game, stats, onUseSheet }: {
+  game: GameDto
+  stats: GameStatsDto | undefined
+  // Brings IBBA's numbers in for a game with none - left out where the viewer can't edit.
+  onUseSheet?: (game: GameDto) => Promise<void>
+}) {
   const [open, setOpen] = useState(false)
+  const [busy, setBusy] = useState(false)
   const ref = useRef<HTMLSpanElement>(null)
   const rows = sheetMismatch(stats)
+  // The games lists load only the viewed player's lines.
+  const missing = !stats && game.status === 'Completed' ? game.scoresheets?.[0] : undefined
 
   useEffect(() => {
     if (!open) return
@@ -30,25 +41,43 @@ export default function SheetMismatch({ stats }: { stats: GameStatsDto | undefin
     return () => document.removeEventListener('pointerdown', close)
   }, [open])
 
-  if (!rows) return null
+  if (!rows && !missing) return null
+  const label = rows ? "IBBA's scoresheet doesn't match" : 'No stats recorded - IBBA has them'
   const stop = (e: SyntheticEvent) => { e.preventDefault(); e.stopPropagation() }
   const toggle = (e: SyntheticEvent) => { stop(e); setOpen((o) => !o) }
+  const use = async (e: SyntheticEvent) => {
+    stop(e)
+    if (!onUseSheet) return
+    setBusy(true)
+    try { await onUseSheet(game); setOpen(false) } finally { setBusy(false) }
+  }
   return (
     <span className="sheet-mismatch" ref={ref}>
       <span
         role="button"
         tabIndex={0}
         className="sheet-mismatch-icon"
-        aria-label="IBBA's scoresheet doesn't match - show the differences"
+        aria-label={`${label} - show the details`}
         aria-expanded={open}
-        title="IBBA's scoresheet doesn't match"
+        title={label}
         onClick={toggle}
         onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') toggle(e); if (e.key === 'Escape') setOpen(false) }}
       >!</span>
       {open && (
         <span className="sheet-mismatch-pop" onClick={stop}>
-          <b>IBBA's scoresheet doesn't match</b>
-          <SheetDiffTable rows={rows} />
+          <b>{label}</b>
+          {rows && <SheetDiffTable rows={rows} />}
+          {missing && (
+            <>
+              <span className="sheet-pop-line">#{missing.number} · {missing.points} pts · {missing.twoPointers}×2 · {missing.threePointers}×3 · {missing.freeThrows} FT</span>
+              <span className="sheet-pop-note">From the game's scoresheet: made shots and fouls only.</span>
+              {onUseSheet && (
+                <span role="button" tabIndex={0} className="sheet-pop-use" aria-disabled={busy} onClick={use} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') use(e) }}>
+                  {busy ? <Busy>Working…</Busy> : "Use IBBA's stats"}
+                </span>
+              )}
+            </>
+          )}
         </span>
       )}
     </span>

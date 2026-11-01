@@ -3,16 +3,12 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { api } from '../api/client'
 import { useLiveGameOverlay } from '../live/LiveGameContext'
 import type {
-  CreateGameStatsDto,
   GameDto,
-  GameStatsDto,
   GameType,
   IbbaLinkStatusDto,
   PlayerDto,
   PlayerTeamStatsDto,
   ShotDto,
-  UpdateGameDto,
-  UpdateGameStatsDto,
 } from '../api/types'
 import { useAuth } from '../auth/AuthContext'
 import { useGamesView } from '../hooks/useGamesView'
@@ -20,7 +16,7 @@ import GamesViewToggle from '../components/GamesViewToggle'
 import CourtShotChart from '../components/CourtShotChart'
 import { shotZones, zoneHeat } from '../utils/shotZones'
 import { AveragesCard, ScheduleGameCards, StatsGameCards } from '../components/GameCards'
-import GameStatsEditor from '../components/GameStatsEditor'
+import EditGameSheet from '../components/EditGameSheet'
 import GameStatusBadge, { onCourtIn } from '../components/GameStatusBadge'
 import { useLiveRefresh } from '../hooks/useLiveRefresh'
 import SegmentedControl from '../components/SegmentedControl'
@@ -35,11 +31,8 @@ import { PlayerCardModal, WrappedModal } from '../components/ShareModals'
 import { formatGameDateOnly } from '../utils/formatGameDate'
 import BouncingBall, { Busy } from '../components/BouncingBall'
 import { GameTypeBadge, HomeAway } from '../components/GameBadges'
-import Modal from '../components/Modal'
-import { LeagueMark, LeagueName } from '../components/LeagueBadge'
 import { average, madeAverage, madeOf, sheetOff, show, showPct } from '../utils/statLines'
 import SheetMismatch from '../components/SheetMismatch'
-import ConfirmModal from '../components/ConfirmModal'
 
 export default function Stats() {
   const { user } = useAuth()
@@ -386,7 +379,7 @@ function PlayerProfilePanel({ player, prefetched }: { player: PlayerDto; prefetc
 
       {tab === 'stats' && (
         <>
-          <StatsPanel games={gamesForTeam} playerId={player.id} typeFilter={activeType} />
+          <StatsPanel games={gamesForTeam} playerId={player.id} typeFilter={activeType} onGameUpdated={readOnly ? undefined : updateGame} />
           <div className="insight-grid">
             <NextGameCard games={gamesForTeam} playerId={player.id} />
             <FormCard games={gamesForTeam} />
@@ -445,8 +438,19 @@ function PlayerProfilePanel({ player, prefetched }: { player: PlayerDto; prefetc
   )
 }
 
-function StatsPanel({ games, playerId, typeFilter }: { games: GameDto[]; playerId: string; typeFilter: GameTypeFilter }) {
+function StatsPanel({ games, playerId, typeFilter, onGameUpdated }: {
+  games: GameDto[]
+  playerId: string
+  typeFilter: GameTypeFilter
+  // Set where the viewer can edit - the "!" then offers IBBA's stats for a game with none.
+  onGameUpdated?: (game: GameDto) => void
+}) {
   const isCounted = countedFor(typeFilter)
+  const useSheet = onGameUpdated && (async (game: GameDto) => {
+    await api.post('/gamestats/from-scoresheet', { gameId: game.id, playerId })
+    const { data } = await api.get<GameDto>(`/games/${game.id}`, { params: { playerId } })
+    onGameUpdated(data)
+  })
   const { completedGames, wins, losses, ppg, averages } = useMemo(() => {
     const completedGames = games
       .filter((g) => g.status === 'Completed' && (typeFilter === 'All' || g.gameType === typeFilter))
@@ -515,7 +519,7 @@ function StatsPanel({ games, playerId, typeFilter }: { games: GameDto[]; playerI
       ) : (
         <>
         <GamesViewToggle view={view} onChange={setView} />
-        <StatsGameCards games={completedGames} isCounted={isCounted} linkFor={(game) => `/games/${game.id}?playerId=${playerId}`} />
+        <StatsGameCards games={completedGames} isCounted={isCounted} linkFor={(game) => `/games/${game.id}?playerId=${playerId}`} onUseSheet={useSheet} />
         {averages && <AveragesCard averages={averages} />}
         <div className="games-table-wrap desktop-only" ref={wrapRef}>
           <table className="games-table">
@@ -563,7 +567,7 @@ function StatsPanel({ games, playerId, typeFilter }: { games: GameDto[]; playerI
                       </span>
                     </td>
                     <td className={`num ${won ? 'win' : 'loss'}`}>
-                      <span className="score-cell"><SheetMismatch stats={stats} />{game.teamScore}&ndash;{game.opponentScore}</span>
+                      <span className="score-cell"><SheetMismatch game={game} stats={stats} onUseSheet={useSheet} />{game.teamScore}&ndash;{game.opponentScore}</span>
                     </td>
                     <td className={`num ${off('points')}`}>{stats?.totalPoints ?? '-'}</td>
                     <td className={`num ${off('two')}`}>{stats ? madeOf(stats.fieldGoalsMade, stats.fieldGoalsAttempted) : '-'}</td>
@@ -767,7 +771,7 @@ function SchedulePanel({
       </>
       )}
       {!readOnly && editingGame && (
-        <ScheduleEditPanel
+        <EditGameSheet
           player={player}
           game={editingGame}
           onGameUpdated={onGameUpdated}
@@ -891,381 +895,6 @@ function ScheduleNewGamePanel({
         <button className="submit-btn" onClick={create} disabled={saving}>{saving ? <Busy>Scheduling…</Busy> : 'Schedule Game'}</button>
         <button className="nav-btn" onClick={onCancel} disabled={saving}>Cancel</button>
       </div>
-    </div>
-  )
-}
-
-interface EditGameForm {
-  opponentName: string
-  gameDate: string
-  location: string
-  gameType: GameType
-  isHomeGame: 'home' | 'away'
-  teamScore: string
-  opponentScore: string
-}
-
-function ScheduleEditPanel({
-  player,
-  game,
-  onGameUpdated,
-  onClose,
-}: {
-  player: PlayerDto
-  game: GameDto
-  onGameUpdated: (game: GameDto) => void
-  onClose: () => void
-}) {
-  const existingStats = game.playerStats.find((s) => s.playerId === player.id)
-  const [statsMode, setStatsMode] = useState<'track' | 'quick'>('track')
-
-  const [form, setForm] = useState<EditGameForm>({
-    opponentName: game.opponentName,
-    gameDate: toDatetimeLocalValue(new Date(game.gameDate)),
-    location: game.location,
-    gameType: game.gameType,
-    isHomeGame: game.isHomeGame === false ? 'away' : 'home',
-    teamScore: game.teamScore != null ? String(game.teamScore) : '',
-    opponentScore: game.opponentScore != null ? String(game.opponentScore) : '',
-  })
-  const [saving, setSaving] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  // The box score below is edited live (tap the court, tap a stat button,
-  // same as a live game) and saves itself as you go - only the game's own
-  // fields (opponent, date, score, ...) need an explicit Save.
-  const [statsSeed, setStatsSeed] = useState(existingStats ?? null)
-  const [startingStats, setStartingStats] = useState(false)
-
-  const saveGameInfo = async () => {
-    setSaving(true)
-    setError(null)
-    try {
-      const teamScore = form.teamScore === '' ? null : Number(form.teamScore)
-      const opponentScore = form.opponentScore === '' ? null : Number(form.opponentScore)
-      const dto: UpdateGameDto = {
-        opponentName: form.opponentName.trim(),
-        gameDate: new Date(form.gameDate).toISOString(),
-        location: form.location.trim(),
-        gameType: form.gameType,
-        teamScore,
-        opponentScore,
-        status: teamScore != null && opponentScore != null ? 'Completed' : 'Upcoming',
-        isHomeGame: form.isHomeGame === 'home',
-      }
-      const { data: updatedGame } = await api.put<GameDto>(`/games/${game.id}`, dto, { params: { playerId: player.id } })
-      onGameUpdated(updatedGame)
-    } catch {
-      setError('Could not save those changes.')
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  const startTrackingStats = async () => {
-    setStartingStats(true)
-    setError(null)
-    try {
-      const emptyStats: CreateGameStatsDto = {
-        gameId: game.id,
-        playerId: player.id,
-        fieldGoalsMade: 0,
-        fieldGoalsAttempted: 0,
-        threePointersMade: 0,
-        threePointersAttempted: 0,
-        freeThrowsMade: 0,
-        freeThrowsAttempted: 0,
-        offensiveRebounds: 0,
-        defensiveRebounds: 0,
-        assists: 0,
-        steals: 0,
-        blocks: 0,
-        turnovers: 0,
-        fouls: 0,
-        minutesPlayed: 0,
-      }
-      const { data } = await api.post('/gamestats', emptyStats)
-      setStatsSeed(data)
-      const { data: updatedGame } = await api.get<GameDto>(`/games/${game.id}`, { params: { playerId: player.id } })
-      onGameUpdated(updatedGame)
-    } catch {
-      setError('Could not start tracking stats for this game.')
-    } finally {
-      setStartingStats(false)
-    }
-  }
-
-  const [clearing, setClearing] = useState(false)
-
-  // IBBA's scoresheet line for the player - offered back in place of what's recorded.
-  const sheetLine = game.scoresheets?.find((l) => l.playerId === player.id)
-  const [askSheet, setAskSheet] = useState(false)
-  const [restoring, setRestoring] = useState(false)
-  const useSheetStats = async () => {
-    setRestoring(true)
-    setError(null)
-    try {
-      const { data } = await api.post<GameStatsDto>('/gamestats/from-scoresheet', { gameId: game.id, playerId: player.id })
-      setStatsSeed(data)
-      setStatsMode('quick')
-      const { data: updatedGame } = await api.get<GameDto>(`/games/${game.id}`, { params: { playerId: player.id } })
-      onGameUpdated(updatedGame)
-    } catch {
-      setError("Could not bring back IBBA's stats.")
-    } finally {
-      setRestoring(false)
-      setAskSheet(false)
-    }
-  }
-
-  const clearStats = async () => {
-    if (!statsSeed) return
-    if (!window.confirm('Clear all recorded stats for this game? This removes the box score and shot chart entirely.')) return
-    setClearing(true)
-    setError(null)
-    try {
-      await api.delete(`/gamestats/${statsSeed.id}`)
-      setStatsSeed(null)
-      const { data: updatedGame } = await api.get<GameDto>(`/games/${game.id}`, { params: { playerId: player.id } })
-      onGameUpdated(updatedGame)
-    } catch {
-      setError('Could not clear stats for this game.')
-    } finally {
-      setClearing(false)
-    }
-  }
-
-  return (
-    <Modal
-      kind="editor"
-      onClose={onClose}
-      head={
-        <>
-          <h3>Edit Game</h3>
-          <p className="opponent-cell">
-            {game.opponentLogoUrl && <img className="opponent-logo-md" src={game.opponentLogoUrl} alt="" />}
-            <span>vs {game.opponentName}</span>
-          </p>
-        </>
-      }
-    >
-        <div className="modal-body">
-    <div className="edit-panel">
-      {game.isFromIbba ? (
-        <div className="ibba-locked-info">
-          <LeagueMark league={game.league} className="ibba-locked-mark" />
-          <span>
-            {game.isHomeGame != null && <>{game.isHomeGame ? '🏠' : '✈️'} </>}
-            vs {game.opponentName} · {game.gameType}
-            {game.teamScore != null && game.opponentScore != null && <> · {game.teamScore}–{game.opponentScore}</>}
-          </span>
-          <span className="ibba-locked-note">Synced from <LeagueName league={game.league} /> - game info can't be edited here.</span>
-        </div>
-      ) : (
-        <>
-          <div className="form-row">
-            <label>
-              Opponent
-              <input value={form.opponentName} onChange={(e) => setForm({ ...form, opponentName: e.target.value })} />
-            </label>
-            <label>
-              Date &amp; time
-              <input type="datetime-local" value={form.gameDate} onChange={(e) => setForm({ ...form, gameDate: e.target.value })} />
-            </label>
-            <label>
-              Location
-              <input value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} />
-            </label>
-            <label>
-              Type
-              <select value={form.gameType} onChange={(e) => setForm({ ...form, gameType: e.target.value as GameType })}>
-                <option value="League">League</option>
-                <option value="Cup">Cup</option>
-                <option value="Friendly">Friendly</option>
-              </select>
-            </label>
-            <label>
-              Home/Away
-              <select value={form.isHomeGame} onChange={(e) => setForm({ ...form, isHomeGame: e.target.value as 'home' | 'away' })}>
-                <option value="home">🏠 Home</option>
-                <option value="away">✈️ Away</option>
-              </select>
-            </label>
-            <label>
-              {game.teamName} Score
-              <input type="number" value={form.teamScore} onChange={(e) => setForm({ ...form, teamScore: e.target.value })} />
-            </label>
-            <label>
-              Opponent Score
-              <input type="number" value={form.opponentScore} onChange={(e) => setForm({ ...form, opponentScore: e.target.value })} />
-            </label>
-          </div>
-
-          {error && <p className="error">{error}</p>}
-          <div className="flex gap-1">
-            <button className="submit-btn" onClick={saveGameInfo} disabled={saving}>{saving ? <Busy>Saving…</Busy> : 'Save Game Info'}</button>
-          </div>
-        </>
-      )}
-
-      <div className="flex gap-1" style={{ marginTop: '1.25rem', alignItems: 'baseline', justifyContent: 'space-between' }}>
-        <h4 style={{ margin: 0 }}>Box Score</h4>
-        <span className="flex gap-1">
-          {sheetLine && statsSeed?.source !== 'scoresheet' && (
-            <button className="clear-stats-btn sheet-restore-btn" onClick={() => setAskSheet(true)} disabled={restoring}>
-              ↩ Use IBBA's stats
-            </button>
-          )}
-          {statsSeed && (
-            <button className="clear-stats-btn" onClick={clearStats} disabled={clearing}>
-              {clearing ? <Busy>Clearing…</Busy> : '🗑️ Clear Stats'}
-            </button>
-          )}
-        </span>
-      </div>
-      {askSheet && sheetLine && (
-        <ConfirmModal
-          title="Use IBBA's stats?"
-          message={<>
-            The box score becomes IBBA's scoresheet: #{sheetLine.number} · {sheetLine.points} pts · {sheetLine.twoPointers}×2 · {sheetLine.threePointers}×3 · {sheetLine.freeThrows} FT · {sheetLine.fouls} fouls.
-            {statsSeed && ' What was recorded for this game, shot chart included, is replaced.'}
-          </>}
-          confirmLabel="Use IBBA's stats"
-          busy={restoring}
-          onConfirm={useSheetStats}
-          onCancel={() => setAskSheet(false)}
-        />
-      )}
-      {statsSeed ? (
-        <>
-          <SegmentedControl
-            className="stats-mode-switch"
-            options={[
-              { value: 'track', label: '📍 Track Shots' },
-              { value: 'quick', label: '🔢 Quick Numbers' },
-            ]}
-            value={statsMode}
-            onChange={setStatsMode}
-          />
-          {statsMode === 'track' ? (
-            <GameStatsEditor gameStatsId={statsSeed.id} initialStats={statsSeed} />
-          ) : (
-            <QuickStatsForm statsId={statsSeed.id} initialStats={statsSeed} onSaved={(updated) => setStatsSeed(updated)} />
-          )}
-        </>
-      ) : (
-        <div className="flex gap-1">
-          <button className="submit-btn" onClick={() => { setStatsMode('track'); startTrackingStats() }} disabled={startingStats}>
-            {startingStats ? <Busy>Starting…</Busy> : '📍 Track Shots'}
-          </button>
-          <button className="submit-btn" onClick={() => { setStatsMode('quick'); startTrackingStats() }} disabled={startingStats}>
-            {startingStats ? <Busy>Starting…</Busy> : '🔢 Enter Numbers'}
-          </button>
-        </div>
-      )}
-
-      <div className="flex gap-1" style={{ marginTop: '1rem' }}>
-        <button className="nav-btn" onClick={onClose}>Done</button>
-      </div>
-    </div>
-        </div>
-    </Modal>
-  )
-}
-
-function QuickStatsForm({
-  statsId,
-  initialStats,
-  onSaved,
-}: {
-  statsId: string
-  initialStats: GameStatsDto
-  onSaved: (stats: GameStatsDto) => void
-}) {
-  const [form, setForm] = useState({
-    fieldGoalsMade: String(initialStats.fieldGoalsMade ?? ''),
-    fieldGoalsAttempted: String(initialStats.fieldGoalsAttempted ?? ''),
-    threePointersMade: String(initialStats.threePointersMade ?? ''),
-    threePointersAttempted: String(initialStats.threePointersAttempted ?? ''),
-    freeThrowsMade: String(initialStats.freeThrowsMade ?? ''),
-    freeThrowsAttempted: String(initialStats.freeThrowsAttempted ?? ''),
-    offensiveRebounds: String(initialStats.offensiveRebounds ?? ''),
-    defensiveRebounds: String(initialStats.defensiveRebounds ?? ''),
-    assists: String(initialStats.assists ?? ''),
-    steals: String(initialStats.steals ?? ''),
-    blocks: String(initialStats.blocks ?? ''),
-    turnovers: String(initialStats.turnovers ?? ''),
-    fouls: String(initialStats.fouls ?? ''),
-    minutesPlayed: String(initialStats.minutesPlayed ?? ''),
-  })
-  const [saving, setSaving] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  const field = (key: keyof typeof form, label: string) => (
-    <label>
-      {label}
-      <input
-        type="number"
-        value={form[key]}
-        onChange={(e) => setForm({ ...form, [key]: e.target.value })}
-      />
-    </label>
-  )
-
-  const save = async () => {
-    // Minutes a scoresheet left unrecorded may stay that way.
-    if (!(Number(form.minutesPlayed) > 0) && !(initialStats.minutesPlayed === null && form.minutesPlayed === '')) {
-      setError('Enter minutes played before saving - a game with no minutes reads as not actually played.')
-      return
-    }
-    setSaving(true)
-    setError(null)
-    try {
-      const dto: UpdateGameStatsDto = Object.fromEntries(
-        Object.entries(form)
-          // An unrecorded stat left empty stays unrecorded.
-          .filter(([k, v]) => !(v === '' && initialStats[k as keyof typeof form] === null))
-          .map(([k, v]) => [k, Number(v) || 0])
-      )
-      const { data } = await api.put<GameStatsDto>(`/gamestats/${statsId}`, dto)
-      onSaved(data)
-    } catch {
-      setError('Could not save those stats.')
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  return (
-    <div className="quick-stats-form">
-      <label className="minutes-field">
-        Minutes Played
-        <input
-          type="number"
-          min={0}
-          max={48}
-          value={form.minutesPlayed}
-          onChange={(e) => setForm({ ...form, minutesPlayed: e.target.value })}
-          placeholder="0"
-        />
-      </label>
-      <div className="stat-fields">
-        {field('fieldGoalsMade', '2PM')}
-        {field('fieldGoalsAttempted', '2PA')}
-        {field('threePointersMade', '3PM')}
-        {field('threePointersAttempted', '3PA')}
-        {field('freeThrowsMade', 'FTM')}
-        {field('freeThrowsAttempted', 'FTA')}
-        {field('offensiveRebounds', 'Off Reb')}
-        {field('defensiveRebounds', 'Def Reb')}
-        {field('assists', 'Ast')}
-        {field('steals', 'Stl')}
-        {field('blocks', 'Blk')}
-        {field('turnovers', 'TO')}
-        {field('fouls', 'Fouls')}
-      </div>
-      {error && <p className="error">{error}</p>}
-      <button className="submit-btn" onClick={save} disabled={saving}>{saving ? <Busy>Saving…</Busy> : 'Save Stats'}</button>
     </div>
   )
 }

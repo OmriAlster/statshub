@@ -71,12 +71,15 @@ export function StatsGameCards({
   games,
   linkFor,
   isCounted = countsTowardStats,
+  onUseSheet,
 }: {
   games: GameDto[]
   linkFor: (game: GameDto) => string
   // Which games count toward the numbers - friendlies don't, unless they're
   // what the game-type filter is showing.
   isCounted?: (game: GameDto) => boolean
+  // Brings IBBA's scoresheet in for a game with no stats (the "!").
+  onUseSheet?: (game: GameDto) => Promise<void>
 }) {
   return (
     <ul className="game-cards mobile-only">
@@ -93,7 +96,7 @@ export function StatsGameCards({
                   <Matchup game={game} counted={counted} />
                 </div>
                 <span className="game-card-end">
-                  <SheetMismatch stats={stats} />
+                  <SheetMismatch game={game} stats={stats} onUseSheet={onUseSheet} />
                   <Result game={game} />
                 </span>
               </div>
