@@ -613,6 +613,11 @@ namespace StatsHub.Api.Data.Migrations.Sqlite
                     b.Property<Guid>("GameId")
                         .HasColumnType("TEXT");
 
+                    b.Property<bool>("NotListed")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(false);
+
                     b.Property<int>("Number")
                         .HasColumnType("INTEGER");
 

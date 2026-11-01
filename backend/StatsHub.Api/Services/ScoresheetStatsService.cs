@@ -78,8 +78,7 @@ namespace StatsHub.Api.Services
                 .ToList();
         }
 
-        // A sheet the player isn't on (didn't dress, or the name fits two
-        // players) isn't read again for a week.
+        // A sheet whose name fits two players isn't read again for a week.
         private bool Absent(Guid gameId, Guid playerId) => _cache.TryGetValue(AbsentKey(gameId, playerId), out _);
         private static string AbsentKey(Guid gameId, Guid playerId) => $"sheet-absent:{gameId}:{playerId}";
 
@@ -196,6 +195,19 @@ namespace StatsHub.Api.Services
                 if (found == null)
                 {
                     var (status, match, _) = FindPlayer(playerName, side.Players);
+                    // Not on the sheet: kept, so the game says he wasn't listed
+                    // (and isn't read again). Two who fit: asked again in a week.
+                    if (status == ScoresheetMatchStatus.NotFound)
+                    {
+                        _context.ScoresheetLines.Add(new ScoresheetLine
+                        {
+                            GameId = game.Id,
+                            PlayerId = link.PlayerId,
+                            NotListed = true,
+                            SheetValid = sheet.IsValid,
+                        });
+                        continue;
+                    }
                     if (status != ScoresheetMatchStatus.Matched)
                     {
                         _cache.Set(AbsentKey(game.Id, link.PlayerId), true, TimeSpan.FromDays(7));
@@ -299,7 +311,7 @@ namespace StatsHub.Api.Services
         {
             if (membership.JerseyNumber != 0 && !membership.JerseyFromScoresheet) return;
             var newest = await _context.ScoresheetLines
-                .Where(l => l.PlayerId == membership.PlayerId && (l.Game.HomeTeamId == ibbaTeamId || l.Game.AwayTeamId == ibbaTeamId))
+                .Where(l => l.PlayerId == membership.PlayerId && !l.NotListed && (l.Game.HomeTeamId == ibbaTeamId || l.Game.AwayTeamId == ibbaTeamId))
                 .OrderByDescending(l => l.Game.GameDate)
                 .Select(l => (int?)l.Number)
                 .FirstOrDefaultAsync(ct);

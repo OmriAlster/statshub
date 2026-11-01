@@ -197,7 +197,7 @@ function BoxScoreCard({ name, stats, sheet, busy, onRecord, onEdit, onUseSheet }
   const off = sheetOff(stats ?? undefined)
   const chip = !stats ? <span className="eg-chip none">Not recorded</span>
     : mismatch ? <span className="eg-chip diff"><span className="eg-bang" aria-hidden="true">!</span>Differs from IBBA</span>
-    : stats.source ? <span className="eg-chip ibba">From IBBA{sheet ? ` · #${sheet.number}` : ''}</span>
+    : stats.source ? <span className="eg-chip ibba">From IBBA{sheet && !sheet.notListed ? ` · #${sheet.number}` : ''}</span>
     : <span className="eg-chip mine">Yours</span>
 
   return (
@@ -206,7 +206,10 @@ function BoxScoreCard({ name, stats, sheet, busy, onRecord, onEdit, onUseSheet }
 
       {!stats ? (
         <>
-          {sheet && !sheet.played && (
+          {sheet?.notListed && (
+            <p className="eg-hint">IBBA's scoresheet for this game doesn't list <bdi>{name}</bdi> - so no stats from it. Record them below if they did play.</p>
+          )}
+          {sheet && !sheet.notListed && !sheet.played && (
             <p className="eg-hint">IBBA's scoresheet has {'#'}{sheet.number} on the roster but not entering the game - so no stats, and the game doesn't count. Record it below if they did play.</p>
           )}
           {sheet?.played && (

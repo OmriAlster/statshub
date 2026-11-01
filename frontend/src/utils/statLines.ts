@@ -50,7 +50,7 @@ export interface SheetRow { stat: SheetStat; label: string; recorded: number; sh
 // sheet, or the stats are IBBA's own (the sheet's, or a league box score).
 export function sheetMismatch(stats: GameStatsDto | undefined): SheetRow[] | null {
   const sheet = stats?.scoresheet
-  if (!stats || !sheet || stats.source) return null
+  if (!stats || !sheet || sheet.notListed || stats.source) return null
   const rows = [
     { stat: 'points' as const, label: 'Points', recorded: stats.totalPoints, sheet: sheet.points, counts: true },
     { stat: 'two' as const, label: '2PT made', recorded: stats.fieldGoalsMade, sheet: sheet.twoPointers, counts: true },
@@ -68,10 +68,10 @@ export function sheetOff(stats: GameStatsDto | undefined) {
   return (stat: SheetStat) => (differs.has(stat) ? 'sheet-off' : '')
 }
 
-// A game with no box score, as the list says it: on the sheet without
-// entering - didn't play; on the sheet - IBBA has stats (the "!" brings them
-// in); neither - there are none.
-export function noStatsLabel(game: { scoresheets?: { played: boolean }[] | null }) {
+// A game with no box score, as the list says it: the sheet doesn't list the
+// player - not listed; on it without entering - didn't play; on it - IBBA has
+// stats (the "!" brings them in); no sheet - there are none.
+export function noStatsLabel(game: { scoresheets?: { played: boolean; notListed?: boolean }[] | null }) {
   const line = game.scoresheets?.[0]
-  return !line ? 'No stats available' : line.played ? 'No stats recorded' : "Didn't play"
+  return !line ? 'No stats available' : line.notListed ? 'Not listed for this game' : line.played ? 'No stats recorded' : "Didn't play"
 }

@@ -618,6 +618,11 @@ namespace StatsHub.Api.Data.Migrations.Postgres
                     b.Property<Guid>("GameId")
                         .HasColumnType("uuid");
 
+                    b.Property<bool>("NotListed")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
                     b.Property<int>("Number")
                         .HasColumnType("integer");
 

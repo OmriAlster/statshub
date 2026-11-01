@@ -203,6 +203,24 @@ public class ScoresheetStatsTests : IClassFixture<ScoresheetStatsTests.Factory>
     }
 
     [Fact]
+    public async Task A_player_the_sheet_doesnt_list_is_marked_not_listed_and_their_own_stats_stay()
+    {
+        var s = await SeedAsync(firstName: "דני", lastName: "מישהו");
+        await FillAsync(s.LinkId);
+
+        var game = await s.Parent.GetAsync<GameDto>($"/api/games/{s.GameId}");
+        Assert.Empty(game.PlayerStats);
+        Assert.True(Assert.Single(game.Scoresheets).NotListed);
+        var stats = Assert.Single(await s.Parent.GetAsync<List<PlayerTeamStatsDto>>($"/api/gamestats/player/{s.PlayerId}"));
+        Assert.Equal(0, stats.JerseyNumber); // no number from a sheet he isn't on
+
+        // The parent's own numbers are what count.
+        await s.Parent.CreateStatsAsync(s.GameId, s.PlayerId, ftm: 3, fta: 4);
+        game = await s.Parent.GetAsync<GameDto>($"/api/games/{s.GameId}");
+        Assert.Equal(3, Assert.Single(game.PlayerStats).TotalPoints);
+    }
+
+    [Fact]
     public async Task With_no_games_there_are_no_points_per_game()
     {
         var parent = await TestUser.SignInAsync(_factory);

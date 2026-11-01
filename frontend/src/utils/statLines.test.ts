@@ -50,6 +50,11 @@ describe("IBBA's scoresheet against what was recorded", () => {
     expect(noStatsLabel({ scoresheets: [] })).toBe('No stats available')
     expect(noStatsLabel({ scoresheets: [{ played: true }] })).toBe('No stats recorded')
     expect(noStatsLabel({ scoresheets: [{ played: false }] })).toBe("Didn't play")
+    expect(noStatsLabel({ scoresheets: [{ played: false, notListed: true }] })).toBe('Not listed for this game')
+  })
+
+  it("doesn't compare against a sheet that doesn't list the player", () => {
+    expect(sheetMismatch(recorded({ scoresheet: { ...sheet, notListed: true, points: 0, twoPointers: 0, freeThrows: 0, fouls: 0 } }))).toBeNull()
   })
 
   it("doesn't flag a match, or the sheet's own numbers", () => {

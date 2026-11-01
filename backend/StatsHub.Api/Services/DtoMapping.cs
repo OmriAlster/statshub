@@ -94,6 +94,7 @@ namespace StatsHub.Api.Services
         public static ScoresheetLineDto ToDto(this ScoresheetLine line) => new()
         {
             PlayerId = line.PlayerId,
+            NotListed = line.NotListed,
             Number = line.Number,
             Played = line.Played,
             Starter = line.Starter,

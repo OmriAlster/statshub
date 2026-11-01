@@ -84,6 +84,8 @@ export interface GameStatsDto {
 
 export interface ScoresheetLineDto {
   playerId: string
+  // The game's sheet was found, but the player isn't on it.
+  notListed?: boolean
   number: number
   // Entered the game (the X in the "entered" column) - on the sheet without it, didn't play.
   played: boolean
