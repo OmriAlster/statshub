@@ -158,6 +158,7 @@ export default function Dashboard() {
           hasPlayer={players.length > 0}
           hasIbba={players.some((p) => !!p.ibba)}
           hasTrackedGame={players.some((p) => Object.values(p.gamesByTeam).some((games) => games.some((g) => g.playerStats.length > 0)))}
+          hasFamily={players.some((p) => p.player.parents.length > 1 || !!p.player.linkedUser)}
         />
       )}
 

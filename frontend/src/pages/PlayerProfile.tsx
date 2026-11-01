@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { api } from '../api/client'
 import type { CreatePlayerFromIbbaResultDto, GameDto, FamilyInviteDto, IbbaLinkStatusDto, IbbaPreviewDto, PlayerDto, TeamDto } from '../api/types'
 import { useAuth } from '../auth/AuthContext'
@@ -88,6 +88,14 @@ export default function PlayerProfile() {
   useEffect(() => {
     if (!isPlayerRole) loadInvites()
   }, [isPlayerRole])
+
+  // "Send an invite" from the getting-started steps opens the invite window.
+  const [searchParams, setSearchParams] = useSearchParams()
+  useEffect(() => {
+    if (loading || searchParams.get('invite') !== '1') return
+    if (!isPlayerRole && players.length > 0) setInviting(true)
+    setSearchParams((prev) => { prev.delete('invite'); return prev }, { replace: true })
+  }, [loading, searchParams, isPlayerRole, players.length, setSearchParams])
 
   const cancelInvite = async (id: string) => {
     try {
