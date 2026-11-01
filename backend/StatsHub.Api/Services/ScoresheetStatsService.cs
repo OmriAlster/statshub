@@ -102,6 +102,13 @@ namespace StatsHub.Api.Services
             if (ownIds.Count == 0) return;
             var teams = await _context.IbbaTeams.Where(t => ownIds.Contains(t.Id)).ToListAsync(ct);
 
+            // Stats once made from a sheet the player never entered on - he didn't play.
+            var notPlayed = await _context.GameStats
+                .Where(gs => gs.PlayerId == player.Id && gs.Source == GameStats.ScoresheetSource
+                    && _context.ScoresheetLines.Any(l => l.GameId == gs.GameId && l.PlayerId == gs.PlayerId && !l.Played))
+                .ToListAsync(ct);
+            _context.GameStats.RemoveRange(notPlayed);
+
             var seasonStart = LeagueSeason.StartOf(DateTime.UtcNow);
             List<SwishCompetition>? competitions = null;
             foreach (var team in teams)
@@ -223,9 +230,14 @@ namespace StatsHub.Api.Services
 
             // The game's stats: the sheet's, unless someone else's are there -
             // the parent's own (which win) or a league box score (which has more).
+            // On the sheet but never entered (no X): didn't play - no stats.
             var stats = await _context.GameStats.FirstOrDefaultAsync(gs => gs.GameId == game.Id && gs.PlayerId == playerId, ct);
             string? news = null;
-            if (stats == null)
+            if (!line.Played)
+            {
+                if (stats?.Source == GameStats.ScoresheetSource) _context.GameStats.Remove(stats);
+            }
+            else if (stats == null)
             {
                 _context.GameStats.Add(FromSheet(new GameStats { GameId = game.Id, PlayerId = playerId }, line));
                 news = "none";
@@ -255,11 +267,10 @@ namespace StatsHub.Api.Services
             return stats;
         }
 
-        // The parent's numbers and the sheet's say the same - the scoring, and
-        // the fouls when the parent recorded any (0 is usually "not tracked").
+        // The parent's numbers and the sheet's say the same - the scoring and the fouls.
         internal static bool Agrees(GameStats stats, ScoresheetLine line) =>
             stats.FieldGoalsMade == line.TwoPointers && stats.ThreePointersMade == line.ThreePointers && stats.FreeThrowsMade == line.FreeThrows
-            && (stats.Fouls == 0 || stats.Fouls == line.Fouls);
+            && stats.Fouls == line.Fouls;
 
         private async Task NotifyAsync(Guid playerId, Game game, ScoresheetLine line, GameStats? recorded, string opponentName)
         {

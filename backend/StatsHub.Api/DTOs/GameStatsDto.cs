@@ -48,6 +48,9 @@ namespace StatsHub.Api.DTOs
     {
         public Guid PlayerId { get; set; }
         public int Number { get; set; }
+        // Entered the game (the X in the sheet's "entered" column) - on the
+        // sheet without it, the player didn't play.
+        public bool Played { get; set; }
         public bool Starter { get; set; }
         public int Points { get; set; }
         public int FreeThrows { get; set; }

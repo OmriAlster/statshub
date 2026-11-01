@@ -95,6 +95,7 @@ namespace StatsHub.Api.Services
         {
             PlayerId = line.PlayerId,
             Number = line.Number,
+            Played = line.Played,
             Starter = line.Starter,
             Points = line.Points,
             FreeThrows = line.FreeThrows,

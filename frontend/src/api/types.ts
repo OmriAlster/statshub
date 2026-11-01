@@ -85,6 +85,8 @@ export interface GameStatsDto {
 export interface ScoresheetLineDto {
   playerId: string
   number: number
+  // Entered the game (the X in the "entered" column) - on the sheet without it, didn't play.
+  played: boolean
   starter: boolean
   points: number
   freeThrows: number

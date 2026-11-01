@@ -6,7 +6,7 @@ import EditGameSheet from './EditGameSheet'
 vi.mock('../api/client', () => ({ api: { get: vi.fn(), post: vi.fn(), put: vi.fn(), delete: vi.fn() } }))
 
 const player = makePlayer({ id: 'p1', firstName: 'Idan' })
-const line = { playerId: 'p1', number: 8, starter: true, points: 11, freeThrows: 5, twoPointers: 3, threePointers: 0, fouls: 1, sheetValid: true }
+const line = { playerId: 'p1', number: 8, played: true, starter: true, points: 11, freeThrows: 5, twoPointers: 3, threePointers: 0, fouls: 1, sheetValid: true }
 const open = (overrides: Parameters<typeof makeGame>[0]) =>
   render(<EditGameSheet player={player} game={makeGame({ isFromIbba: true, status: 'Completed', teamScore: 53, opponentScore: 84, ...overrides })} onGameUpdated={() => {}} onClose={() => {}} />)
 
@@ -35,6 +35,13 @@ describe('edit game: where the box score comes from', () => {
     expect(screen.getByText('From IBBA · #8')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: "Add what's missing" })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /Use IBBA's stats/ })).not.toBeInTheDocument()
+  })
+
+  it("on the sheet without entering: said so, and IBBA's stats aren't offered", () => {
+    open({ playerStats: [], scoresheets: [{ ...line, played: false }] })
+    expect(screen.getByText(/not entering the game/)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: "Use IBBA's stats" })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Type the numbers/ })).toBeInTheDocument()
   })
 
   it("a synced game's details aren't editable; your own game's are", () => {

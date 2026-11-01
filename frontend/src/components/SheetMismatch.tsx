@@ -32,7 +32,8 @@ export default function SheetMismatch({ game, stats, onUseSheet }: {
   const ref = useRef<HTMLSpanElement>(null)
   const rows = sheetMismatch(stats)
   // The games lists load only the viewed player's lines.
-  const missing = !stats && game.status === 'Completed' ? game.scoresheets?.[0] : undefined
+  const line = game.scoresheets?.[0]
+  const missing = !stats && game.status === 'Completed' && line?.played ? line : undefined
 
   useEffect(() => {
     if (!open) return

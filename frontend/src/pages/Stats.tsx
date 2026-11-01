@@ -569,7 +569,7 @@ function StatsPanel({ games, playerId, typeFilter, onGameUpdated }: {
                     <td className={`num ${won ? 'win' : 'loss'}`}>
                       <span className="score-cell"><SheetMismatch game={game} stats={stats} onUseSheet={useSheet} />{game.teamScore}&ndash;{game.opponentScore}</span>
                     </td>
-                    <td className={`num ${off('points')}`}>{stats?.totalPoints ?? '-'}</td>
+                    <td className={`num ${off('points')}`}>{stats?.totalPoints ?? (game.scoresheets?.[0]?.played === false ? <span className="dnp" title="Didn't play">DNP</span> : '-')}</td>
                     <td className={`num ${off('two')}`}>{stats ? madeOf(stats.fieldGoalsMade, stats.fieldGoalsAttempted) : '-'}</td>
                     <td className={`num ${off('three')}`}>{stats ? madeOf(stats.threePointersMade, stats.threePointersAttempted) : '-'}</td>
                     <td className={`num ${off('ft')}`}>{stats ? madeOf(stats.freeThrowsMade, stats.freeThrowsAttempted) : '-'}</td>

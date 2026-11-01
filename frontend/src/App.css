@@ -8212,6 +8212,14 @@ a.insight-card:hover { border-color: var(--color-accent); }
   cursor: pointer;
 }
 
+/* A game the player was on the sheet for but didn't enter. */
+.dnp {
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+}
+
 /* Kept last: it must win over each stat's own colour. */
 /* A number IBBA's scoresheet disagrees with. */
 .sheet-off,

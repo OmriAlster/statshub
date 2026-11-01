@@ -5,7 +5,7 @@ import { countsTowardStats } from '../utils/countedGames'
 import { formatGameTime } from '../utils/formatGameDate'
 import GameStatusBadge, { onCourtIn } from './GameStatusBadge'
 import { GameTypeBadge, HomeAway } from './GameBadges'
-import { madeOf, sheetOff, show } from '../utils/statLines'
+import { madeOf, noStatsLabel, sheetOff, show } from '../utils/statLines'
 import SheetMismatch from './SheetMismatch'
 
 // Phone layout for the Stats and Schedule tables: a 5-13 column table can't
@@ -118,7 +118,7 @@ export function StatsGameCards({
                   </div>
                 </>
               ) : (
-                <p className="game-card-empty">No box score recorded</p>
+                <p className="game-card-empty">{noStatsLabel(game)}</p>
               )}
             </Link>
           </li>
