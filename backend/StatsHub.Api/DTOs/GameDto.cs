@@ -34,6 +34,9 @@ namespace StatsHub.Api.DTOs
         // a read-only "watching" view).
         public bool CanRecordLive { get; set; } = true;
         public List<GameStatsDto> PlayerStats { get; set; } = new List<GameStatsDto>();
+        // The players' lines on the game's scoresheet - there even when the
+        // stats were cleared, to bring IBBA's back.
+        public List<ScoresheetLineDto> Scoresheets { get; set; } = new List<ScoresheetLineDto>();
     }
 
     public class CreateGameDto

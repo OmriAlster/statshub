@@ -93,8 +93,8 @@ export function StatsGameCards({
                   <Matchup game={game} counted={counted} />
                 </div>
                 <span className="game-card-end">
-                  <Result game={game} />
                   <SheetMismatch stats={stats} />
+                  <Result game={game} />
                 </span>
               </div>
               {stats ? (

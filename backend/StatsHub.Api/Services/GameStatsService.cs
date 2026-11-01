@@ -11,6 +11,7 @@ namespace StatsHub.Api.Services
         Task<GameStatsDto> CreateGameStatsAsync(CreateGameStatsDto dto, Guid requestingUserId);
         Task<GameStatsDto?> UpdateGameStatsAsync(Guid id, UpdateGameStatsDto dto, Guid requestingUserId);
         Task<bool> DeleteGameStatsAsync(Guid id, Guid requestingUserId);
+        Task<GameStatsDto> StatsFromScoresheetAsync(StatsFromScoresheetDto dto, Guid requestingUserId);
         Task<List<PlayerTeamStatsDto>> GetStatsByPlayerAsync(Guid playerId, Guid requestingUserId, string? gameType = null);
         Task<PlayerTeamStatsDto?> GetTeamStatsForPlayerAsync(Guid playerId, Guid teamId, Guid requestingUserId);
         Task<List<PlayerTeamStatsDto>> GetStatsByPlayerUnrestrictedAsync(Guid playerId);
@@ -131,6 +132,36 @@ namespace StatsHub.Api.Services
             await _context.SaveChangesAsync();
 
             return await GetGameStatsByIdAsync(id, requestingUserId);
+        }
+
+        // Back to IBBA's numbers: the game's stats (and their shot chart, which
+        // the sheet's makes wouldn't match) replaced by the scoresheet's line -
+        // updated by the sync again from then on, like any line from a sheet.
+        public async Task<GameStatsDto> StatsFromScoresheetAsync(StatsFromScoresheetDto dto, Guid requestingUserId)
+        {
+            if (!await CanWritePlayerAsync(dto.PlayerId, requestingUserId))
+                throw new UnauthorizedAccessException("Player not found or not owned by user");
+            var game = await _context.Games.FindAsync(dto.GameId);
+            if (game == null || !await CanAccessGameAsync(game, requestingUserId))
+                throw new KeyNotFoundException("Game not found");
+            if (game.Status == "In Progress")
+                throw new InvalidOperationException("The game is being tracked live.");
+            var line = await _context.ScoresheetLines.FirstOrDefaultAsync(l => l.GameId == dto.GameId && l.PlayerId == dto.PlayerId)
+                ?? throw new KeyNotFoundException("This game has no scoresheet line for the player.");
+
+            var existing = await _context.GameStats.FirstOrDefaultAsync(gs => gs.GameId == dto.GameId && gs.PlayerId == dto.PlayerId);
+            if (existing != null)
+            {
+                _context.GameStats.Remove(existing);
+                await _context.SaveChangesAsync();
+            }
+            var stats = ScoresheetStatsService.FromSheet(new GameStats { GameId = dto.GameId, PlayerId = dto.PlayerId }, line);
+            _context.GameStats.Add(stats);
+            await _context.SaveChangesAsync();
+
+            var result = (await GetGameStatsByIdAsync(stats.Id, requestingUserId))!;
+            result.Scoresheet = line.ToDto();
+            return result;
         }
 
         private static bool HasStatChange(UpdateGameStatsDto dto) =>

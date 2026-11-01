@@ -83,6 +83,7 @@ export interface GameStatsDto {
 }
 
 export interface ScoresheetLineDto {
+  playerId: string
   number: number
   starter: boolean
   points: number
@@ -117,6 +118,8 @@ export interface GameDto {
   league?: string | null
   canRecordLive: boolean
   playerStats: GameStatsDto[]
+  // The players' lines on the game's scoresheet - there even when the stats were cleared.
+  scoresheets?: ScoresheetLineDto[]
 }
 
 export interface CreateGameStatsDto {

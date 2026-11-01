@@ -84,23 +84,26 @@ namespace StatsHub.Api.Services
                 PlayerStats = game.GameStats.Select(gs =>
                 {
                     var dto = gs.ToDto();
-                    var line = game.ScoresheetLines.FirstOrDefault(l => l.PlayerId == gs.PlayerId);
-                    if (line != null) dto.Scoresheet = new ScoresheetLineDto
-                    {
-                        Number = line.Number,
-                        Starter = line.Starter,
-                        Points = line.Points,
-                        FreeThrows = line.FreeThrows,
-                        TwoPointers = line.TwoPointers,
-                        ThreePointers = line.ThreePointers,
-                        Fouls = line.Fouls,
-                        SheetValid = line.SheetValid,
-                        SheetErrors = line.SheetErrors,
-                    };
+                    dto.Scoresheet = game.ScoresheetLines.FirstOrDefault(l => l.PlayerId == gs.PlayerId)?.ToDto();
                     return dto;
-                }).ToList()
+                }).ToList(),
+                Scoresheets = game.ScoresheetLines.Select(ToDto).ToList()
             };
         }
+
+        public static ScoresheetLineDto ToDto(this ScoresheetLine line) => new()
+        {
+            PlayerId = line.PlayerId,
+            Number = line.Number,
+            Starter = line.Starter,
+            Points = line.Points,
+            FreeThrows = line.FreeThrows,
+            TwoPointers = line.TwoPointers,
+            ThreePointers = line.ThreePointers,
+            Fouls = line.Fouls,
+            SheetValid = line.SheetValid,
+            SheetErrors = line.SheetErrors,
+        };
 
         // A box score, with its shots when they were loaded.
         public static GameStatsDto ToDto(this GameStats gs) => new()

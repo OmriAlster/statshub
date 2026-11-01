@@ -39,6 +39,7 @@ import Modal from '../components/Modal'
 import { LeagueMark, LeagueName } from '../components/LeagueBadge'
 import { average, madeAverage, madeOf, sheetOff, show, showPct } from '../utils/statLines'
 import SheetMismatch from '../components/SheetMismatch'
+import ConfirmModal from '../components/ConfirmModal'
 
 export default function Stats() {
   const { user } = useAuth()
@@ -562,7 +563,7 @@ function StatsPanel({ games, playerId, typeFilter }: { games: GameDto[]; playerI
                       </span>
                     </td>
                     <td className={`num ${won ? 'win' : 'loss'}`}>
-                      <span className="score-cell">{game.teamScore}&ndash;{game.opponentScore}<SheetMismatch stats={stats} /></span>
+                      <span className="score-cell"><SheetMismatch stats={stats} />{game.teamScore}&ndash;{game.opponentScore}</span>
                     </td>
                     <td className={`num ${off('points')}`}>{stats?.totalPoints ?? '-'}</td>
                     <td className={`num ${off('two')}`}>{stats ? madeOf(stats.fieldGoalsMade, stats.fieldGoalsAttempted) : '-'}</td>
@@ -996,6 +997,27 @@ function ScheduleEditPanel({
 
   const [clearing, setClearing] = useState(false)
 
+  // IBBA's scoresheet line for the player - offered back in place of what's recorded.
+  const sheetLine = game.scoresheets?.find((l) => l.playerId === player.id)
+  const [askSheet, setAskSheet] = useState(false)
+  const [restoring, setRestoring] = useState(false)
+  const useSheetStats = async () => {
+    setRestoring(true)
+    setError(null)
+    try {
+      const { data } = await api.post<GameStatsDto>('/gamestats/from-scoresheet', { gameId: game.id, playerId: player.id })
+      setStatsSeed(data)
+      setStatsMode('quick')
+      const { data: updatedGame } = await api.get<GameDto>(`/games/${game.id}`, { params: { playerId: player.id } })
+      onGameUpdated(updatedGame)
+    } catch {
+      setError("Could not bring back IBBA's stats.")
+    } finally {
+      setRestoring(false)
+      setAskSheet(false)
+    }
+  }
+
   const clearStats = async () => {
     if (!statsSeed) return
     if (!window.confirm('Clear all recorded stats for this game? This removes the box score and shot chart entirely.')) return
@@ -1088,12 +1110,32 @@ function ScheduleEditPanel({
 
       <div className="flex gap-1" style={{ marginTop: '1.25rem', alignItems: 'baseline', justifyContent: 'space-between' }}>
         <h4 style={{ margin: 0 }}>Box Score</h4>
-        {statsSeed && (
-          <button className="clear-stats-btn" onClick={clearStats} disabled={clearing}>
-            {clearing ? <Busy>Clearing…</Busy> : '🗑️ Clear Stats'}
-          </button>
-        )}
+        <span className="flex gap-1">
+          {sheetLine && statsSeed?.source !== 'scoresheet' && (
+            <button className="clear-stats-btn sheet-restore-btn" onClick={() => setAskSheet(true)} disabled={restoring}>
+              ↩ Use IBBA's stats
+            </button>
+          )}
+          {statsSeed && (
+            <button className="clear-stats-btn" onClick={clearStats} disabled={clearing}>
+              {clearing ? <Busy>Clearing…</Busy> : '🗑️ Clear Stats'}
+            </button>
+          )}
+        </span>
       </div>
+      {askSheet && sheetLine && (
+        <ConfirmModal
+          title="Use IBBA's stats?"
+          message={<>
+            The box score becomes IBBA's scoresheet: #{sheetLine.number} · {sheetLine.points} pts · {sheetLine.twoPointers}×2 · {sheetLine.threePointers}×3 · {sheetLine.freeThrows} FT · {sheetLine.fouls} fouls.
+            {statsSeed && ' What was recorded for this game, shot chart included, is replaced.'}
+          </>}
+          confirmLabel="Use IBBA's stats"
+          busy={restoring}
+          onConfirm={useSheetStats}
+          onCancel={() => setAskSheet(false)}
+        />
+      )}
       {statsSeed ? (
         <>
           <SegmentedControl

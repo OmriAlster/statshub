@@ -31,7 +31,7 @@ describe('stats a game may not have recorded', () => {
 })
 
 describe("IBBA's scoresheet against what was recorded", () => {
-  const sheet = { number: 8, starter: true, points: 11, freeThrows: 5, twoPointers: 3, threePointers: 0, fouls: 1, sheetValid: true }
+  const sheet = { playerId: 'p1', number: 8, starter: true, points: 11, freeThrows: 5, twoPointers: 3, threePointers: 0, fouls: 1, sheetValid: true }
   const recorded = (o: Parameters<typeof makeStats>[0]) =>
     makeStats({ fieldGoalsMade: 3, threePointersMade: 0, freeThrowsMade: 5, totalPoints: 11, fouls: 1, scoresheet: sheet, ...o })
 

@@ -2349,20 +2349,34 @@ select:focus {
 .game-card-end {
   display: inline-flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 0.4rem;
+  line-height: 1;
 }
 
+/* The "!" goes before the score, so the score stays lined up with the rows
+   that have none. */
 .score-cell {
   display: inline-flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 0.35rem;
+  vertical-align: middle;
+  line-height: 1;
+}
+
+.game-card-end .sheet-mismatch,
+.score-cell .sheet-mismatch {
+  line-height: 1;
 }
 
 .sheet-mismatch-icon {
   display: inline-grid;
   place-items: center;
-  width: 1.1rem;
-  height: 1.1rem;
+  flex: none;
+  width: 1.05rem;
+  height: 1.05rem;
+  line-height: 1;
   border-radius: 50%;
   background: var(--color-gold);
   color: #1a1400;
@@ -5214,6 +5228,12 @@ button.crest-cluster:hover .crest-main {
   background: var(--color-surface-hover);
 }
 
+/* Back to IBBA's scoresheet numbers - a restore, not a delete. */
+.clear-stats-btn.sheet-restore-btn {
+  border-color: var(--color-info);
+  color: var(--color-info);
+}
+
 .ibba-locked-mark {
   width: 14px;
   height: 14px;
@@ -7677,23 +7697,6 @@ a.insight-card:hover { border-color: var(--color-accent); }
   color: var(--color-gold);
 }
 
-/* ...on a soft yellow ground, so it doesn't pass for the points' own orange. */
-.game-card-stats .sheet-off,
-.game-card-shooting .sheet-off,
-.percentage-label.sheet-off,
-.games-table td.sheet-off {
-  background: var(--color-gold-soft);
-  border-radius: 6px;
-}
-
-.game-card-shooting .sheet-off,
-.percentage-label.sheet-off {
-  padding: 0 0.35rem;
-  justify-self: start;
-}
-
 .stat-box-enhanced.sheet-off {
-  background: var(--color-gold-soft);
   border-color: var(--color-gold);
-  box-shadow: 0 0 0 1px var(--color-gold-soft);
 }

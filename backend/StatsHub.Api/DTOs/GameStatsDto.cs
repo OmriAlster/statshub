@@ -46,6 +46,7 @@ namespace StatsHub.Api.DTOs
 
     public class ScoresheetLineDto
     {
+        public Guid PlayerId { get; set; }
         public int Number { get; set; }
         public bool Starter { get; set; }
         public int Points { get; set; }
@@ -56,6 +57,13 @@ namespace StatsHub.Api.DTOs
         // The sheet failed its own cross-checks - its numbers may be off.
         public bool SheetValid { get; set; }
         public string? SheetErrors { get; set; }
+    }
+
+    // The game's stats rebuilt from IBBA's scoresheet, in place of what was there.
+    public class StatsFromScoresheetDto
+    {
+        public Guid GameId { get; set; }
+        public Guid PlayerId { get; set; }
     }
 
     public class CreateGameStatsDto

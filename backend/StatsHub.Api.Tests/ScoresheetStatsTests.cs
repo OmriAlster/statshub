@@ -141,6 +141,27 @@ public class ScoresheetStatsTests : IClassFixture<ScoresheetStatsTests.Factory>
     }
 
     [Fact]
+    public async Task Cleared_or_overwritten_stats_come_back_from_the_sheet_on_request()
+    {
+        var s = await SeedAsync();
+        var mine = await s.Parent.CreateStatsAsync(s.GameId, s.PlayerId, ftm: 2, fta: 4, reb: 6);
+        await FillAsync(s.LinkId);
+        var cleared = await s.Parent.Http.DeleteAsync($"/api/gamestats/{mine.Id}");
+        Assert.Equal(HttpStatusCode.NoContent, cleared.StatusCode);
+
+        // A cleared game stays cleared on the next sync...
+        await FillAsync(s.LinkId);
+        var game = await s.Parent.GetAsync<GameDto>($"/api/games/{s.GameId}");
+        Assert.Empty(game.PlayerStats);
+        Assert.Equal(16, Assert.Single(game.Scoresheets).Number);
+
+        // ...until the parent asks for IBBA's numbers back.
+        var back = await s.Parent.PostAsync<GameStatsDto>("/api/gamestats/from-scoresheet", new StatsFromScoresheetDto { GameId = s.GameId, PlayerId = s.PlayerId });
+        Assert.Equal(GameStats.ScoresheetSource, back.Source);
+        Assert.Equal((18, 5, null), (back.TotalPoints, back.FreeThrowsMade, back.TotalRebounds));
+    }
+
+    [Fact]
     public async Task With_no_games_there_are_no_points_per_game()
     {
         var parent = await TestUser.SignInAsync(_factory);
