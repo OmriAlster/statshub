@@ -16,16 +16,38 @@ namespace StatsHub.Api.Services
         private readonly IServiceScopeFactory _scopeFactory;
         private readonly ILogger<IbbaNightlySyncBackgroundService> _logger;
         private readonly TimeZoneInfo _israelTime;
+        private readonly bool _syncOnStart;
 
-        public IbbaNightlySyncBackgroundService(IServiceScopeFactory scopeFactory, ILogger<IbbaNightlySyncBackgroundService> logger)
+        public IbbaNightlySyncBackgroundService(IServiceScopeFactory scopeFactory, ILogger<IbbaNightlySyncBackgroundService> logger, IConfiguration config)
         {
             _scopeFactory = scopeFactory;
             _logger = logger;
             _israelTime = FindIsraelTimeZone(logger);
+            _syncOnStart = config.GetValue<bool>("IBBA_SYNC_ALL_ON_START");
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
+            // IBBA_SYNC_ALL_ON_START=true: everyone is synced once, a minute
+            // after starting - to bring a new feature's data in without waiting
+            // for midnight. Unset it after, or every deploy syncs everyone.
+            if (_syncOnStart)
+            {
+                try
+                {
+                    await Task.Delay(TimeSpan.FromMinutes(1), stoppingToken);
+                    await SyncAllAsync(stoppingToken);
+                }
+                catch (TaskCanceledException)
+                {
+                    return;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Startup IBBA sync failed");
+                }
+            }
+
             while (!stoppingToken.IsCancellationRequested)
             {
                 var delay = TimeUntilNextMidnight();
