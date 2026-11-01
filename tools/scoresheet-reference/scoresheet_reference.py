@@ -82,6 +82,7 @@ def parse(path):
 
     # scorer (player) numbers: coloured numeric words in the grid area
     scorer = {}
+    scorer_text = {}  # jersey as written: "0" and "00" are different players
     colored = [w for w in words if w["text"].isdigit() and not is_black(w["non_stroking_color"])
                and not is_white(w["non_stroking_color"]) and w["x0"] > 255 and 115 < w["top"] < 600]
     scorer_centers = {}
@@ -96,6 +97,7 @@ def parse(path):
         if k in scorer:
             errors.append(f"two scorer numbers on row {k}")
         scorer[k] = int(w["text"])
+        scorer_text[k] = w["text"]
         scorer_centers[k] = (cx, cy)
 
     # marks
@@ -167,13 +169,15 @@ def parse(path):
         if not num:
             continue
         namew = [w for w in band if HEB.search(w["text"]) or w["text"] in (",", ".")
-                 or re.fullmatch(r"\(CAP\)", w["text"])]
-        captain = any(w["text"] == "(CAP)" for w in namew)
-        namew = [w for w in namew if w["text"] != "(CAP)" and w["x0"] > 47]
+                 or re.fullmatch(r"\((CAP|C)\),?", w["text"])]
+        captain = any(re.fullmatch(r"\((CAP|C)\),?", w["text"]) for w in namew)
+        namew = [w for w in namew if not re.fullmatch(r"\((CAP|C)\),?", w["text"]) and w["x0"] > 47]
         raw = re.sub(r"[.,]", " ", read_rtl(namew)).split()
         raw = [t for t in raw if t]
-        initial = raw[-1] if len(raw) > 1 and len(raw[-1]) == 1 else ""
-        last = " ".join(raw[:-1] if initial else raw)
+        # the one-letter token is the first-name initial, wherever the captain marker put it
+        singles = [i for i, t in enumerate(raw) if len(t) == 1]
+        initial = raw[singles[-1]] if len(raw) > 1 and singles else ""
+        last = " ".join(t for i, t in enumerate(raw) if not (initial and i == singles[-1]))
         xw = [w for w in band if w["text"] == "X" and 146 < w["x0"] < 160]
         played = bool(xw)
         starter = False
@@ -184,6 +188,7 @@ def parse(path):
         fouls = [w for w in band if w["text"] in ("P", "T", "U", "D") and w["x0"] > 160]
         rosters[side].append({
             "number": int(num[0]["text"]),
+            "numberText": num[0]["text"],
             "code": cw["text"].strip("()"),
             "lastName": last,
             "firstInitial": initial,
@@ -211,7 +216,7 @@ def parse(path):
                 pts = 3 if k in circled_scorer else 2
             if diff != pts:
                 errors.append(f"{side} score {n}: mark implies {pts} pts but score moved {diff}")
-            events[side].append({"score": n, "player": pl, "points": pts, "kind": "ft" if pts == 1 and kind == "dot" else ("fg3" if pts == 3 else "fg2")})
+            events[side].append({"score": n, "player": pl, "playerText": scorer_text.get(k), "points": pts, "kind": "ft" if pts == 1 and kind == "dot" else ("fg3" if pts == 3 else "fg2")})
             prev = n
 
     # quarter of each event from the printed partials
@@ -231,15 +236,15 @@ def parse(path):
     for side, name in (("A", home_name), ("B", away_name)):
         players = []
         for p in rosters[side]:
-            evs = [e for e in events[side] if e["player"] == p["number"]]
+            evs = [e for e in events[side] if e["playerText"] == p["numberText"]]
             players.append({**p,
                             "points": sum(e["points"] for e in evs),
                             "ft": sum(e["kind"] == "ft" for e in evs),
                             "fg2": sum(e["kind"] == "fg2" for e in evs),
                             "fg3": sum(e["kind"] == "fg3" for e in evs)})
-        nums = {p["number"] for p in rosters[side]}
+        nums = {p["numberText"] for p in rosters[side]}
         for e in events[side]:
-            if e["player"] is not None and e["player"] not in nums:
+            if e["playerText"] is not None and e["playerText"] not in nums:
                 errors.append(f"{side}: scorer #{e['player']} not on roster")
         total = sum(p["points"] for p in players)
         last_score = events[side][-1]["score"] if events[side] else 0

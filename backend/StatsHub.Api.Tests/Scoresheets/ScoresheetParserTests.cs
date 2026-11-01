@@ -84,6 +84,39 @@ public class ScoresheetParserTests
         Assert.False(sheet.Away.Players.Single(p => p.Number == 20).Played);
     }
 
+    private static ParsedScoresheet ParseFixture(string name) =>
+        ScoresheetParser.Parse(File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "Scoresheets", "Fixtures", name + ".pdf")));
+
+    [Fact]
+    public void Jersey_0_and_00_are_two_players()
+    {
+        // Megiddo has #0 (Ariav, scored a basket) and #00 (Luria, did not play): read as numbers
+        // both were 0 and the basket counted twice - 80 points against a running score of 78.
+        var sheet = ParseFixture("ibba-boys-b-2026-10-11-haifa-megiddo");
+
+        Assert.True(sheet.IsValid, string.Join("; ", sheet.Errors));
+        Assert.Equal((60, 78), (sheet.HomeFinal!.Value, sheet.AwayFinal!.Value));
+        Assert.Equal(2, sheet.Away.Players.Single(p => p.Code == "065").Points);
+        Assert.Equal(0, sheet.Away.Players.Single(p => p.Code == "674").Points);
+        Assert.Equal(78, sheet.Away.Players.Sum(p => p.Points));
+    }
+
+    [Fact]
+    public void A_captain_marked_C_keeps_the_name_and_initial_apart()
+    {
+        // "סמט (C), א." - the short captain marker shifts the words; the initial is still the
+        // one-letter token. His 14 points match IBBA's own box score for this game.
+        var sheet = ParseFixture("ibba-artzit-2026-10-11-netzer-sereni-maale-adumim");
+        var samet = sheet.Away.Players.Single(p => p.Code == "800");
+
+        Assert.True(sheet.IsValid, string.Join("; ", sheet.Errors));
+        Assert.Equal(("סמט", "א", 12), (samet.LastName, samet.FirstInitial, samet.Number));
+        Assert.True(samet.Captain);
+        Assert.True(samet.Starter);
+        Assert.Equal((14, 0, 1, 4, 4), (samet.Points, samet.FreeThrows, samet.TwoPointers, samet.ThreePointers, samet.Fouls));
+        Assert.Equal(ScoresheetMatchStatus.Matched, ScoresheetNameMatcher.Match("אברהם זאב", "סמט", sheet.Away.Players).Status);
+    }
+
     [Fact]
     public void The_whole_result_matches_the_verified_expected_output()
     {

@@ -75,7 +75,9 @@ public static class ScoresheetParser
 
     private readonly record struct LetterInfo(string Value, double X0, double X1, double Base, double Size, Rgb Color);
 
-    private sealed record RosterRow(int Number, string Code, string LastName, string FirstInitial,
+    // NumberText is the jersey as printed: "0" and "00" are different players, so baskets are
+    // matched to players by it, not by the number.
+    private sealed record RosterRow(int Number, string NumberText, string Code, string LastName, string FirstInitial,
         bool Captain, bool Played, bool Starter, int Fouls);
 
     // ------------------------------------------------------------------ extraction
@@ -261,6 +263,7 @@ public static class ScoresheetParser
 
         // ---- scorer jersey numbers: coloured numbers beside a grid row
         var scorer = new Dictionary<(char Side, int N), int>();
+        var scorerText = new Dictionary<(char Side, int N), string>();
         var scorerCenters = new Dictionary<(char Side, int N), Cell>();
         foreach (var w in words.Where(w => TryInt(w.Text, out _) && !w.Color.IsBlack && !w.Color.IsWhite
                                            && w.X0 > 255 && w.Top is > 115 and < 600))
@@ -272,6 +275,7 @@ public static class ScoresheetParser
             var key = candidates[0].Key;
             if (scorer.ContainsKey(key)) errors.Add($"two scorer numbers on row {key}");
             scorer[key] = int.Parse(w.Text, CultureInfo.InvariantCulture);
+            scorerText[key] = w.Text;
             scorerCenters[key] = new Cell(w.Cx, w.Cy);
         }
 
@@ -361,12 +365,13 @@ public static class ScoresheetParser
                 var number = band.FirstOrDefault(w => TryInt(w.Text, out _) && w.X0 is > 130 and < 142);
                 if (number is null) continue; // coach rows carry a code but no jersey number
 
-                bool captain = band.Any(w => w.Text == "(CAP)");
+                bool captain = band.Any(w => Regex.IsMatch(w.Text, @"^\((CAP|C)\),?$"));
                 var nameWords = band.Where(w => HebrewChar.IsMatch(w.Text) && w.X0 > 47).ToList();
                 var tokens = Regex.Replace(ReadRtl(nameWords), @"[.,]", " ")
                     .Split(' ', StringSplitOptions.RemoveEmptyEntries);
-                string initial = tokens.Length > 1 && tokens[^1].Length == 1 ? tokens[^1] : string.Empty;
-                string last = string.Join(" ", initial.Length > 0 ? tokens[..^1] : tokens);
+                var single = tokens.Select((t, i) => (t, i)).Where(x => x.t.Length == 1).ToList();
+                string initial = tokens.Length > 1 && single.Count > 0 ? single[^1].t : string.Empty;
+                string last = string.Join(" ", initial.Length > 0 ? tokens.Where((_, i) => i != single[^1].i) : tokens);
 
                 var x = band.FirstOrDefault(w => w.Text == "X" && w.X0 is > 146 and < 160);
                 bool played = x is not null;
@@ -378,13 +383,15 @@ public static class ScoresheetParser
                 }
                 int fouls = band.Count(w => FoulToken.IsMatch(w.Text) && w.X0 > 160);
 
-                rosters[side].Add(new RosterRow(int.Parse(number.Text, CultureInfo.InvariantCulture),
+                rosters[side].Add(new RosterRow(int.Parse(number.Text, CultureInfo.InvariantCulture), number.Text,
                     code.Text.Trim('(', ')'), last, initial, captain, played, starter, fouls));
             }
         }
 
         // ---- scoring events per team
         var events = new Dictionary<char, List<ScoringEvent>> { ['A'] = new(), ['B'] = new() };
+        // The scorer's jersey as written, per basket (side, running score).
+        var eventScorer = new Dictionary<(char Side, int Score), string>();
         foreach (char side in new[] { 'A', 'B' })
         {
             int prev = 0;
@@ -394,6 +401,7 @@ public static class ScoresheetParser
                 bool dot = marks[key] == "dot";
                 int points = dot ? 1 : circledScorer.Contains(key) ? 3 : 2;
                 int? player = scorer.TryGetValue(key, out var p) ? p : null;
+                if (scorerText.TryGetValue(key, out var text)) eventScorer[(side, key.N)] = text;
                 if (player is null) errors.Add($"{side} score {key.N}: no scorer number");
                 if (diff != points)
                     errors.Add($"{side} score {key.N}: mark implies {points} pts but score moved {diff}");
@@ -425,15 +433,15 @@ public static class ScoresheetParser
         {
             var players = rosters[side].Select(r =>
             {
-                var mine = events[side].Where(e => e.Player == r.Number).ToList();
+                var mine = events[side].Where(e => eventScorer.GetValueOrDefault((side, e.Score)) == r.NumberText).ToList();
                 return new ScoresheetPlayer(r.Number, r.Code, r.LastName, r.FirstInitial, r.Captain, r.Played,
                     r.Starter, r.Fouls, mine.Sum(e => e.Points),
                     mine.Count(e => e.Kind == "ft"), mine.Count(e => e.Kind == "fg2"), mine.Count(e => e.Kind == "fg3"));
             }).ToList();
 
-            var numbers = rosters[side].Select(r => r.Number).ToHashSet();
-            foreach (var e in events[side].Where(e => e.Player is not null && !numbers.Contains(e.Player.Value)))
-                errors.Add($"{side}: scorer #{e.Player} not on roster");
+            var numbers = rosters[side].Select(r => r.NumberText).ToHashSet();
+            foreach (var e in events[side].Where(e => eventScorer.TryGetValue((side, e.Score), out var t) && !numbers.Contains(t)))
+                errors.Add($"{side}: scorer #{eventScorer[(side, e.Score)]} not on roster");
 
             int total = players.Sum(p => p.Points);
             int lastScore = events[side].Count > 0 ? events[side][^1].Score : 0;
