@@ -31,3 +31,7 @@ node_modules/
 # Ad-hoc local backup snapshots
 _backup_*/
 .vercel
+
+# Python bytecode (tools/)
+__pycache__/
+*.pyc

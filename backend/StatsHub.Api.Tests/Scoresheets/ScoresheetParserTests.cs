@@ -92,7 +92,10 @@ public class ScoresheetParserTests
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
             Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
         };
-        var actual = JsonNode.Parse(JsonSerializer.Serialize(Parse(), options));
+        var actual = JsonNode.Parse(JsonSerializer.Serialize(Parse(), options))!.AsObject();
+        // IsValid is computed from Errors, not read from the sheet - checked on its own.
+        Assert.True(actual["isValid"]!.GetValue<bool>());
+        actual.Remove("isValid");
         var expected = JsonNode.Parse(File.ReadAllText(FixturePath(".expected.json")));
 
         Assert.True(JsonNode.DeepEquals(expected, actual),

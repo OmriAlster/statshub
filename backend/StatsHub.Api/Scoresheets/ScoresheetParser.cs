@@ -2,6 +2,8 @@ using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
 using UglyToad.PdfPig;
+using UglyToad.PdfPig.Core;
+using UglyToad.PdfPig.Graphics;
 using UglyToad.PdfPig.Content;
 using UglyToad.PdfPig.Graphics.Colors;
 
@@ -46,6 +48,8 @@ public static class ScoresheetParser
     {
         public bool IsBlack => R < 0.05 && G < 0.05 && B < 0.05;
         public bool IsWhite => R > 0.95 && G > 0.95 && B > 0.95;
+        // Background tints (the grid's cells are 0.93/0.94/0.95), never ink.
+        public bool IsLight => R > 0.85 && G > 0.85 && B > 0.85;
         public bool IsBlue => R < 0.05 && G < 0.05 && B > 0.95;
     }
 
@@ -56,7 +60,10 @@ public static class ScoresheetParser
         public double Cy => Base - Size / 2;
     }
 
-    private sealed record Shape(double X0, double X1, double Top, double Bottom, bool Filled, bool Stroked, Rgb Fill)
+    // IsCurve: what pdfplumber calls a "curve" - anything but an axis-aligned rectangle or a
+    // straight horizontal/vertical line. The grid's own cell boxes are rectangles; the marks
+    // (dots, circles, the diagonal slash) are curves.
+    private sealed record Shape(double X0, double X1, double Top, double Bottom, bool Filled, bool Stroked, Rgb Fill, bool IsCurve)
     {
         public double W => X1 - X0;
         public double H => Bottom - Top;
@@ -148,10 +155,41 @@ public static class ScoresheetParser
             if (rect is null) continue;
             var r = rect.Value;
             shapes.Add(new Shape(r.Left, r.Right, height - r.Top, height - r.Bottom,
-                path.IsFilled, path.IsStroked, path.IsFilled ? ToRgb(path.FillColor) : default));
+                path.IsFilled, path.IsStroked, path.IsFilled ? ToRgb(path.FillColor) : default, IsCurve(path)));
         }
         return shapes;
     }
+
+    private static bool IsCurve(PdfPath path)
+    {
+        foreach (var subpath in path)
+        {
+            PdfPoint? start = null, current = null;
+            foreach (var command in subpath.Commands)
+            {
+                switch (command)
+                {
+                    case PdfSubpath.BezierCurve:
+                        return true;
+                    case PdfSubpath.Move move:
+                        start = current = move.Location;
+                        break;
+                    case PdfSubpath.Line line:
+                        if (Diagonal(line.From, line.To)) return true;
+                        current = line.To;
+                        break;
+                    case PdfSubpath.Close:
+                        if (start is not null && current is not null && Diagonal(current.Value, start.Value)) return true;
+                        current = start;
+                        break;
+                }
+            }
+        }
+        return false;
+    }
+
+    private static bool Diagonal(PdfPoint a, PdfPoint b) =>
+        Math.Abs(a.X - b.X) > 0.01 && Math.Abs(a.Y - b.Y) > 0.01;
 
     /// <summary>Hebrew arrives visually ordered (reversed); flip it, mirroring brackets.</summary>
     private static string Logical(Word w)
@@ -243,8 +281,12 @@ public static class ScoresheetParser
         var periodEnds = new Dictionary<char, List<int>> { ['A'] = new(), ['B'] = new() };
         foreach (var s in shapes.Where(s => s.X0 > 255 && s.Top is > 115 and < 600))
         {
-            if (s.Filled && !s.Stroked && !s.Fill.IsWhite && s.W is > 17 and < 21 && s.H is > 11 and < 15)
+            // A slash is a filled 4-point polygon in ink. PdfPig stores any closed 4-line path as an
+            // axis-aligned rectangle, so its angle is lost - the grid's own cell backgrounds have the
+            // same size but a light grey fill, which is what tells them apart here.
+            if (s.Filled && !s.Stroked && !s.Fill.IsLight && s.W is > 17 and < 21 && s.H is > 11 and < 15)
                 AddMark("slash", s);
+            else if (!s.IsCurve) continue;
             else if (s.Filled && !s.Stroked && !s.Fill.IsWhite && s.W is > 4 and < 7 && s.H is > 4 and < 7)
                 AddMark("dot", s);
             else if (s.Stroked && !s.Filled && s.W is > 9 and < 11.5)
@@ -310,7 +352,7 @@ public static class ScoresheetParser
         }
         else
         {
-            var xCircles = shapes.Where(s => s.Stroked && !s.Filled && s.W is > 8 and < 10.5 && s.X0 < 200).ToList();
+            var xCircles = shapes.Where(s => s.IsCurve && s.Stroked && !s.Filled && s.W is > 8 and < 10.5 && s.X0 < 200).ToList();
             foreach (var code in words.Where(w => CodeToken.IsMatch(w.Text) && w.X0 < 60 && w.Top > markerA.Top)
                          .OrderBy(w => w.Top))
             {
