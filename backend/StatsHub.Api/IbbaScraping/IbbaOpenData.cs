@@ -67,12 +67,28 @@ public class IbbaOpenData
     {
         var ids = leagueIds.Distinct().ToList();
         if (ids.Count == 0 || string.IsNullOrWhiteSpace(leagueName)) return null;
-        using var timing = RequestTimings.Time("ibba-api-league");
-        var leagues = await GetAsync<List<LeagueJson>>($"{Api}/leagues?include={string.Join(',', ids)}&per_page=100&_fields=id,name,link");
+        var leagues = await LeaguesAsync(ids);
         var league = leagues?
             .Where(l => Decode(l.Name) == leagueName.Trim() && !string.IsNullOrEmpty(l.Link))
             .MaxBy(l => l.Id);
         return league == null ? null : new LeagueInfo(league.Id, Decode(league.Name), PageUrl(league.Link!));
+    }
+
+    // A season's leagues - their names and pages - don't change: asked once
+    // in a while, not on every sync.
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, (DateTime At, List<LeagueJson> Leagues)> LeaguesByIds = new();
+    // Nor does a team's page address.
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<int, (DateTime At, string Url)> TeamUrlById = new();
+    private static readonly TimeSpan SeasonDataFor = TimeSpan.FromHours(12);
+
+    private async Task<List<LeagueJson>?> LeaguesAsync(List<int> ids)
+    {
+        var key = string.Join(',', ids);
+        if (LeaguesByIds.TryGetValue(key, out var known) && DateTime.UtcNow - known.At < SeasonDataFor) return known.Leagues;
+        using var timing = RequestTimings.Time("ibba-api-league");
+        var leagues = await GetAsync<List<LeagueJson>>($"{Api}/leagues?include={key}&per_page=100&_fields=id,name,link");
+        if (leagues != null) LeaguesByIds[key] = (DateTime.UtcNow, leagues);
+        return leagues;
     }
 
     /// <summary>
@@ -83,8 +99,7 @@ public class IbbaOpenData
     {
         var ids = leagueIds.Distinct().ToList();
         if (ids.Count == 0) return null;
-        using var timing = RequestTimings.Time("ibba-api-league");
-        var leagues = await GetAsync<List<LeagueJson>>($"{Api}/leagues?include={string.Join(',', ids)}&per_page=100&_fields=id,name,link");
+        var leagues = await LeaguesAsync(ids);
         var league = leagues?
             .Where(l => !Decode(l.Name).Contains("גביע") && !string.IsNullOrEmpty(l.Link))
             .MaxBy(l => l.Id);
@@ -114,9 +129,20 @@ public class IbbaOpenData
         var rows = table.Data.Where(r => r.Key != "0").ToList();
         if (rows.Count == 0) return [];
         var teamIds = rows.Select(r => int.TryParse(r.Key, out var id) ? id : 0).Where(id => id > 0).ToList();
-        var links = await GetAsync<List<TeamJson>>($"{Api}/teams?include={string.Join(',', teamIds)}&per_page=100&_fields=id,link");
-        if (links == null) return null;
-        var urlById = links.Where(t => !string.IsNullOrEmpty(t.Link)).ToDictionary(t => t.Id, t => PageUrl(t.Link!));
+        var urlById = new Dictionary<int, string>();
+        foreach (var id in teamIds)
+            if (TeamUrlById.TryGetValue(id, out var known) && DateTime.UtcNow - known.At < SeasonDataFor) urlById[id] = known.Url;
+        var unknown = teamIds.Where(id => !urlById.ContainsKey(id)).ToList();
+        if (unknown.Count > 0)
+        {
+            var links = await GetAsync<List<TeamJson>>($"{Api}/teams?include={string.Join(',', unknown)}&per_page=100&_fields=id,link");
+            if (links == null) return null;
+            foreach (var t in links.Where(t => !string.IsNullOrEmpty(t.Link)))
+            {
+                urlById[t.Id] = PageUrl(t.Link!);
+                TeamUrlById[t.Id] = (DateTime.UtcNow, urlById[t.Id]);
+            }
+        }
 
         var standings = new List<LeagueStanding>();
         foreach (var (key, row) in rows)
