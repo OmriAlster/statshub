@@ -17,6 +17,7 @@ const Login = lazy(() => import('./pages/Login'))
 const JoinAsPlayer = lazy(() => import('./pages/JoinAsPlayer'))
 const SharedPlayerView = lazy(() => import('./pages/SharedPlayerView'))
 const InviteLanding = lazy(() => import('./pages/InviteLanding'))
+const ScoresheetLab = lazy(() => import('./pages/ScoresheetLab'))
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth()
@@ -60,6 +61,7 @@ function App() {
       <Route path="/stats" element={signedIn(<Stats />)} />
       <Route path="/stats/:playerId" element={signedIn(<Stats />)} />
       <Route path="/players" element={signedIn(<PlayerProfile />)} />
+      {import.meta.env.DEV && <Route path="/lab/scoresheets" element={signedIn(<ScoresheetLab />)} />}
 
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
