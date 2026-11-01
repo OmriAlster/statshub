@@ -16,6 +16,7 @@ const PlayerProfile = lazy(() => import('./pages/PlayerProfile'))
 const Login = lazy(() => import('./pages/Login'))
 const JoinAsPlayer = lazy(() => import('./pages/JoinAsPlayer'))
 const SharedPlayerView = lazy(() => import('./pages/SharedPlayerView'))
+const InviteLanding = lazy(() => import('./pages/InviteLanding'))
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth()
@@ -46,6 +47,7 @@ function App() {
     <Suspense fallback={<div className="app-loading"><BouncingBall size="lg" /></div>}>
     <Routes>
       <Route path="/login" element={<Login />} />
+      <Route path="/i/:code" element={<InviteLanding />} />
       <Route path="/share/:token" element={<SharedPlayerView />} />
       <Route path="/share/:token/games/:gameId" element={<SharedPlayerView />} />
 

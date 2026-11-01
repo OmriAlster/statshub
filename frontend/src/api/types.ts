@@ -23,6 +23,8 @@ export interface PlayerDto {
   profilePictureUrl?: string | null
   teams: TeamDto[]
   parents: ParentDto[]
+  // The player's own login, once they've joined.
+  linkedUser?: ParentDto | null
 }
 
 export interface UserDto {
@@ -280,4 +282,35 @@ export interface IbbaStandingRowDto {
   pointsAgainst: number
   diff: number
   leaguePoints: number
+}
+
+// ---- Family invites (/i/{code}) ----
+export type FamilyInviteKind = 'Parent' | 'Player'
+
+export interface InvitePlayerDto {
+  id: string
+  firstName: string
+  lastName: string
+  profilePictureUrl?: string | null
+}
+
+export interface FamilyInviteDto {
+  id: string
+  code: string
+  kind: FamilyInviteKind
+  expiresAt: string
+  players: InvitePlayerDto[]
+  joined: string[]
+}
+
+export interface InvitePreviewDto {
+  kind: FamilyInviteKind
+  invitedBy: string
+  status: 'open' | 'expired' | 'used'
+  players: InvitePlayerDto[]
+}
+
+export interface InviteAcceptResultDto {
+  kind: FamilyInviteKind
+  playerIds: string[]
 }

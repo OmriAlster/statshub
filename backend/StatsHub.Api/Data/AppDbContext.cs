@@ -28,6 +28,9 @@ namespace StatsHub.Api.Data
         public DbSet<PlayerIbbaTeam> PlayerIbbaTeams { get; set; }
         public DbSet<PushSubscription> PushSubscriptions { get; set; }
         public DbSet<PlayerGoal> PlayerGoals { get; set; }
+        public DbSet<FamilyInvite> FamilyInvites { get; set; }
+        public DbSet<FamilyInvitePlayer> FamilyInvitePlayers { get; set; }
+        public DbSet<FamilyInviteJoin> FamilyInviteJoins { get; set; }
 
         // SQLite never validated DateTime.Kind, so call sites across the app
         // freely mix DateTime.UtcNow with Kind-less values (new DateTime(...),
@@ -100,6 +103,36 @@ namespace StatsHub.Api.Data
                 .HasOne(g => g.Player)
                 .WithMany()
                 .HasForeignKey(g => g.PlayerId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // Family invites: the link's kids, and who joined through it
+            modelBuilder.Entity<FamilyInvite>()
+                .HasIndex(i => i.Code)
+                .IsUnique();
+            modelBuilder.Entity<FamilyInvite>()
+                .HasOne(i => i.CreatedBy)
+                .WithMany()
+                .HasForeignKey(i => i.CreatedByUserId)
+                .OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<FamilyInvitePlayer>()
+                .HasOne(ip => ip.Invite)
+                .WithMany(i => i.Players)
+                .HasForeignKey(ip => ip.InviteId)
+                .OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<FamilyInvitePlayer>()
+                .HasOne(ip => ip.Player)
+                .WithMany()
+                .HasForeignKey(ip => ip.PlayerId)
+                .OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<FamilyInviteJoin>()
+                .HasOne(j => j.Invite)
+                .WithMany(i => i.Joins)
+                .HasForeignKey(j => j.InviteId)
+                .OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<FamilyInviteJoin>()
+                .HasOne(j => j.User)
+                .WithMany()
+                .HasForeignKey(j => j.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
 
             modelBuilder.Entity<PlayerParent>()

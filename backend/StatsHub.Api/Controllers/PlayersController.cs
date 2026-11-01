@@ -64,6 +64,24 @@ namespace StatsHub.Api.Controllers
             return NoContent();
         }
 
+        [HttpDelete("{id}/parents/{userId}")]
+        public async Task<ActionResult<PlayerDto>> RemoveParent(Guid id, Guid userId)
+        {
+            var player = await _playerService.RemoveParentAsync(id, userId, _currentUser.UserId);
+            if (player == null)
+                return NotFound(new { message = "Player not found" });
+            return Ok(player);
+        }
+
+        [HttpDelete("{id}/linked-user")]
+        public async Task<ActionResult<PlayerDto>> UnlinkPlayerLogin(Guid id)
+        {
+            var player = await _playerService.UnlinkPlayerLoginAsync(id, _currentUser.UserId);
+            if (player == null)
+                return NotFound(new { message = "Player not found" });
+            return Ok(player);
+        }
+
         // Generates a short-lived code the parent can send to their player so the
         // player can sign in with their own Google account and see their own stats.
         [HttpPost("{id}/invite")]

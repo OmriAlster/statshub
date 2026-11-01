@@ -18,6 +18,8 @@ namespace StatsHub.Api.Services
         Task<ParentInviteDto?> CreateParentInviteAsync(Guid playerId, Guid requestingUserId, string? password);
         Task<PlayerDto?> ClaimParentInviteAsync(string inviteCode, Guid claimingUserId, string? password);
         Task<bool> CanAccessPlayerAsync(Guid playerId, Guid userId);
+        Task<PlayerDto?> RemoveParentAsync(Guid playerId, Guid parentUserId, Guid requestingUserId);
+        Task<PlayerDto?> UnlinkPlayerLoginAsync(Guid playerId, Guid requestingUserId);
     }
 
     public class PlayerService : IPlayerService
@@ -34,7 +36,8 @@ namespace StatsHub.Api.Services
         private IQueryable<Player> PlayersWithTeams() =>
             _context.Players
                 .Include(p => p.PlayerTeams).ThenInclude(pt => pt.Team)
-                .Include(p => p.Parents).ThenInclude(pp => pp.User);
+                .Include(p => p.Parents).ThenInclude(pp => pp.User)
+                .Include(p => p.LinkedUser);
 
         private Task<bool> IsParentAsync(Guid playerId, Guid userId) => _context.CanWritePlayerAsync(playerId, userId);
 
@@ -81,7 +84,14 @@ namespace StatsHub.Api.Services
             _context.Players.Add(player);
             await _context.SaveChangesAsync();
 
-            _context.PlayerParents.Add(new PlayerParent { PlayerId = player.Id, UserId = userId, CreatedAt = DateTime.UtcNow });
+            // The family shares the new kid too: everyone who is a parent of
+            // one of this parent's kids (a co-parent, a grandparent who joined
+            // through a family invite).
+            var family = await _context.PlayerParents
+                .Where(pp => pp.UserId != userId && _context.PlayerParents.Any(mine => mine.UserId == userId && mine.PlayerId == pp.PlayerId))
+                .Select(pp => pp.UserId).Distinct().ToListAsync();
+            foreach (var parentId in family.Prepend(userId))
+                _context.PlayerParents.Add(new PlayerParent { PlayerId = player.Id, UserId = parentId, CreatedAt = DateTime.UtcNow });
             await _context.SaveChangesAsync();
 
             return await GetPlayerByIdAsync(player.Id, userId) ?? MapToDto(player);
@@ -135,6 +145,37 @@ namespace StatsHub.Api.Services
             _context.Players.Remove(player);
             await _context.SaveChangesAsync();
             return true;
+        }
+
+        // Another parent of this kid takes someone off (never themself - so
+        // the kid always keeps a parent).
+        public async Task<PlayerDto?> RemoveParentAsync(Guid playerId, Guid parentUserId, Guid requestingUserId)
+        {
+            if (parentUserId == requestingUserId || !await IsParentAsync(playerId, requestingUserId)) return null;
+            var link = await _context.PlayerParents.FirstOrDefaultAsync(pp => pp.PlayerId == playerId && pp.UserId == parentUserId);
+            if (link == null) return null;
+            _context.PlayerParents.Remove(link);
+            await _context.SaveChangesAsync();
+            return await GetPlayerByIdAsync(playerId, requestingUserId);
+        }
+
+        // The kid's own login is taken off the player; the account is an
+        // ordinary one again.
+        public async Task<PlayerDto?> UnlinkPlayerLoginAsync(Guid playerId, Guid requestingUserId)
+        {
+            if (!await IsParentAsync(playerId, requestingUserId)) return null;
+            var player = await _context.Players.FindAsync(playerId);
+            if (player?.LinkedUserId == null) return null;
+            var account = await _context.Users.FindAsync(player.LinkedUserId.Value);
+            player.LinkedUserId = null;
+            player.UpdatedAt = DateTime.UtcNow;
+            if (account != null)
+            {
+                account.Role = "Parent";
+                account.UpdatedAt = DateTime.UtcNow;
+            }
+            await _context.SaveChangesAsync();
+            return await GetPlayerByIdAsync(playerId, requestingUserId);
         }
 
         // Generates a short-lived code the parent can send to their player so the
@@ -237,7 +278,8 @@ namespace StatsHub.Api.Services
             DateOfBirth = p.DateOfBirth,
             ProfilePictureUrl = p.ProfilePictureUrl,
             Teams = p.PlayerTeams.Select(pt => new TeamDto { Id = pt.Team.Id, Name = pt.Team.Name, JerseyNumber = pt.JerseyNumber }).ToList(),
-            Parents = p.Parents.Select(pp => new ParentDto { UserId = pp.UserId, FirstName = pp.User.FirstName, LastName = pp.User.LastName }).ToList()
+            Parents = p.Parents.Select(pp => new ParentDto { UserId = pp.UserId, FirstName = pp.User.FirstName, LastName = pp.User.LastName }).ToList(),
+            LinkedUser = p.LinkedUser == null ? null : new ParentDto { UserId = p.LinkedUser.Id, FirstName = p.LinkedUser.FirstName, LastName = p.LinkedUser.LastName },
         };
     }
 }

@@ -5164,9 +5164,22 @@ button.crest-cluster:hover .crest-main {
   max-width: 30rem;
   width: 100%;
   max-height: 80vh;
+  max-height: 85dvh; /* the phone's visible height, without its address bar */
   overflow: hidden;
   display: flex;
   flex-direction: column;
+}
+
+/* Every window's content scrolls under its head when it's taller than the
+   screen (the head with the close button stays put). */
+.modal-panel > .modal-head,
+.game-edit-modal-panel > .modal-head { flex: none; }
+.modal-panel > :not(.modal-head),
+.game-edit-modal-panel > :not(.modal-head) {
+  min-height: 0;
+  flex: 0 1 auto;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .modal-head {
@@ -6659,26 +6672,25 @@ a.game-card:active {
   box-shadow: var(--shadow-sm);
 }
 
-/* Today's game on the dashboard: lit up, with "Start live" right on it */
+/* Today's game on the dashboard: marked, not shouting - an outline, the
+   date tile outlined, and one quiet row of actions (Waze, Maps, Start live) */
 .dash-upcoming-today {
-  background: var(--color-accent-soft);
-  border: 1px solid rgba(255, 122, 26, 0.45);
+  border: 1px solid rgba(255, 122, 26, 0.35);
   border-radius: var(--radius-md);
-  padding: 0.15rem 0.45rem 0.6rem;
+  padding: 0.15rem 0.45rem 0.55rem;
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
+  gap: 0.3rem;
 }
 
 .dash-upcoming-today .dash-upcoming-row:hover { background: transparent; }
 
 .dash-upcoming-today .dash-upcoming-date-tile {
-  background: var(--gradient-accent);
-  border-color: transparent;
-  color: #1a0d00;
+  border-color: var(--color-accent);
+  color: var(--color-accent-bright);
 }
 
-.dash-upcoming-today .dash-upcoming-date-tile span { color: #1a0d00; }
+.dash-upcoming-today .dash-upcoming-date-tile span { color: var(--color-accent-bright); }
 
 .dash-upcoming-tile-today {
   font-size: 0.6rem;
@@ -6689,26 +6701,53 @@ a.game-card:active {
 
 .dash-upcoming-today .dash-upcoming-time { color: var(--color-accent-bright); font-weight: 800; }
 
+/* the row: the game (a link) | Waze, Maps, Start live | the time */
+.dash-upcoming-today { flex-direction: row; align-items: center; gap: 0.4rem; padding: 0 0.6rem 0 0.2rem; }
+.dash-upcoming-today .dash-upcoming-row { flex: 1; min-width: 0; grid-template-columns: auto minmax(0, 1fr); }
+.dash-today-actions { display: flex; align-items: center; gap: 0.3rem; flex: none; }
+.navigate-buttons.icon-only { gap: 0.3rem; }
+.navigate-buttons.icon-only .navigate-btn { flex: none; width: 32px; min-height: 32px; height: 32px; padding: 0; font-size: 0.95rem; }
+.dash-today-actions .dash-upcoming-time { margin-inline-start: 0.35rem; }
+
 .dash-upcoming-card .dash-upcoming-start {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  gap: 0.45rem;
-  min-height: 44px;
+  gap: 0.3rem;
+  height: 32px;
+  padding: 0 0.7rem;
   border: none;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-pill);
   background: var(--gradient-accent);
   color: #1a0d00;
   font: inherit;
   font-weight: 800;
-  font-size: 0.92rem;
-  box-shadow: var(--glow-accent);
+  font-size: 0.76rem;
+  white-space: nowrap;
+  box-shadow: none;
   cursor: pointer;
 }
 
-.dash-upcoming-card .dash-upcoming-start .icon { width: 16px; height: 16px; stroke: #1a0d00; }
-.dash-upcoming-card .dash-upcoming-start:hover { transform: none; filter: brightness(1.05); }
-.dash-upcoming-start-who { font-weight: 600; }
+.dash-upcoming-card .dash-upcoming-start .icon { width: 13px; height: 13px; stroke: #1a0d00; }
+.dash-upcoming-card .dash-upcoming-start:hover { transform: none; filter: brightness(1.06); }
+.dash-today-buttons { display: flex; align-items: center; gap: 0.3rem; }
+.navigate-buttons.icon-only .navigate-word { display: none; }
+/* the time stays in the game row on a phone; on a wider screen it moves
+   after the buttons */
+.dash-today-when { display: none; }
+/* a phone has no room for the name beside all of it: the game row as on any
+   other day, then the buttons on a row of their own, with their words */
+@media (max-width: 480px) {
+  .dash-upcoming-today { flex-wrap: wrap; padding: 0 0.45rem 0.5rem 0.2rem; gap: 0.15rem; }
+  .dash-upcoming-today .dash-upcoming-row { flex: 1 1 100%; grid-template-columns: auto minmax(0, 1fr) auto; }
+  .dash-today-when { display: flex; }
+  .dash-today-time { display: none; }
+  .dash-today-actions { flex: 1 1 100%; padding-inline-start: 0.25rem; }
+  .dash-today-buttons { width: 100%; gap: 0.35rem; }
+  .dash-today-buttons .navigate-buttons.icon-only { flex: 2; gap: 0.35rem; }
+  .navigate-buttons.icon-only .navigate-btn { flex: 1; width: auto; height: 32px; min-height: 32px; padding: 0 0.4rem; font-size: 0.8rem; }
+  .navigate-buttons.icon-only .navigate-word { display: inline; }
+  .dash-upcoming-card .dash-upcoming-start { flex: 1.3; justify-content: center; height: 32px; padding: 0 0.5rem; }
+}
 
 .field-hint { font-size: 0.75rem; color: var(--color-text-muted); }
 
@@ -7334,3 +7373,116 @@ a.insight-card:hover { border-color: var(--color-accent); }
   .games-view-table .games-table .flex { flex-wrap: nowrap; }
 }
 .profile-actions-bottom { margin-top: 1.25rem; }
+@media (max-width: 480px) {
+  .dash-upcoming-today .dash-upcoming-opponent { white-space: normal; overflow: hidden; text-overflow: clip; line-height: 1.25; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow-wrap: anywhere; }
+}
+
+/* ============================================================
+   Family invites: the button and open links on the players page,
+   the invite window, and the page a link opens (/i/{code})
+   ============================================================ */
+.players-head { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; flex-wrap: wrap; padding-bottom: 1.25rem; }
+.page-container .players-head h2 { padding-bottom: 0; margin-bottom: 0; }
+.invite-family-btn {
+  display: inline-flex; align-items: center; gap: 0.35rem;
+  height: 36px; padding: 0 1rem; border: none; border-radius: var(--radius-pill);
+  background: var(--gradient-accent); color: #1a0d00; font: inherit; font-weight: 800; font-size: 0.85rem; cursor: pointer;
+}
+.invite-family-btn:hover { filter: brightness(1.06); }
+
+.open-invites { display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 1.25rem; }
+.open-invite {
+  display: flex; align-items: center; gap: 0.5rem;
+  background: var(--color-surface-alt); border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: 0.6rem 0.75rem;
+}
+.open-invite-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.open-invite-text b { font-size: 0.88rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.open-invite-text span { color: var(--color-text-muted); font-size: 0.78rem; }
+.open-invite-btn {
+  flex: none; background: none; border: 1px solid var(--color-border-strong); color: var(--color-text-muted);
+  border-radius: var(--radius-pill); padding: 0.3rem 0.75rem; font: inherit; font-size: 0.78rem; font-weight: 700; cursor: pointer; white-space: nowrap;
+}
+.open-invite-btn:hover { color: var(--color-text); border-color: var(--color-accent); }
+
+.family-role { color: var(--color-text-faint); font-weight: 600; font-size: 0.72rem; }
+.parent-row .parent-chip .family-remove {
+  background: none; border: none; color: var(--color-text-faint); padding: 0 0.1rem 0 0.15rem; margin: 0;
+  font-size: 0.75rem; line-height: 1; cursor: pointer; border-radius: 50%;
+}
+.parent-row .parent-chip .family-remove:hover { color: var(--color-danger); border: none; }
+.parent-chip.player-chip { background: var(--color-info-soft); color: var(--color-info); border-color: rgba(63, 183, 255, 0.3); }
+.parent-chip.player-chip .parent-avatar { color: var(--color-info); }
+.family-pending { background: var(--color-accent-soft); color: var(--color-accent-bright); border-radius: var(--radius-pill); padding: 0.3rem 0.75rem; font-size: 0.75rem; font-weight: 700; }
+
+/* the invite window */
+.invite-modal { max-width: 440px; }
+.invite-modal-body { padding: 0.25rem 1.25rem 1.25rem; display: flex; flex-direction: column; gap: 0.75rem; }
+.invite-kinds { display: flex; flex-direction: column; gap: 0.5rem; }
+.invite-kind {
+  display: flex; align-items: center; gap: 0.75rem; text-align: left; width: 100%;
+  background: var(--color-surface-alt); border: 1px solid var(--color-border-strong); border-radius: var(--radius-md);
+  padding: 0.7rem 0.85rem; color: var(--color-text); font: inherit; cursor: pointer;
+}
+.invite-kind.on { border-color: var(--color-accent); background: var(--color-accent-soft); }
+.invite-kind-icon { font-size: 1.35rem; }
+.invite-kind b { display: block; font-size: 0.92rem; }
+.invite-kind small { display: block; color: var(--color-text-muted); font-size: 0.78rem; }
+.invite-label { margin: 0.25rem 0 0; color: var(--color-text-faint); font-size: 0.7rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.06em; }
+.invite-picks { display: flex; flex-direction: column; gap: 0.35rem; }
+.invite-pick { display: flex; align-items: center; gap: 0.6rem; padding: 0.35rem 0.25rem; cursor: pointer; font-weight: 600; }
+.invite-pick > span:not(.invite-pick-face) { flex: 1; min-width: 0; }
+.invite-pick input { width: 20px; height: 20px; accent-color: var(--color-accent); margin: 0; flex: none; }
+.invite-pick small { color: var(--color-text-faint); font-weight: 600; }
+.invite-pick.done { cursor: default; opacity: 0.7; }
+.invite-pick-face {
+  width: 30px; height: 30px; border-radius: 50%; flex: none; object-fit: cover;
+  display: inline-grid; place-items: center; background: var(--color-surface-hover); font-weight: 800; font-size: 0.8rem;
+}
+.invite-note { margin: 0; color: var(--color-text-muted); font-size: 0.8rem; background: var(--color-surface-alt); border-radius: var(--radius-sm); padding: 0.55rem 0.7rem; }
+.invite-send { display: flex; flex-direction: column; gap: 0.5rem; }
+.invite-send-row { display: flex; gap: 0.5rem; }
+.invite-send-row .invite-btn { flex: 1; }
+.invite-url { font-size: 0.78rem; color: var(--color-info); background: var(--color-surface-alt); border-radius: var(--radius-sm); padding: 0.5rem 0.65rem; word-break: break-all; user-select: all; }
+
+.invite-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 0.4rem;
+  min-height: 42px; padding: 0 1rem; width: 100%;
+  border-radius: var(--radius-pill); border: 1px solid var(--color-border-strong);
+  background: var(--color-surface-alt); color: var(--color-text);
+  font: inherit; font-weight: 800; font-size: 0.9rem; text-decoration: none; cursor: pointer;
+}
+.invite-btn:hover { border-color: var(--color-accent); }
+.invite-btn:disabled { opacity: 0.55; cursor: default; }
+.invite-btn.primary { background: var(--gradient-accent); color: #1a0d00; border: none; }
+.invite-btn.wa { background: #25d366; color: #06210f; border: none; }
+.invite-btn.ghost { background: transparent; border-color: transparent; color: var(--color-text-muted); }
+.invite-btn.ghost:hover { color: var(--color-text); }
+
+/* the page a link opens */
+.invite-page { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 1.5rem 1rem; background: var(--color-bg); }
+.invite-card {
+  width: 100%; max-width: 400px; background: var(--color-surface); border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg); padding: 1.5rem 1.25rem; box-shadow: var(--shadow-md);
+}
+.invite-brand { display: flex; align-items: center; gap: 0.4rem; font-family: var(--font-display); font-weight: 700; color: var(--color-text-muted); font-size: 0.9rem; }
+.invite-brand .icon { width: 18px; height: 18px; stroke: var(--color-accent); }
+.invite-hero { text-align: center; padding: 1.25rem 0 0.25rem; display: flex; flex-direction: column; align-items: center; gap: 0.35rem; }
+.invite-hero h1 { font-family: var(--font-display); font-size: 1.35rem; line-height: 1.25; margin: 0.4rem 0 0; text-wrap: balance; }
+.invite-hero p { color: var(--color-text-muted); margin: 0; font-size: 0.92rem; }
+.invite-hero p b { color: var(--color-text); }
+.invite-hero .invite-actions { width: 100%; margin-top: 0.75rem; }
+.invite-hero > .invite-btn { margin-top: 0.75rem; }
+.invite-faces { display: flex; justify-content: center; }
+.invite-face {
+  width: 64px; height: 64px; border-radius: 50%; object-fit: cover; border: 3px solid var(--color-surface);
+  display: inline-grid; place-items: center; background: var(--color-surface-hover); font-family: var(--font-display); font-weight: 800; font-size: 1.4rem;
+}
+.invite-face + .invite-face { margin-left: -16px; }
+.invite-gives { list-style: none; padding: 0; margin: 1.1rem 0; display: flex; flex-direction: column; gap: 0.45rem; font-size: 0.9rem; }
+.invite-gives li { display: flex; align-items: center; gap: 0.55rem; }
+.invite-gives .icon { width: 16px; height: 16px; flex: none; stroke: var(--color-success); }
+.invite-actions { display: flex; flex-direction: column; gap: 0.5rem; }
+.invite-actions .google-login-wrap { margin: 0.25rem 0 0; }
+.invite-actions .auth-divider { margin: 0.4rem 0; }
+.invite-signed-in { text-align: center; color: var(--color-text-muted); font-size: 0.85rem; margin: 0.25rem 0; }
+.invite-link { background: none; border: none; padding: 0; color: var(--color-accent-bright); font: inherit; font-weight: 700; cursor: pointer; }
