@@ -15,7 +15,7 @@ import { formatGameDateOnly } from '../utils/formatGameDate'
 import BouncingBall from '../components/BouncingBall'
 import { GameTypeBadge, HomeAway } from '../components/GameBadges'
 import { useLiveGames } from '../live/liveUpdates'
-import { average, madeAverage, madeOf, show, showPct } from '../utils/statLines'
+import { average, madeAverage, madeOf, noStatsLabel, show, showPct } from '../utils/statLines'
 
 export default function SharedPlayerView() {
   const { token, gameId } = useParams<{ token: string; gameId?: string }>()
@@ -266,15 +266,21 @@ function SharedStatsPanel({ games }: { games: GameDto[] }) {
                 return (
                   <GameRow key={game.id} game={game}>
                     <td className={`num ${won ? 'win' : 'loss'}`}>{game.teamScore}&ndash;{game.opponentScore}</td>
-                    <td className="num">{stats?.totalPoints ?? '-'}</td>
-                    <td className="num">{stats ? madeOf(stats.fieldGoalsMade, stats.fieldGoalsAttempted) : '-'}</td>
-                    <td className="num">{stats ? madeOf(stats.threePointersMade, stats.threePointersAttempted) : '-'}</td>
-                    <td className="num">{stats ? madeOf(stats.freeThrowsMade, stats.freeThrowsAttempted) : '-'}</td>
-                    <td className="num">{stats?.totalRebounds ?? '-'}</td>
-                    <td className="num">{stats?.assists ?? '-'}</td>
-                    <td className="num">{stats?.steals ?? '-'}</td>
-                    <td className="num">{stats?.blocks ?? '-'}</td>
-                    <td className="num">{stats?.turnovers ?? '-'}</td>
+                    {stats ? (
+                      <>
+                        <td className="num">{stats.totalPoints}</td>
+                        <td className="num">{madeOf(stats.fieldGoalsMade, stats.fieldGoalsAttempted)}</td>
+                        <td className="num">{madeOf(stats.threePointersMade, stats.threePointersAttempted)}</td>
+                        <td className="num">{madeOf(stats.freeThrowsMade, stats.freeThrowsAttempted)}</td>
+                        <td className="num">{show(stats.totalRebounds)}</td>
+                        <td className="num">{show(stats.assists)}</td>
+                        <td className="num">{show(stats.steals)}</td>
+                        <td className="num">{show(stats.blocks)}</td>
+                        <td className="num">{show(stats.turnovers)}</td>
+                      </>
+                    ) : (
+                      <td colSpan={9} className="games-table-nostats">{noStatsLabel(game)}</td>
+                    )}
                   </GameRow>
                 )
               })}

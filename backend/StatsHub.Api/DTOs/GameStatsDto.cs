@@ -47,7 +47,12 @@ namespace StatsHub.Api.DTOs
     public class ScoresheetLineDto
     {
         public Guid PlayerId { get; set; }
+        // The game's sheet doesn't list the player at all.
+        public bool NotListed { get; set; }
         public int Number { get; set; }
+        // Entered the game (the X in the sheet's "entered" column) - on the
+        // sheet without it, the player didn't play.
+        public bool Played { get; set; }
         public bool Starter { get; set; }
         public int Points { get; set; }
         public int FreeThrows { get; set; }

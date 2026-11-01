@@ -8,6 +8,9 @@ namespace StatsHub.Api.Models
         public Guid Id { get; set; } = Guid.CreateVersion7();
         public Guid GameId { get; set; }
         public Guid PlayerId { get; set; }
+        // The sheet was found but the player isn't on it - not listed for the
+        // game. Everything else is empty then.
+        public bool NotListed { get; set; }
         public int Number { get; set; }
         // The player code printed on the sheet - stable across games, unlike
         // the number.

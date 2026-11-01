@@ -78,8 +78,7 @@ namespace StatsHub.Api.Services
                 .ToList();
         }
 
-        // A sheet the player isn't on (didn't dress, or the name fits two
-        // players) isn't read again for a week.
+        // A sheet whose name fits two players isn't read again for a week.
         private bool Absent(Guid gameId, Guid playerId) => _cache.TryGetValue(AbsentKey(gameId, playerId), out _);
         private static string AbsentKey(Guid gameId, Guid playerId) => $"sheet-absent:{gameId}:{playerId}";
 
@@ -101,6 +100,13 @@ namespace StatsHub.Api.Services
             ownIds = ownIds.Where(id => memberships.Any(m => m.IbbaTeamId == id)).ToList();
             if (ownIds.Count == 0) return;
             var teams = await _context.IbbaTeams.Where(t => ownIds.Contains(t.Id)).ToListAsync(ct);
+
+            // Stats once made from a sheet the player never entered on - he didn't play.
+            var notPlayed = await _context.GameStats
+                .Where(gs => gs.PlayerId == player.Id && gs.Source == GameStats.ScoresheetSource
+                    && _context.ScoresheetLines.Any(l => l.GameId == gs.GameId && l.PlayerId == gs.PlayerId && !l.Played))
+                .ToListAsync(ct);
+            _context.GameStats.RemoveRange(notPlayed);
 
             var seasonStart = LeagueSeason.StartOf(DateTime.UtcNow);
             List<SwishCompetition>? competitions = null;
@@ -189,6 +195,19 @@ namespace StatsHub.Api.Services
                 if (found == null)
                 {
                     var (status, match, _) = FindPlayer(playerName, side.Players);
+                    // Not on the sheet: kept, so the game says he wasn't listed
+                    // (and isn't read again). Two who fit: asked again in a week.
+                    if (status == ScoresheetMatchStatus.NotFound)
+                    {
+                        _context.ScoresheetLines.Add(new ScoresheetLine
+                        {
+                            GameId = game.Id,
+                            PlayerId = link.PlayerId,
+                            NotListed = true,
+                            SheetValid = sheet.IsValid,
+                        });
+                        continue;
+                    }
                     if (status != ScoresheetMatchStatus.Matched)
                     {
                         _cache.Set(AbsentKey(game.Id, link.PlayerId), true, TimeSpan.FromDays(7));
@@ -223,9 +242,14 @@ namespace StatsHub.Api.Services
 
             // The game's stats: the sheet's, unless someone else's are there -
             // the parent's own (which win) or a league box score (which has more).
+            // On the sheet but never entered (no X): didn't play - no stats.
             var stats = await _context.GameStats.FirstOrDefaultAsync(gs => gs.GameId == game.Id && gs.PlayerId == playerId, ct);
             string? news = null;
-            if (stats == null)
+            if (!line.Played)
+            {
+                if (stats?.Source == GameStats.ScoresheetSource) _context.GameStats.Remove(stats);
+            }
+            else if (stats == null)
             {
                 _context.GameStats.Add(FromSheet(new GameStats { GameId = game.Id, PlayerId = playerId }, line));
                 news = "none";
@@ -255,11 +279,10 @@ namespace StatsHub.Api.Services
             return stats;
         }
 
-        // The parent's numbers and the sheet's say the same - the scoring, and
-        // the fouls when the parent recorded any (0 is usually "not tracked").
+        // The parent's numbers and the sheet's say the same - the scoring and the fouls.
         internal static bool Agrees(GameStats stats, ScoresheetLine line) =>
             stats.FieldGoalsMade == line.TwoPointers && stats.ThreePointersMade == line.ThreePointers && stats.FreeThrowsMade == line.FreeThrows
-            && (stats.Fouls == 0 || stats.Fouls == line.Fouls);
+            && stats.Fouls == line.Fouls;
 
         private async Task NotifyAsync(Guid playerId, Game game, ScoresheetLine line, GameStats? recorded, string opponentName)
         {
@@ -288,7 +311,7 @@ namespace StatsHub.Api.Services
         {
             if (membership.JerseyNumber != 0 && !membership.JerseyFromScoresheet) return;
             var newest = await _context.ScoresheetLines
-                .Where(l => l.PlayerId == membership.PlayerId && (l.Game.HomeTeamId == ibbaTeamId || l.Game.AwayTeamId == ibbaTeamId))
+                .Where(l => l.PlayerId == membership.PlayerId && !l.NotListed && (l.Game.HomeTeamId == ibbaTeamId || l.Game.AwayTeamId == ibbaTeamId))
                 .OrderByDescending(l => l.Game.GameDate)
                 .Select(l => (int?)l.Number)
                 .FirstOrDefaultAsync(ct);

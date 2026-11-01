@@ -197,7 +197,7 @@ function BoxScoreCard({ name, stats, sheet, busy, onRecord, onEdit, onUseSheet }
   const off = sheetOff(stats ?? undefined)
   const chip = !stats ? <span className="eg-chip none">Not recorded</span>
     : mismatch ? <span className="eg-chip diff"><span className="eg-bang" aria-hidden="true">!</span>Differs from IBBA</span>
-    : stats.source ? <span className="eg-chip ibba">From IBBA{sheet ? ` · #${sheet.number}` : ''}</span>
+    : stats.source ? <span className="eg-chip ibba">From IBBA{sheet && !sheet.notListed ? ` · #${sheet.number}` : ''}</span>
     : <span className="eg-chip mine">Yours</span>
 
   return (
@@ -206,7 +206,13 @@ function BoxScoreCard({ name, stats, sheet, busy, onRecord, onEdit, onUseSheet }
 
       {!stats ? (
         <>
-          {sheet && (
+          {sheet?.notListed && (
+            <p className="eg-hint">IBBA's scoresheet for this game doesn't list <bdi>{name}</bdi> - so no stats from it. Record them below if they did play.</p>
+          )}
+          {sheet && !sheet.notListed && !sheet.played && (
+            <p className="eg-hint">IBBA's scoresheet has {'#'}{sheet.number} on the roster but not entering the game - so no stats, and the game doesn't count. Record it below if they did play.</p>
+          )}
+          {sheet?.played && (
             <div className="eg-sheetline">
               <span className="eg-label ibba">IBBA's scoresheet · #{sheet.number}</span>
               <div className="eg-nums">
@@ -220,7 +226,7 @@ function BoxScoreCard({ name, stats, sheet, busy, onRecord, onEdit, onUseSheet }
               <button className="eg-btn ibba" onClick={onUseSheet} disabled={busy}>{busy ? <Busy>Working…</Busy> : "Use IBBA's stats"}</button>
             </div>
           )}
-          {sheet && <div className="eg-or">or record it yourself</div>}
+          {sheet?.played && <div className="eg-or">or record it yourself</div>}
           <button className="eg-choice" onClick={() => onRecord('numbers')} disabled={busy}>
             <span className="eg-ic" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M4 7h16M4 12h16M4 17h10" /></svg></span>
             <span><b>Type the numbers</b><small>Points, shots, rebounds, minutes - from a stat sheet or memory</small></span>
@@ -265,7 +271,7 @@ function BoxScoreCard({ name, stats, sheet, busy, onRecord, onEdit, onUseSheet }
             </button>
             <button className="eg-btn" onClick={() => onEdit('shots')}>Shot chart</button>
           </div>
-          {sheet && stats.source !== 'scoresheet' && (
+          {sheet?.played && stats.source !== 'scoresheet' && (
             <button className="eg-btn ghost-ibba" onClick={onUseSheet} disabled={busy}>Use IBBA's stats instead</button>
           )}
         </>

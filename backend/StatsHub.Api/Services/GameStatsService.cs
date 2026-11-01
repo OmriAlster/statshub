@@ -148,6 +148,8 @@ namespace StatsHub.Api.Services
                 throw new InvalidOperationException("The game is being tracked live.");
             var line = await _context.ScoresheetLines.FirstOrDefaultAsync(l => l.GameId == dto.GameId && l.PlayerId == dto.PlayerId)
                 ?? throw new KeyNotFoundException("This game has no scoresheet line for the player.");
+            if (line.NotListed || !line.Played)
+                throw new InvalidOperationException("The scoresheet has the player not playing this game.");
 
             var existing = await _context.GameStats.FirstOrDefaultAsync(gs => gs.GameId == dto.GameId && gs.PlayerId == dto.PlayerId);
             if (existing != null)

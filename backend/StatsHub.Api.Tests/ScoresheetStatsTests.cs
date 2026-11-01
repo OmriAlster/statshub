@@ -1,3 +1,4 @@
+using System.Net.Http.Json;
 using System.Net;
 using System.Text;
 using Microsoft.EntityFrameworkCore;
@@ -54,10 +55,10 @@ public class ScoresheetStatsTests : IClassFixture<ScoresheetStatsTests.Factory>
     private sealed record Seeded(TestUser Parent, Guid PlayerId, Guid TeamId, Guid LinkId, Guid GameId);
 
     // A parent's player "אורי כאהן", linked to Tel Mond, with the finished game in the app.
-    private async Task<Seeded> SeedAsync(int? jersey = null)
+    private async Task<Seeded> SeedAsync(int? jersey = null, string firstName = "אורי", string lastName = "כאהן")
     {
         var parent = await TestUser.SignInAsync(_factory);
-        var player = await parent.PostAsync<PlayerDto>("/api/players", new CreatePlayerDto { FirstName = "אורי", LastName = "כאהן", Position = "" });
+        var player = await parent.PostAsync<PlayerDto>("/api/players", new CreatePlayerDto { FirstName = firstName, LastName = lastName, Position = "" });
         var team = await parent.CreateTeamWithPlayerAsync(player.Id, Away, jersey);
         Guid linkId = default, gameId = default;
         await _factory.WithDbAsync(async db =>
@@ -181,6 +182,42 @@ public class ScoresheetStatsTests : IClassFixture<ScoresheetStatsTests.Factory>
 
         Assert.Empty(game.Scoresheets);
         Assert.All(game.PlayerStats, line => Assert.Null(line.Scoresheet));
+    }
+
+    [Fact]
+    public async Task On_the_sheet_without_entering_the_game_is_no_game_played()
+    {
+        // "כהן, נ." (#20) is on Tel Mond's sheet with no X in the entered column.
+        var s = await SeedAsync(firstName: "נועם", lastName: "כהן");
+
+        await FillAsync(s.LinkId);
+
+        var game = await s.Parent.GetAsync<GameDto>($"/api/games/{s.GameId}");
+        Assert.Empty(game.PlayerStats);
+        var line = Assert.Single(game.Scoresheets);
+        Assert.False(line.Played);
+        var stats = Assert.Single(await s.Parent.GetAsync<List<PlayerTeamStatsDto>>($"/api/gamestats/player/{s.PlayerId}"));
+        Assert.Equal(0, stats.GamesPlayed);
+        var back = await s.Parent.Http.PostAsJsonAsync("/api/gamestats/from-scoresheet", new StatsFromScoresheetDto { GameId = s.GameId, PlayerId = s.PlayerId });
+        Assert.Equal(HttpStatusCode.Conflict, back.StatusCode);
+    }
+
+    [Fact]
+    public async Task A_player_the_sheet_doesnt_list_is_marked_not_listed_and_their_own_stats_stay()
+    {
+        var s = await SeedAsync(firstName: "דני", lastName: "מישהו");
+        await FillAsync(s.LinkId);
+
+        var game = await s.Parent.GetAsync<GameDto>($"/api/games/{s.GameId}");
+        Assert.Empty(game.PlayerStats);
+        Assert.True(Assert.Single(game.Scoresheets).NotListed);
+        var stats = Assert.Single(await s.Parent.GetAsync<List<PlayerTeamStatsDto>>($"/api/gamestats/player/{s.PlayerId}"));
+        Assert.Equal(0, stats.JerseyNumber); // no number from a sheet he isn't on
+
+        // The parent's own numbers are what count.
+        await s.Parent.CreateStatsAsync(s.GameId, s.PlayerId, ftm: 3, fta: 4);
+        game = await s.Parent.GetAsync<GameDto>($"/api/games/{s.GameId}");
+        Assert.Equal(3, Assert.Single(game.PlayerStats).TotalPoints);
     }
 
     [Fact]

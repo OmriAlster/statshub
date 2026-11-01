@@ -8212,6 +8212,14 @@ a.insight-card:hover { border-color: var(--color-accent); }
   cursor: pointer;
 }
 
+/* A games-table row with no box score: why, across the stat columns. */
+.games-table td.games-table-nostats {
+  color: var(--color-text-muted);
+  font-size: 0.82rem;
+  font-style: italic;
+  text-align: start;
+}
+
 /* Kept last: it must win over each stat's own colour. */
 /* A number IBBA's scoresheet disagrees with. */
 .sheet-off,

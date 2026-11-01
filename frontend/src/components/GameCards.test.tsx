@@ -23,7 +23,7 @@ describe('phone game cards', () => {
     const game = makeGame({ status: 'Completed', teamScore: 50, opponentScore: 60, playerStats: [] })
     inRouter(<StatsGameCards games={[game]} linkFor={() => '/x'} />)
     expect(screen.getByText(/L 50.60/)).toBeInTheDocument()
-    expect(screen.getByText('No box score recorded')).toBeInTheDocument()
+    expect(screen.getByText('No stats available')).toBeInTheDocument()
   })
 
   it('a finished friendly is marked as not counted', () => {
@@ -53,7 +53,7 @@ describe('phone game cards', () => {
   })
 
   it("a game with no stats but a line on IBBA's scoresheet gets a \"!\" that brings it in", async () => {
-    const line = { playerId: 'p1', number: 3, starter: true, points: 2, freeThrows: 0, twoPointers: 1, threePointers: 0, fouls: 0, sheetValid: true }
+    const line = { playerId: 'p1', number: 3, played: true, starter: true, points: 2, freeThrows: 0, twoPointers: 1, threePointers: 0, fouls: 0, sheetValid: true }
     const game = makeGame({ status: 'Completed', teamScore: 54, opponentScore: 70, playerStats: [], scoresheets: [line] })
     const onUseSheet = vi.fn().mockResolvedValue(undefined)
     inRouter(<StatsGameCards games={[game]} linkFor={() => '/x'} onUseSheet={onUseSheet} />)

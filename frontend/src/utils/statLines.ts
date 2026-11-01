@@ -45,18 +45,18 @@ export type SheetStat = 'points' | 'two' | 'three' | 'ft' | 'fouls'
 export interface SheetRow { stat: SheetStat; label: string; recorded: number; sheet: number; differs: boolean }
 
 // The recorded numbers next to IBBA's scoresheet, when they don't match: the
-// scoring, and the fouls when any were recorded (0 is usually "not tracked").
+// scoring and the fouls.
 // Null when they match, or when there's nothing to hold them against - no
 // sheet, or the stats are IBBA's own (the sheet's, or a league box score).
 export function sheetMismatch(stats: GameStatsDto | undefined): SheetRow[] | null {
   const sheet = stats?.scoresheet
-  if (!stats || !sheet || stats.source) return null
+  if (!stats || !sheet || sheet.notListed || stats.source) return null
   const rows = [
     { stat: 'points' as const, label: 'Points', recorded: stats.totalPoints, sheet: sheet.points, counts: true },
     { stat: 'two' as const, label: '2PT made', recorded: stats.fieldGoalsMade, sheet: sheet.twoPointers, counts: true },
     { stat: 'three' as const, label: '3PT made', recorded: stats.threePointersMade, sheet: sheet.threePointers, counts: true },
     { stat: 'ft' as const, label: 'FT made', recorded: stats.freeThrowsMade, sheet: sheet.freeThrows, counts: true },
-    { stat: 'fouls' as const, label: 'Fouls', recorded: stats.fouls, sheet: sheet.fouls, counts: stats.fouls > 0 },
+    { stat: 'fouls' as const, label: 'Fouls', recorded: stats.fouls, sheet: sheet.fouls, counts: true },
   ]
   if (!rows.some((r) => r.counts && r.recorded !== r.sheet)) return null
   return rows.map(({ stat, label, recorded, sheet: onSheet }) => ({ stat, label, recorded, sheet: onSheet, differs: recorded !== onSheet }))
@@ -66,4 +66,12 @@ export function sheetMismatch(stats: GameStatsDto | undefined): SheetRow[] | nul
 export function sheetOff(stats: GameStatsDto | undefined) {
   const differs = new Set((sheetMismatch(stats) ?? []).filter((r) => r.differs).map((r) => r.stat))
   return (stat: SheetStat) => (differs.has(stat) ? 'sheet-off' : '')
+}
+
+// A game with no box score, as the list says it: the sheet doesn't list the
+// player - not listed; on it without entering - didn't play; on it - IBBA has
+// stats (the "!" brings them in); no sheet - there are none.
+export function noStatsLabel(game: { scoresheets?: { played: boolean; notListed?: boolean }[] | null }) {
+  const line = game.scoresheets?.[0]
+  return !line ? 'No stats available' : line.notListed ? 'Not listed for this game' : line.played ? 'No stats recorded' : "Didn't play"
 }

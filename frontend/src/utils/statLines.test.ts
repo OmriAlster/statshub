@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { makeStats } from '../test/fixtures'
-import { average, fieldGoalAttempts, madeAverage, madeOf, sheetMismatch, shooting, show, showPct } from './statLines'
+import { average, fieldGoalAttempts, madeAverage, madeOf, noStatsLabel, sheetMismatch, shooting, show, showPct } from './statLines'
 
 describe('stats a game may not have recorded', () => {
   const tracked = makeStats({ fieldGoalsMade: 2, fieldGoalsAttempted: 4, threePointersMade: 1, threePointersAttempted: 2, defensiveRebounds: 6, offensiveRebounds: 0 })
@@ -31,7 +31,7 @@ describe('stats a game may not have recorded', () => {
 })
 
 describe("IBBA's scoresheet against what was recorded", () => {
-  const sheet = { playerId: 'p1', number: 8, starter: true, points: 11, freeThrows: 5, twoPointers: 3, threePointers: 0, fouls: 1, sheetValid: true }
+  const sheet = { playerId: 'p1', number: 8, played: true, starter: true, points: 11, freeThrows: 5, twoPointers: 3, threePointers: 0, fouls: 1, sheetValid: true }
   const recorded = (o: Parameters<typeof makeStats>[0]) =>
     makeStats({ fieldGoalsMade: 3, threePointersMade: 0, freeThrowsMade: 5, totalPoints: 11, fouls: 1, scoresheet: sheet, ...o })
 
@@ -41,9 +41,20 @@ describe("IBBA's scoresheet against what was recorded", () => {
     expect(rows.find((r) => r.label === 'FT made')).toMatchObject({ recorded: 4, sheet: 5 })
   })
 
-  it('flags fouls only where some were recorded', () => {
-    expect(sheetMismatch(recorded({ fouls: 0 }))).toBeNull()
+  it('flags a fouls difference too, 0 recorded included', () => {
+    expect(sheetMismatch(recorded({ fouls: 0 }))).not.toBeNull()
     expect(sheetMismatch(recorded({ fouls: 3 }))).not.toBeNull()
+  })
+
+  it('says why a game has no box score', () => {
+    expect(noStatsLabel({ scoresheets: [] })).toBe('No stats available')
+    expect(noStatsLabel({ scoresheets: [{ played: true }] })).toBe('No stats recorded')
+    expect(noStatsLabel({ scoresheets: [{ played: false }] })).toBe("Didn't play")
+    expect(noStatsLabel({ scoresheets: [{ played: false, notListed: true }] })).toBe('Not listed for this game')
+  })
+
+  it("doesn't compare against a sheet that doesn't list the player", () => {
+    expect(sheetMismatch(recorded({ scoresheet: { ...sheet, notListed: true, points: 0, twoPointers: 0, freeThrows: 0, fouls: 0 } }))).toBeNull()
   })
 
   it("doesn't flag a match, or the sheet's own numbers", () => {

@@ -31,7 +31,7 @@ import { PlayerCardModal, WrappedModal } from '../components/ShareModals'
 import { formatGameDateOnly } from '../utils/formatGameDate'
 import BouncingBall, { Busy } from '../components/BouncingBall'
 import { GameTypeBadge, HomeAway } from '../components/GameBadges'
-import { average, madeAverage, madeOf, sheetOff, show, showPct } from '../utils/statLines'
+import { average, madeAverage, madeOf, noStatsLabel, sheetOff, show, showPct } from '../utils/statLines'
 import SheetMismatch from '../components/SheetMismatch'
 
 export default function Stats() {
@@ -569,15 +569,22 @@ function StatsPanel({ games, playerId, typeFilter, onGameUpdated }: {
                     <td className={`num ${won ? 'win' : 'loss'}`}>
                       <span className="score-cell"><SheetMismatch game={game} stats={stats} onUseSheet={useSheet} />{game.teamScore}&ndash;{game.opponentScore}</span>
                     </td>
-                    <td className={`num ${off('points')}`}>{stats?.totalPoints ?? '-'}</td>
-                    <td className={`num ${off('two')}`}>{stats ? madeOf(stats.fieldGoalsMade, stats.fieldGoalsAttempted) : '-'}</td>
-                    <td className={`num ${off('three')}`}>{stats ? madeOf(stats.threePointersMade, stats.threePointersAttempted) : '-'}</td>
-                    <td className={`num ${off('ft')}`}>{stats ? madeOf(stats.freeThrowsMade, stats.freeThrowsAttempted) : '-'}</td>
-                    <td className="num">{stats?.totalRebounds ?? '-'}</td>
-                    <td className="num">{stats?.assists ?? '-'}</td>
-                    <td className="num">{stats?.steals ?? '-'}</td>
-                    <td className="num">{stats?.blocks ?? '-'}</td>
-                    <td className="num">{stats?.turnovers ?? '-'}</td>
+                    {stats ? (
+                      <>
+                        <td className={`num ${off('points')}`}>{stats.totalPoints}</td>
+                        <td className={`num ${off('two')}`}>{madeOf(stats.fieldGoalsMade, stats.fieldGoalsAttempted)}</td>
+                        <td className={`num ${off('three')}`}>{madeOf(stats.threePointersMade, stats.threePointersAttempted)}</td>
+                        <td className={`num ${off('ft')}`}>{madeOf(stats.freeThrowsMade, stats.freeThrowsAttempted)}</td>
+                        <td className="num">{show(stats.totalRebounds)}</td>
+                        <td className="num">{show(stats.assists)}</td>
+                        <td className="num">{show(stats.steals)}</td>
+                        <td className="num">{show(stats.blocks)}</td>
+                        <td className="num">{show(stats.turnovers)}</td>
+                      </>
+                    ) : (
+                      // No box score: why, across the stat columns.
+                      <td colSpan={9} className="games-table-nostats">{noStatsLabel(game)}</td>
+                    )}
                   </tr>
                 )
               })}

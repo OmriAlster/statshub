@@ -286,6 +286,7 @@ namespace StatsHub.Api.Data
             modelBuilder.Entity<PlayerIbbaLink>().Property(l => l.Provider).HasDefaultValue("ibba");
             // Rows from before it existed were never set from a scoresheet.
             modelBuilder.Entity<PlayerTeam>().Property(pt => pt.JerseyFromScoresheet).HasDefaultValue(false);
+            modelBuilder.Entity<ScoresheetLine>().Property(l => l.NotListed).HasDefaultValue(false);
 
             // The link lives on Team, not IbbaTeam - many app Teams (one per
             // player/parent) can point at the same shared IbbaTeam row, so no
