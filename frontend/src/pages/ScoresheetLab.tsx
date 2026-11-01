@@ -7,6 +7,8 @@ interface Hit { leagueName: string; playerName: string; playerUrl: string }
 
 interface LabGame {
   date: string
+  competition: string
+  cup: boolean
   opponent: string
   home: boolean
   teamScore: number | null
@@ -26,7 +28,7 @@ interface LabGame {
   fouls: number
 }
 
-interface LabResult { league: string; team: string; numbers: number[]; games: LabGame[]; upcomingGames: number }
+interface LabResult { league: string; cups: string[]; team: string; numbers: number[]; games: LabGame[]; upcomingGames: number }
 
 type TeamState = { busy: boolean; mode?: 'games' | 'jersey'; result?: LabResult; error?: string }
 
@@ -156,18 +158,19 @@ export default function ScoresheetLab() {
                       {result.numbers.length > 0
                         ? <>Jersey <b>#{result.numbers.join(' / #')}</b></>
                         : 'Not found on any sheet yet'}
-                      <span className="lab-source" dir="auto">On Swish: {result.team} · {result.league}</span>
+                      <span className="lab-source" dir="auto">On Swish: {result.team} · {result.league}{result.cups.length > 0 ? ` + ${result.cups.join(', ')}` : ' (no cup games)'}</span>
                     </p>
                     {state.mode === 'games' && (
                       <div className="lab-table-wrap">
                         <table className="lab-table">
                           <thead>
-                            <tr><th>Date</th><th>Game</th><th>#</th><th>PTS</th><th>FT</th><th>2PT</th><th>3PT</th><th>Fouls</th><th></th></tr>
+                            <tr><th>Date</th><th></th><th>Game</th><th>#</th><th>PTS</th><th>FT</th><th>2PT</th><th>3PT</th><th>Fouls</th><th></th></tr>
                           </thead>
                           <tbody>
                             {result.games.map((g) => (
                               <tr key={g.date + g.opponent} className={g.status === 'found' ? '' : 'muted'}>
                                 <td>{new Date(g.date).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: '2-digit' })}</td>
+                                <td><span className={`lab-comp ${g.cup ? 'cup' : ''}`} title={g.competition}>{g.cup ? 'Cup' : 'League'}</span></td>
                                 <td dir="auto">{g.home ? 'vs' : '@'} {g.opponent} <span className="lab-score">{g.teamScore}–{g.opponentScore}</span></td>
                                 <td>{g.number ?? '–'}</td>
                                 <td><b>{g.status === 'found' ? g.points : '–'}</b></td>

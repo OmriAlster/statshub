@@ -7522,3 +7522,5 @@ a.insight-card:hover { border-color: var(--color-accent); }
 .lab-note { white-space: normal; }
 @media (max-width: 640px) { .lab-team-actions { width: 100%; } .lab-team-actions .lab-btn { flex: 1; } }
 .lab-number .lab-source { display: block; margin-top: 0.15rem; }
+.lab-comp { display: inline-block; padding: 0.1rem 0.5rem; border-radius: var(--radius-pill); font-size: 0.7rem; font-weight: 800; background: var(--color-info-soft); color: var(--color-info); }
+.lab-comp.cup { background: var(--color-gold-soft); color: var(--color-gold); }
