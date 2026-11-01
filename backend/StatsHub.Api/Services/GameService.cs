@@ -93,6 +93,7 @@ namespace StatsHub.Api.Services
                     (g.IbbaGameCode != null && team.IbbaTeamId != null && (g.HomeTeamId == team.IbbaTeamId || g.AwayTeamId == team.IbbaTeamId)))
                 .Include(g => g.GameStats)
                 .ThenInclude(gs => gs.Player)
+                .Include(g => g.ScoresheetLines)
                 .OrderByDescending(g => g.GameDate)
                 .ToListAsync();
 
@@ -180,6 +181,7 @@ namespace StatsHub.Api.Services
                     g.GameStats.Any(gs => gs.PlayerId == playerId))
                 .Include(g => g.GameStats.Where(gs => gs.PlayerId == playerId))
                 .ThenInclude(gs => gs.Player)
+                .Include(g => g.ScoresheetLines.Where(l => l.PlayerId == playerId))
                 .OrderByDescending(g => g.GameDate)
                 .ToListAsync();
 

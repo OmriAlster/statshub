@@ -15,7 +15,7 @@ import { formatGameDateOnly } from '../utils/formatGameDate'
 import BouncingBall from '../components/BouncingBall'
 import { GameTypeBadge, HomeAway } from '../components/GameBadges'
 import { useLiveGames } from '../live/liveUpdates'
-import { average, madeOf, show, showPct } from '../utils/statLines'
+import { average, madeAverage, madeOf, show, showPct } from '../utils/statLines'
 
 export default function SharedPlayerView() {
   const { token, gameId } = useParams<{ token: string; gameId?: string }>()
@@ -197,11 +197,11 @@ function SharedStatsPanel({ games }: { games: GameDto[] }) {
       ? {
           count: gamesWithStats.length,
           pts: ppg,
-          fgm: avg((g) => g.playerStats[0]?.fieldGoalsMade ?? 0).toFixed(1),
+          fgm: show(madeAverage(gamesWithStats, (g) => g.playerStats[0]?.fieldGoalsMade, (g) => g.playerStats[0]?.fieldGoalsAttempted), 1),
           fga: show(average(gamesWithStats, (g) => g.playerStats[0]?.fieldGoalsAttempted), 1),
-          tpm: avg((g) => g.playerStats[0]?.threePointersMade ?? 0).toFixed(1),
+          tpm: show(madeAverage(gamesWithStats, (g) => g.playerStats[0]?.threePointersMade, (g) => g.playerStats[0]?.threePointersAttempted), 1),
           tpa: show(average(gamesWithStats, (g) => g.playerStats[0]?.threePointersAttempted), 1),
-          ftm: avg((g) => g.playerStats[0]?.freeThrowsMade ?? 0).toFixed(1),
+          ftm: show(madeAverage(gamesWithStats, (g) => g.playerStats[0]?.freeThrowsMade, (g) => g.playerStats[0]?.freeThrowsAttempted), 1),
           fta: show(average(gamesWithStats, (g) => g.playerStats[0]?.freeThrowsAttempted), 1),
           reb: show(average(gamesWithStats, (g) => g.playerStats[0]?.totalRebounds), 1),
           ast: show(average(gamesWithStats, (g) => g.playerStats[0]?.assists), 1),
@@ -430,7 +430,7 @@ function SharedSeasonPanel({ team, games }: { team: SharedTeamDto; games: GameDt
             <h4>{showTotals ? 'Totals' : 'Key Averages'}</h4>
             <div className="stats-grid-enhanced">
               <div className="stat-box-enhanced">
-                <span className="stat-value">{showTotals ? team.totalPoints : team.pointsPerGame.toFixed(1)}</span>
+                <span className="stat-value">{showTotals ? team.totalPoints : show(team.pointsPerGame, 1)}</span>
                 <span className="stat-label">{showTotals ? 'PTS' : 'PPG'}</span>
               </div>
               <div className="stat-box-enhanced">

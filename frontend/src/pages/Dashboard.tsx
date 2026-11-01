@@ -211,7 +211,7 @@ export default function Dashboard() {
                         )}
                       </div>
                       <div className="pctr-stats">
-                        <div><b>{s.pointsPerGame}</b><span>PPG</span></div>
+                        <div><b>{show(s.pointsPerGame)}</b><span>PPG</span></div>
                         <div><b>{show(s.reboundsPerGame)}</b><span>RPG</span></div>
                         <div><b>{show(s.assistsPerGame)}</b><span>APG</span></div>
                       </div>

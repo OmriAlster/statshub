@@ -5,7 +5,8 @@ import CourtShotChart from './CourtShotChart'
 import GameStatusBadge, { onCourtIn } from './GameStatusBadge'
 import LeagueBadge from './LeagueBadge'
 import NavigateButtons from './NavigateButtons'
-import { madeOf, show, showPct } from '../utils/statLines'
+import { madeOf, sheetMismatch, show, showPct } from '../utils/statLines'
+import { SheetDiffTable } from './SheetMismatch'
 
 interface GameDetailViewProps {
   game: GameDto
@@ -170,13 +171,18 @@ function ScoresheetNote({ stats }: { stats: GameStatsDto }) {
   const sheet = stats.scoresheet
   if (!sheet && !stats.source) return null
   const sheetLine = sheet && `#${sheet.number} · ${sheet.points} pts · ${sheet.twoPointers}×2 · ${sheet.threePointers}×3 · ${sheet.freeThrows} FT · ${sheet.fouls} foul${sheet.fouls === 1 ? '' : 's'}`
-  const differs = !!sheet && !stats.source
-    && (sheet.twoPointers !== stats.fieldGoalsMade || sheet.threePointers !== stats.threePointersMade || sheet.freeThrows !== stats.freeThrowsMade)
+  const mismatch = sheetMismatch(stats)
   return (
-    <div className={`sheet-note${differs ? ' differs' : ''}`}>
+    <div className={`sheet-note${mismatch ? ' differs' : ''}`}>
       {stats.source === 'scoresheet' && <p><b>From IBBA's scoresheet</b> · {sheetLine ?? 'made shots and fouls only'}. The rest wasn't recorded - edit the game to add it.</p>}
       {stats.source === 'box' && <p><b>From IBBA's box score</b> - edit the game to correct anything, like the minutes.</p>}
-      {!stats.source && sheet && <p><b>IBBA's scoresheet{differs ? ' says otherwise' : ''}:</b> {sheetLine}</p>}
+      {mismatch && (
+        <>
+          <p><span className="sheet-mismatch-icon static" aria-hidden="true">!</span> <b>IBBA's scoresheet doesn't match what was recorded</b> (#{sheet!.number})</p>
+          <SheetDiffTable rows={mismatch} />
+        </>
+      )}
+      {!stats.source && sheet && !mismatch && <p><b>IBBA's scoresheet agrees:</b> {sheetLine}</p>}
       {sheet && !sheet.sheetValid && <p className="sheet-warning">The scoresheet doesn't add up, so its numbers may be off{sheet.sheetErrors ? `: ${sheet.sheetErrors}` : '.'}</p>}
     </div>
   )

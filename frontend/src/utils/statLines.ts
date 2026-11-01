@@ -25,6 +25,11 @@ export function total<T>(items: T[], pick: (item: T) => number | null | undefine
   return known.length ? known.reduce((s, v) => s + v, 0) : null
 }
 
+// Made shots per game, over the games whose attempts were recorded - a game
+// with makes but no attempts would read as "3 of 0".
+export const madeAverage = <T>(items: T[], made: (item: T) => number | null | undefined, tried: (item: T) => number | null | undefined) =>
+  average(items.filter((i) => tried(i) !== null && tried(i) !== undefined), made)
+
 // Made out of attempts, over the items where the attempts were recorded.
 export function shooting<T>(items: T[], made: (item: T) => number, tried: (item: T) => number | null | undefined) {
   const known = items.filter((i) => tried(i) !== null && tried(i) !== undefined)
@@ -35,3 +40,23 @@ export function shooting<T>(items: T[], made: (item: T) => number, tried: (item:
 // 2s and 3s together - only when both attempts were recorded.
 export const fieldGoalAttempts = (l: GameStatsDto) =>
   l.fieldGoalsAttempted === null || l.threePointersAttempted === null ? null : l.fieldGoalsAttempted + l.threePointersAttempted
+
+export interface SheetRow { label: string; recorded: number; sheet: number; differs: boolean }
+
+// The recorded numbers next to IBBA's scoresheet, when they don't match: the
+// scoring, and the fouls when any were recorded (0 is usually "not tracked").
+// Null when they match, or when there's nothing to hold them against - no
+// sheet, or the stats are IBBA's own (the sheet's, or a league box score).
+export function sheetMismatch(stats: GameStatsDto | undefined): SheetRow[] | null {
+  const sheet = stats?.scoresheet
+  if (!stats || !sheet || stats.source) return null
+  const rows = [
+    { label: 'Points', recorded: stats.totalPoints, sheet: sheet.points, counts: true },
+    { label: '2PT made', recorded: stats.fieldGoalsMade, sheet: sheet.twoPointers, counts: true },
+    { label: '3PT made', recorded: stats.threePointersMade, sheet: sheet.threePointers, counts: true },
+    { label: 'FT made', recorded: stats.freeThrowsMade, sheet: sheet.freeThrows, counts: true },
+    { label: 'Fouls', recorded: stats.fouls, sheet: sheet.fouls, counts: stats.fouls > 0 },
+  ]
+  if (!rows.some((r) => r.counts && r.recorded !== r.sheet)) return null
+  return rows.map(({ label, recorded, sheet: onSheet }) => ({ label, recorded, sheet: onSheet, differs: recorded !== onSheet }))
+}

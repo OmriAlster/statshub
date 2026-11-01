@@ -35,7 +35,7 @@ namespace StatsHub.Api.DTOs
         public int TotalPoints { get; set; }
 
         // The player's line on the game's scoresheet - shown next to the
-        // parent's own numbers. Only on a single game's view.
+        // parent's own numbers, flagged where they differ.
         public ScoresheetLineDto? Scoresheet { get; set; }
 
         // Only populated where a caller specifically asks for it (e.g. a shared

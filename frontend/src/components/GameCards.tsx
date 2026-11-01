@@ -6,6 +6,7 @@ import { formatGameTime } from '../utils/formatGameDate'
 import GameStatusBadge, { onCourtIn } from './GameStatusBadge'
 import { GameTypeBadge, HomeAway } from './GameBadges'
 import { madeOf, show } from '../utils/statLines'
+import SheetMismatch from './SheetMismatch'
 
 // Phone layout for the Stats and Schedule tables: a 5-13 column table can't
 // fit a phone screen (only Opponent and Date were visible, everything else
@@ -95,7 +96,7 @@ export function StatsGameCards({
               {stats ? (
                 <>
                   <div className="game-card-stats">
-                    <div className="gcs-pts"><b>{stats.totalPoints}</b><span>PTS</span></div>
+                    <div className="gcs-pts"><b>{stats.totalPoints}<SheetMismatch stats={stats} /></b><span>PTS</span></div>
                     <div><b>{show(stats.totalRebounds)}</b><span>REB</span></div>
                     <div><b>{show(stats.assists)}</b><span>AST</span></div>
                     <div><b>{show(stats.steals)}</b><span>STL</span></div>

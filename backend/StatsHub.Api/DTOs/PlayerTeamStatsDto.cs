@@ -18,7 +18,7 @@ namespace StatsHub.Api.DTOs
         // null when none do.
         public int? TotalMinutes { get; set; }
         public int TotalPoints { get; set; }
-        public double PointsPerGame { get; set; }
+        public double? PointsPerGame { get; set; }
         public int? TotalRebounds { get; set; }
         public double? ReboundsPerGame { get; set; }
         public int? TotalAssists { get; set; }

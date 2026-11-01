@@ -128,6 +128,32 @@ public class ScoresheetStatsTests : IClassFixture<ScoresheetStatsTests.Factory>
     }
 
     [Fact]
+    public async Task The_games_list_carries_the_sheets_line_to_flag_a_mismatch()
+    {
+        var s = await SeedAsync();
+        await s.Parent.CreateStatsAsync(s.GameId, s.PlayerId, ftm: 2, fta: 4);
+
+        await FillAsync(s.LinkId);
+
+        var games = await s.Parent.GetAsync<List<GameDto>>($"/api/games/player/{s.PlayerId}");
+        var line = Assert.Single(Assert.Single(games, g => g.Id == s.GameId).PlayerStats);
+        Assert.Equal((2, 5), (line.FreeThrowsMade, line.Scoresheet!.FreeThrows));
+    }
+
+    [Fact]
+    public async Task With_no_games_there_are_no_points_per_game()
+    {
+        var parent = await TestUser.SignInAsync(_factory);
+        var player = await parent.CreatePlayerAsync();
+        await parent.CreateTeamWithPlayerAsync(player.Id);
+
+        var stats = Assert.Single(await parent.GetAsync<List<PlayerTeamStatsDto>>($"/api/gamestats/player/{player.Id}"));
+
+        Assert.Equal(0, stats.GamesPlayed);
+        Assert.Null(stats.PointsPerGame);
+    }
+
+    [Fact]
     public async Task Once_the_parent_edits_a_sheets_stats_they_are_theirs()
     {
         var s = await SeedAsync();

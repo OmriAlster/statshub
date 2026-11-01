@@ -267,7 +267,7 @@ namespace StatsHub.Api.Services
                 GamesPlayed = gamesPlayed,
                 TotalMinutes = Stat(gs => gs.MinutesPlayed).Total,
                 TotalPoints = totalPoints,
-                PointsPerGame = PerGame(totalPoints, gamesPlayed) ?? 0,
+                PointsPerGame = PerGame(totalPoints, gamesPlayed),
                 TotalRebounds = rebounds.Total,
                 ReboundsPerGame = rebounds.PerGame,
                 TotalAssists = assists.Total,

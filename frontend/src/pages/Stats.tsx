@@ -37,7 +37,8 @@ import BouncingBall, { Busy } from '../components/BouncingBall'
 import { GameTypeBadge, HomeAway } from '../components/GameBadges'
 import Modal from '../components/Modal'
 import { LeagueMark, LeagueName } from '../components/LeagueBadge'
-import { average, madeOf, show, showPct } from '../utils/statLines'
+import { average, madeAverage, madeOf, show, showPct } from '../utils/statLines'
+import SheetMismatch from '../components/SheetMismatch'
 
 export default function Stats() {
   const { user } = useAuth()
@@ -468,11 +469,11 @@ function StatsPanel({ games, playerId, typeFilter }: { games: GameDto[]; playerI
       ? {
           count: gamesWithStats.length,
           pts: ppg,
-          fgm: avg((g) => g.playerStats[0]?.fieldGoalsMade ?? 0).toFixed(1),
+          fgm: show(madeAverage(gamesWithStats, (g) => g.playerStats[0]?.fieldGoalsMade, (g) => g.playerStats[0]?.fieldGoalsAttempted), 1),
           fga: show(average(gamesWithStats, (g) => g.playerStats[0]?.fieldGoalsAttempted), 1),
-          tpm: avg((g) => g.playerStats[0]?.threePointersMade ?? 0).toFixed(1),
+          tpm: show(madeAverage(gamesWithStats, (g) => g.playerStats[0]?.threePointersMade, (g) => g.playerStats[0]?.threePointersAttempted), 1),
           tpa: show(average(gamesWithStats, (g) => g.playerStats[0]?.threePointersAttempted), 1),
-          ftm: avg((g) => g.playerStats[0]?.freeThrowsMade ?? 0).toFixed(1),
+          ftm: show(madeAverage(gamesWithStats, (g) => g.playerStats[0]?.freeThrowsMade, (g) => g.playerStats[0]?.freeThrowsAttempted), 1),
           fta: show(average(gamesWithStats, (g) => g.playerStats[0]?.freeThrowsAttempted), 1),
           reb: show(average(gamesWithStats, (g) => g.playerStats[0]?.totalRebounds), 1),
           ast: show(average(gamesWithStats, (g) => g.playerStats[0]?.assists), 1),
@@ -562,7 +563,7 @@ function StatsPanel({ games, playerId, typeFilter }: { games: GameDto[]; playerI
                     <td className={`num ${won ? 'win' : 'loss'}`}>
                       {game.teamScore}&ndash;{game.opponentScore}
                     </td>
-                    <td className="num">{stats?.totalPoints ?? '-'}</td>
+                    <td className="num">{stats?.totalPoints ?? '-'}<SheetMismatch stats={stats} /></td>
                     <td className="num">{stats ? madeOf(stats.fieldGoalsMade, stats.fieldGoalsAttempted) : '-'}</td>
                     <td className="num">{stats ? madeOf(stats.threePointersMade, stats.threePointersAttempted) : '-'}</td>
                     <td className="num">{stats ? madeOf(stats.freeThrowsMade, stats.freeThrowsAttempted) : '-'}</td>
@@ -1302,9 +1303,9 @@ function SeasonPanel({
             <h4>{showTotals ? 'Totals' : 'Key Averages'}</h4>
             <div className="stats-grid-enhanced">
               <div className="stat-box-enhanced">
-                <span className="stat-value">{showTotals ? selected.totalPoints : selected.pointsPerGame.toFixed(1)}</span>
+                <span className="stat-value">{showTotals ? selected.totalPoints : show(selected.pointsPerGame, 1)}</span>
                 <span className="stat-label">{showTotals ? 'PTS' : 'PPG'}</span>
-                <span className="stat-detail">{showTotals ? `${selected.pointsPerGame.toFixed(1)}/game` : `${selected.totalPoints} total`}</span>
+                <span className="stat-detail">{showTotals ? `${show(selected.pointsPerGame, 1)}/game` : `${selected.totalPoints} total`}</span>
               </div>
               <div className="stat-box-enhanced">
                 <span className="stat-value">{showTotals ? show(selected.totalRebounds) : show(selected.reboundsPerGame, 1)}</span>

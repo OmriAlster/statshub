@@ -164,7 +164,7 @@ export interface PlayerTeamStatsDto {
   // null when none do.
   totalMinutes: number | null
   totalPoints: number
-  pointsPerGame: number
+  pointsPerGame: number | null
   totalRebounds: number | null
   reboundsPerGame: number | null
   totalAssists: number | null

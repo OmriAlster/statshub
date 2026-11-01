@@ -255,9 +255,11 @@ namespace StatsHub.Api.Services
             return stats;
         }
 
-        // The parent's numbers and the sheet's say the same about the scoring.
+        // The parent's numbers and the sheet's say the same - the scoring, and
+        // the fouls when the parent recorded any (0 is usually "not tracked").
         internal static bool Agrees(GameStats stats, ScoresheetLine line) =>
-            stats.FieldGoalsMade == line.TwoPointers && stats.ThreePointersMade == line.ThreePointers && stats.FreeThrowsMade == line.FreeThrows;
+            stats.FieldGoalsMade == line.TwoPointers && stats.ThreePointersMade == line.ThreePointers && stats.FreeThrowsMade == line.FreeThrows
+            && (stats.Fouls == 0 || stats.Fouls == line.Fouls);
 
         private async Task NotifyAsync(Guid playerId, Game game, ScoresheetLine line, GameStats? recorded, string opponentName)
         {
