@@ -1,0 +1,890 @@
+{
+  "competition": "נוער ארצית שרון",
+  "date": "19/10/2026",
+  "time": "19:00",
+  "home": {
+    "name": "בית\"ר כפר יונה",
+    "points": 70,
+    "players": [
+      {
+        "number": 2,
+        "code": "491",
+        "lastName": "נוימן",
+        "firstInitial": "ל",
+        "captain": false,
+        "played": true,
+        "starter": false,
+        "fouls": 0,
+        "points": 0,
+        "freeThrows": 0,
+        "twoPointers": 0,
+        "threePointers": 0
+      },
+      {
+        "number": 4,
+        "code": "389",
+        "lastName": "מזרחי",
+        "firstInitial": "ר",
+        "captain": false,
+        "played": true,
+        "starter": false,
+        "fouls": 2,
+        "points": 8,
+        "freeThrows": 0,
+        "twoPointers": 1,
+        "threePointers": 2
+      },
+      {
+        "number": 9,
+        "code": "441",
+        "lastName": "ששון",
+        "firstInitial": "ח",
+        "captain": false,
+        "played": true,
+        "starter": false,
+        "fouls": 3,
+        "points": 5,
+        "freeThrows": 1,
+        "twoPointers": 2,
+        "threePointers": 0
+      },
+      {
+        "number": 10,
+        "code": "111",
+        "lastName": "אלגזאר",
+        "firstInitial": "נ",
+        "captain": true,
+        "played": true,
+        "starter": true,
+        "fouls": 1,
+        "points": 11,
+        "freeThrows": 0,
+        "twoPointers": 4,
+        "threePointers": 1
+      },
+      {
+        "number": 11,
+        "code": "204",
+        "lastName": "חכים",
+        "firstInitial": "א",
+        "captain": false,
+        "played": true,
+        "starter": false,
+        "fouls": 1,
+        "points": 5,
+        "freeThrows": 2,
+        "twoPointers": 0,
+        "threePointers": 1
+      },
+      {
+        "number": 12,
+        "code": "803",
+        "lastName": "פוקס",
+        "firstInitial": "א",
+        "captain": false,
+        "played": true,
+        "starter": false,
+        "fouls": 1,
+        "points": 0,
+        "freeThrows": 0,
+        "twoPointers": 0,
+        "threePointers": 0
+      },
+      {
+        "number": 19,
+        "code": "105",
+        "lastName": "אברהמי",
+        "firstInitial": "א",
+        "captain": false,
+        "played": true,
+        "starter": true,
+        "fouls": 3,
+        "points": 13,
+        "freeThrows": 3,
+        "twoPointers": 2,
+        "threePointers": 2
+      },
+      {
+        "number": 24,
+        "code": "456",
+        "lastName": "פרקש",
+        "firstInitial": "א",
+        "captain": false,
+        "played": true,
+        "starter": true,
+        "fouls": 2,
+        "points": 6,
+        "freeThrows": 2,
+        "twoPointers": 2,
+        "threePointers": 0
+      },
+      {
+        "number": 28,
+        "code": "993",
+        "lastName": "יאור",
+        "firstInitial": "פ",
+        "captain": false,
+        "played": true,
+        "starter": true,
+        "fouls": 2,
+        "points": 14,
+        "freeThrows": 6,
+        "twoPointers": 1,
+        "threePointers": 2
+      },
+      {
+        "number": 30,
+        "code": "514",
+        "lastName": "רפאלי",
+        "firstInitial": "א",
+        "captain": false,
+        "played": true,
+        "starter": true,
+        "fouls": 1,
+        "points": 0,
+        "freeThrows": 0,
+        "twoPointers": 0,
+        "threePointers": 0
+      },
+      {
+        "number": 55,
+        "code": "427",
+        "lastName": "אורן",
+        "firstInitial": "א",
+        "captain": false,
+        "played": true,
+        "starter": false,
+        "fouls": 0,
+        "points": 8,
+        "freeThrows": 0,
+        "twoPointers": 4,
+        "threePointers": 0
+      }
+    ],
+    "events": [
+      {
+        "score": 1,
+        "player": 24,
+        "points": 1,
+        "kind": "ft",
+        "period": 1
+      },
+      {
+        "score": 2,
+        "player": 24,
+        "points": 1,
+        "kind": "ft",
+        "period": 1
+      },
+      {
+        "score": 3,
+        "player": 28,
+        "points": 1,
+        "kind": "ft",
+        "period": 1
+      },
+      {
+        "score": 4,
+        "player": 28,
+        "points": 1,
+        "kind": "ft",
+        "period": 1
+      },
+      {
+        "score": 5,
+        "player": 28,
+        "points": 1,
+        "kind": "ft",
+        "period": 1
+      },
+      {
+        "score": 6,
+        "player": 19,
+        "points": 1,
+        "kind": "ft",
+        "period": 1
+      },
+      {
+        "score": 7,
+        "player": 19,
+        "points": 1,
+        "kind": "ft",
+        "period": 1
+      },
+      {
+        "score": 9,
+        "player": 10,
+        "points": 2,
+        "kind": "fg2",
+        "period": 1
+      },
+      {
+        "score": 11,
+        "player": 10,
+        "points": 2,
+        "kind": "fg2",
+        "period": 1
+      },
+      {
+        "score": 14,
+        "player": 10,
+        "points": 3,
+        "kind": "fg3",
+        "period": 1
+      },
+      {
+        "score": 16,
+        "player": 55,
+        "points": 2,
+        "kind": "fg2",
+        "period": 1
+      },
+      {
+        "score": 18,
+        "player": 55,
+        "points": 2,
+        "kind": "fg2",
+        "period": 1
+      },
+      {
+        "score": 20,
+        "player": 55,
+        "points": 2,
+        "kind": "fg2",
+        "period": 2
+      },
+      {
+        "score": 22,
+        "player": 9,
+        "points": 2,
+        "kind": "fg2",
+        "period": 2
+      },
+      {
+        "score": 24,
+        "player": 4,
+        "points": 2,
+        "kind": "fg2",
+        "period": 2
+      },
+      {
+        "score": 26,
+        "player": 55,
+        "points": 2,
+        "kind": "fg2",
+        "period": 2
+      },
+      {
+        "score": 28,
+        "player": 10,
+        "points": 2,
+        "kind": "fg2",
+        "period": 2
+      },
+      {
+        "score": 30,
+        "player": 24,
+        "points": 2,
+        "kind": "fg2",
+        "period": 2
+      },
+      {
+        "score": 31,
+        "player": 28,
+        "points": 1,
+        "kind": "ft",
+        "period": 2
+      },
+      {
+        "score": 34,
+        "player": 4,
+        "points": 3,
+        "kind": "fg3",
+        "period": 2
+      },
+      {
+        "score": 36,
+        "player": 28,
+        "points": 2,
+        "kind": "fg2",
+        "period": 2
+      },
+      {
+        "score": 37,
+        "player": 28,
+        "points": 1,
+        "kind": "ft",
+        "period": 2
+      },
+      {
+        "score": 38,
+        "player": 28,
+        "points": 1,
+        "kind": "ft",
+        "period": 2
+      },
+      {
+        "score": 40,
+        "player": 10,
+        "points": 2,
+        "kind": "fg2",
+        "period": 2
+      },
+      {
+        "score": 41,
+        "player": 11,
+        "points": 1,
+        "kind": "ft",
+        "period": 3
+      },
+      {
+        "score": 42,
+        "player": 11,
+        "points": 1,
+        "kind": "ft",
+        "period": 3
+      },
+      {
+        "score": 44,
+        "player": 19,
+        "points": 2,
+        "kind": "fg2",
+        "period": 3
+      },
+      {
+        "score": 47,
+        "player": 11,
+        "points": 3,
+        "kind": "fg3",
+        "period": 3
+      },
+      {
+        "score": 49,
+        "player": 24,
+        "points": 2,
+        "kind": "fg2",
+        "period": 3
+      },
+      {
+        "score": 50,
+        "player": 19,
+        "points": 1,
+        "kind": "ft",
+        "period": 3
+      },
+      {
+        "score": 52,
+        "player": 19,
+        "points": 2,
+        "kind": "fg2",
+        "period": 3
+      },
+      {
+        "score": 55,
+        "player": 19,
+        "points": 3,
+        "kind": "fg3",
+        "period": 3
+      },
+      {
+        "score": 58,
+        "player": 4,
+        "points": 3,
+        "kind": "fg3",
+        "period": 3
+      },
+      {
+        "score": 61,
+        "player": 28,
+        "points": 3,
+        "kind": "fg3",
+        "period": 4
+      },
+      {
+        "score": 64,
+        "player": 28,
+        "points": 3,
+        "kind": "fg3",
+        "period": 4
+      },
+      {
+        "score": 67,
+        "player": 19,
+        "points": 3,
+        "kind": "fg3",
+        "period": 4
+      },
+      {
+        "score": 69,
+        "player": 9,
+        "points": 2,
+        "kind": "fg2",
+        "period": 4
+      },
+      {
+        "score": 70,
+        "player": 9,
+        "points": 1,
+        "kind": "ft",
+        "period": 4
+      }
+    ]
+  },
+  "away": {
+    "name": "מכבי תל מונד",
+    "points": 54,
+    "players": [
+      {
+        "number": 2,
+        "code": "219",
+        "lastName": "דרורי",
+        "firstInitial": "ס",
+        "captain": false,
+        "played": true,
+        "starter": true,
+        "fouls": 2,
+        "points": 4,
+        "freeThrows": 0,
+        "twoPointers": 2,
+        "threePointers": 0
+      },
+      {
+        "number": 3,
+        "code": "280",
+        "lastName": "אלסטר",
+        "firstInitial": "ע",
+        "captain": false,
+        "played": true,
+        "starter": false,
+        "fouls": 0,
+        "points": 2,
+        "freeThrows": 0,
+        "twoPointers": 1,
+        "threePointers": 0
+      },
+      {
+        "number": 4,
+        "code": "564",
+        "lastName": "בראונר (ח)",
+        "firstInitial": "נ",
+        "captain": false,
+        "played": true,
+        "starter": false,
+        "fouls": 2,
+        "points": 2,
+        "freeThrows": 0,
+        "twoPointers": 1,
+        "threePointers": 0
+      },
+      {
+        "number": 6,
+        "code": "436",
+        "lastName": "זינגר",
+        "firstInitial": "ג",
+        "captain": false,
+        "played": true,
+        "starter": true,
+        "fouls": 0,
+        "points": 3,
+        "freeThrows": 3,
+        "twoPointers": 0,
+        "threePointers": 0
+      },
+      {
+        "number": 8,
+        "code": "284",
+        "lastName": "אלישע",
+        "firstInitial": "ר",
+        "captain": true,
+        "played": true,
+        "starter": true,
+        "fouls": 3,
+        "points": 11,
+        "freeThrows": 2,
+        "twoPointers": 3,
+        "threePointers": 1
+      },
+      {
+        "number": 9,
+        "code": "831",
+        "lastName": "רבין",
+        "firstInitial": "א",
+        "captain": false,
+        "played": true,
+        "starter": false,
+        "fouls": 0,
+        "points": 3,
+        "freeThrows": 0,
+        "twoPointers": 0,
+        "threePointers": 1
+      },
+      {
+        "number": 11,
+        "code": "920",
+        "lastName": "אלון",
+        "firstInitial": "א",
+        "captain": false,
+        "played": true,
+        "starter": false,
+        "fouls": 0,
+        "points": 2,
+        "freeThrows": 0,
+        "twoPointers": 1,
+        "threePointers": 0
+      },
+      {
+        "number": 12,
+        "code": "380",
+        "lastName": "גרבל",
+        "firstInitial": "נ",
+        "captain": false,
+        "played": true,
+        "starter": false,
+        "fouls": 1,
+        "points": 0,
+        "freeThrows": 0,
+        "twoPointers": 0,
+        "threePointers": 0
+      },
+      {
+        "number": 15,
+        "code": "432",
+        "lastName": "אלגרבלי",
+        "firstInitial": "א",
+        "captain": false,
+        "played": true,
+        "starter": false,
+        "fouls": 2,
+        "points": 7,
+        "freeThrows": 1,
+        "twoPointers": 3,
+        "threePointers": 0
+      },
+      {
+        "number": 16,
+        "code": "188",
+        "lastName": "כאהן",
+        "firstInitial": "א",
+        "captain": false,
+        "played": true,
+        "starter": true,
+        "fouls": 1,
+        "points": 18,
+        "freeThrows": 5,
+        "twoPointers": 5,
+        "threePointers": 1
+      },
+      {
+        "number": 19,
+        "code": "547",
+        "lastName": "ברש אור",
+        "firstInitial": "י",
+        "captain": false,
+        "played": true,
+        "starter": true,
+        "fouls": 2,
+        "points": 0,
+        "freeThrows": 0,
+        "twoPointers": 0,
+        "threePointers": 0
+      },
+      {
+        "number": 20,
+        "code": "019",
+        "lastName": "כהן",
+        "firstInitial": "נ",
+        "captain": false,
+        "played": false,
+        "starter": false,
+        "fouls": 0,
+        "points": 0,
+        "freeThrows": 0,
+        "twoPointers": 0,
+        "threePointers": 0
+      },
+      {
+        "number": 28,
+        "code": "890",
+        "lastName": "שטרן",
+        "firstInitial": "י",
+        "captain": false,
+        "played": true,
+        "starter": false,
+        "fouls": 0,
+        "points": 0,
+        "freeThrows": 0,
+        "twoPointers": 0,
+        "threePointers": 0
+      },
+      {
+        "number": 34,
+        "code": "908",
+        "lastName": "שורץ",
+        "firstInitial": "א",
+        "captain": false,
+        "played": true,
+        "starter": false,
+        "fouls": 0,
+        "points": 0,
+        "freeThrows": 0,
+        "twoPointers": 0,
+        "threePointers": 0
+      },
+      {
+        "number": 42,
+        "code": "200",
+        "lastName": "פיין",
+        "firstInitial": "א",
+        "captain": false,
+        "played": true,
+        "starter": false,
+        "fouls": 1,
+        "points": 2,
+        "freeThrows": 0,
+        "twoPointers": 1,
+        "threePointers": 0
+      }
+    ],
+    "events": [
+      {
+        "score": 2,
+        "player": 8,
+        "points": 2,
+        "kind": "fg2",
+        "period": 1
+      },
+      {
+        "score": 5,
+        "player": 8,
+        "points": 3,
+        "kind": "fg3",
+        "period": 1
+      },
+      {
+        "score": 6,
+        "player": 8,
+        "points": 1,
+        "kind": "ft",
+        "period": 1
+      },
+      {
+        "score": 7,
+        "player": 8,
+        "points": 1,
+        "kind": "ft",
+        "period": 1
+      },
+      {
+        "score": 10,
+        "player": 9,
+        "points": 3,
+        "kind": "fg3",
+        "period": 1
+      },
+      {
+        "score": 13,
+        "player": 16,
+        "points": 3,
+        "kind": "fg3",
+        "period": 2
+      },
+      {
+        "score": 15,
+        "player": 16,
+        "points": 2,
+        "kind": "fg2",
+        "period": 2
+      },
+      {
+        "score": 17,
+        "player": 8,
+        "points": 2,
+        "kind": "fg2",
+        "period": 2
+      },
+      {
+        "score": 19,
+        "player": 16,
+        "points": 2,
+        "kind": "fg2",
+        "period": 2
+      },
+      {
+        "score": 20,
+        "player": 16,
+        "points": 1,
+        "kind": "ft",
+        "period": 2
+      },
+      {
+        "score": 21,
+        "player": 16,
+        "points": 1,
+        "kind": "ft",
+        "period": 2
+      },
+      {
+        "score": 23,
+        "player": 2,
+        "points": 2,
+        "kind": "fg2",
+        "period": 2
+      },
+      {
+        "score": 25,
+        "player": 16,
+        "points": 2,
+        "kind": "fg2",
+        "period": 2
+      },
+      {
+        "score": 27,
+        "player": 16,
+        "points": 2,
+        "kind": "fg2",
+        "period": 3
+      },
+      {
+        "score": 29,
+        "player": 2,
+        "points": 2,
+        "kind": "fg2",
+        "period": 3
+      },
+      {
+        "score": 30,
+        "player": 6,
+        "points": 1,
+        "kind": "ft",
+        "period": 3
+      },
+      {
+        "score": 32,
+        "player": 11,
+        "points": 2,
+        "kind": "fg2",
+        "period": 3
+      },
+      {
+        "score": 34,
+        "player": 42,
+        "points": 2,
+        "kind": "fg2",
+        "period": 3
+      },
+      {
+        "score": 35,
+        "player": 6,
+        "points": 1,
+        "kind": "ft",
+        "period": 3
+      },
+      {
+        "score": 36,
+        "player": 6,
+        "points": 1,
+        "kind": "ft",
+        "period": 3
+      },
+      {
+        "score": 38,
+        "player": 15,
+        "points": 2,
+        "kind": "fg2",
+        "period": 4
+      },
+      {
+        "score": 39,
+        "player": 15,
+        "points": 1,
+        "kind": "ft",
+        "period": 4
+      },
+      {
+        "score": 41,
+        "player": 15,
+        "points": 2,
+        "kind": "fg2",
+        "period": 4
+      },
+      {
+        "score": 43,
+        "player": 4,
+        "points": 2,
+        "kind": "fg2",
+        "period": 4
+      },
+      {
+        "score": 45,
+        "player": 16,
+        "points": 2,
+        "kind": "fg2",
+        "period": 4
+      },
+      {
+        "score": 47,
+        "player": 8,
+        "points": 2,
+        "kind": "fg2",
+        "period": 4
+      },
+      {
+        "score": 48,
+        "player": 16,
+        "points": 1,
+        "kind": "ft",
+        "period": 4
+      },
+      {
+        "score": 49,
+        "player": 16,
+        "points": 1,
+        "kind": "ft",
+        "period": 4
+      },
+      {
+        "score": 51,
+        "player": 15,
+        "points": 2,
+        "kind": "fg2",
+        "period": 4
+      },
+      {
+        "score": 53,
+        "player": 3,
+        "points": 2,
+        "kind": "fg2",
+        "period": 4
+      },
+      {
+        "score": 54,
+        "player": 16,
+        "points": 1,
+        "kind": "ft",
+        "period": 4
+      }
+    ]
+  },
+  "quarters": [
+    {
+      "home": 18,
+      "away": 10
+    },
+    {
+      "home": 22,
+      "away": 15
+    },
+    {
+      "home": 18,
+      "away": 11
+    },
+    {
+      "home": 12,
+      "away": 18
+    }
+  ],
+  "homeFinal": 70,
+  "awayFinal": 54,
+  "errors": [],
+  "warnings": []
+}

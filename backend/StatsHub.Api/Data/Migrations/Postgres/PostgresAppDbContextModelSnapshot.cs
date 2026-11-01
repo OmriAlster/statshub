@@ -164,6 +164,9 @@ namespace StatsHub.Api.Data.Migrations.Postgres
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<string>("SwishMatchId")
+                        .HasColumnType("text");
+
                     b.Property<int?>("TeamScore")
                         .HasColumnType("integer");
 
@@ -189,19 +192,19 @@ namespace StatsHub.Api.Data.Migrations.Postgres
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
-                    b.Property<int>("Assists")
+                    b.Property<int?>("Assists")
                         .HasColumnType("integer");
 
-                    b.Property<int>("Blocks")
+                    b.Property<int?>("Blocks")
                         .HasColumnType("integer");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<int>("DefensiveRebounds")
+                    b.Property<int?>("DefensiveRebounds")
                         .HasColumnType("integer");
 
-                    b.Property<int>("FieldGoalsAttempted")
+                    b.Property<int?>("FieldGoalsAttempted")
                         .HasColumnType("integer");
 
                     b.Property<int>("FieldGoalsMade")
@@ -210,7 +213,7 @@ namespace StatsHub.Api.Data.Migrations.Postgres
                     b.Property<int>("Fouls")
                         .HasColumnType("integer");
 
-                    b.Property<int>("FreeThrowsAttempted")
+                    b.Property<int?>("FreeThrowsAttempted")
                         .HasColumnType("integer");
 
                     b.Property<int>("FreeThrowsMade")
@@ -219,10 +222,10 @@ namespace StatsHub.Api.Data.Migrations.Postgres
                     b.Property<Guid>("GameId")
                         .HasColumnType("uuid");
 
-                    b.Property<int>("MinutesPlayed")
+                    b.Property<int?>("MinutesPlayed")
                         .HasColumnType("integer");
 
-                    b.Property<int>("OffensiveRebounds")
+                    b.Property<int?>("OffensiveRebounds")
                         .HasColumnType("integer");
 
                     b.Property<bool?>("OnCourt")
@@ -231,16 +234,19 @@ namespace StatsHub.Api.Data.Migrations.Postgres
                     b.Property<Guid>("PlayerId")
                         .HasColumnType("uuid");
 
-                    b.Property<int>("Steals")
+                    b.Property<string>("Source")
+                        .HasColumnType("text");
+
+                    b.Property<int?>("Steals")
                         .HasColumnType("integer");
 
-                    b.Property<int>("ThreePointersAttempted")
+                    b.Property<int?>("ThreePointersAttempted")
                         .HasColumnType("integer");
 
                     b.Property<int>("ThreePointersMade")
                         .HasColumnType("integer");
 
-                    b.Property<int>("Turnovers")
+                    b.Property<int?>("Turnovers")
                         .HasColumnType("integer");
 
                     b.Property<DateTime>("UpdatedAt")
@@ -465,6 +471,9 @@ namespace StatsHub.Api.Data.Migrations.Postgres
                         .HasColumnType("text")
                         .HasDefaultValue("ibba");
 
+                    b.Property<string>("ScoresheetCode")
+                        .HasColumnType("text");
+
                     b.HasKey("Id");
 
                     b.HasIndex("PlayerId")
@@ -529,6 +538,11 @@ namespace StatsHub.Api.Data.Migrations.Postgres
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<bool>("JerseyFromScoresheet")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
                     b.Property<int>("JerseyNumber")
                         .HasColumnType("integer");
 
@@ -580,6 +594,68 @@ namespace StatsHub.Api.Data.Migrations.Postgres
                     b.HasIndex("UserId");
 
                     b.ToTable("PushSubscriptions");
+                });
+
+            modelBuilder.Entity("StatsHub.Api.Models.ScoresheetLine", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Fouls")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("FreeThrows")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("GameId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Number")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("Played")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid>("PlayerId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Points")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("SheetErrors")
+                        .HasColumnType("text");
+
+                    b.Property<bool>("SheetValid")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("Starter")
+                        .HasColumnType("boolean");
+
+                    b.Property<int>("ThreePointers")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("TwoPointers")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PlayerId");
+
+                    b.HasIndex("GameId", "PlayerId")
+                        .IsUnique();
+
+                    b.ToTable("ScoresheetLines");
                 });
 
             modelBuilder.Entity("StatsHub.Api.Models.Season", b =>
@@ -944,6 +1020,25 @@ namespace StatsHub.Api.Data.Migrations.Postgres
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("StatsHub.Api.Models.ScoresheetLine", b =>
+                {
+                    b.HasOne("StatsHub.Api.Models.Game", "Game")
+                        .WithMany("ScoresheetLines")
+                        .HasForeignKey("GameId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("StatsHub.Api.Models.Player", "Player")
+                        .WithMany()
+                        .HasForeignKey("PlayerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Game");
+
+                    b.Navigation("Player");
+                });
+
             modelBuilder.Entity("StatsHub.Api.Models.Season", b =>
                 {
                     b.HasOne("StatsHub.Api.Models.User", "User")
@@ -1012,6 +1107,8 @@ namespace StatsHub.Api.Data.Migrations.Postgres
             modelBuilder.Entity("StatsHub.Api.Models.Game", b =>
                 {
                     b.Navigation("GameStats");
+
+                    b.Navigation("ScoresheetLines");
                 });
 
             modelBuilder.Entity("StatsHub.Api.Models.GameStats", b =>

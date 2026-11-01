@@ -1,10 +1,12 @@
 import type { ReactNode } from 'react'
-import type { GameDto } from '../api/types'
+import type { GameDto, GameStatsDto } from '../api/types'
 import { formatGameDateTimeFull } from '../utils/formatGameDate'
 import CourtShotChart from './CourtShotChart'
 import GameStatusBadge, { onCourtIn } from './GameStatusBadge'
 import LeagueBadge from './LeagueBadge'
 import NavigateButtons from './NavigateButtons'
+import { madeOf, sheetMismatch, sheetOff, show, showPct } from '../utils/statLines'
+import { SheetDiffTable } from './SheetMismatch'
 
 interface GameDetailViewProps {
   game: GameDto
@@ -58,46 +60,57 @@ export default function GameDetailView({ game, headerActions }: GameDetailViewPr
         </div>
       )}
 
-      {game.playerStats.map((stats) => (
+      {(game.scoresheets ?? []).filter((l) => !game.playerStats.some((s) => s.playerId === l.playerId)).map((l) => (
+        <div key={l.playerId} className="sheet-note differs" style={{ marginTop: '1.75rem' }}>
+          <p><span className="sheet-mismatch-icon static" aria-hidden="true">!</span> <b>No stats recorded - IBBA's scoresheet has them</b></p>
+          <p>#{l.number} · {l.points} pts · {l.twoPointers}×2 · {l.threePointers}×3 · {l.freeThrows} FT · {l.fouls} foul{l.fouls === 1 ? '' : 's'}. Edit the game to use them.</p>
+        </div>
+      ))}
+
+      {game.playerStats.map((stats) => {
+        const off = sheetOff(stats)
+        return (
         <div key={stats.id} className="stats-card-enhanced" style={{ marginTop: '1.75rem' }}>
           <div className="player-header-enhanced">
             <div className="player-info">
               <div>
                 <h3>{stats.playerName}</h3>
-                <p>{stats.minutesPlayed} minutes played</p>
+                <p>{stats.minutesPlayed === null ? 'Minutes not recorded' : `${stats.minutesPlayed} minutes played`}</p>
               </div>
             </div>
           </div>
 
+          <ScoresheetNote stats={stats} />
+
           <div className="primary-stats">
             <h4>Box Score</h4>
             <div className="stats-grid-enhanced">
-              <div className="stat-box-enhanced featured">
+              <div className={`stat-box-enhanced featured ${off('points')}`}>
                 <span className="stat-value">{stats.totalPoints}</span>
                 <span className="stat-label">PTS</span>
               </div>
               <div className="stat-box-enhanced">
-                <span className="stat-value">{stats.totalRebounds}</span>
+                <span className="stat-value">{show(stats.totalRebounds)}</span>
                 <span className="stat-label">REB</span>
-                <span className="stat-detail">{stats.offensiveRebounds} off · {stats.defensiveRebounds} def</span>
+                {stats.totalRebounds !== null && <span className="stat-detail">{show(stats.offensiveRebounds)} off · {show(stats.defensiveRebounds)} def</span>}
               </div>
               <div className="stat-box-enhanced">
-                <span className="stat-value">{stats.assists}</span>
+                <span className="stat-value">{show(stats.assists)}</span>
                 <span className="stat-label">AST</span>
               </div>
               <div className="stat-box-enhanced">
-                <span className="stat-value">{stats.steals}</span>
+                <span className="stat-value">{show(stats.steals)}</span>
                 <span className="stat-label">STL</span>
               </div>
               <div className="stat-box-enhanced">
-                <span className="stat-value">{stats.blocks}</span>
+                <span className="stat-value">{show(stats.blocks)}</span>
                 <span className="stat-label">BLK</span>
               </div>
               <div className="stat-box-enhanced">
-                <span className="stat-value">{stats.turnovers}</span>
+                <span className="stat-value">{show(stats.turnovers)}</span>
                 <span className="stat-label">TO</span>
               </div>
-              <div className="stat-box-enhanced">
+              <div className={`stat-box-enhanced ${off('fouls')}`}>
                 <span className="stat-value">{stats.fouls}</span>
                 <span className="stat-label">FOULS</span>
               </div>
@@ -108,19 +121,19 @@ export default function GameDetailView({ game, headerActions }: GameDetailViewPr
             <h4>Shooting</h4>
             <div className="percentage-bars">
               <div className="percentage-item">
-                <div className="percentage-label">2PT {stats.fieldGoalsMade}/{stats.fieldGoalsAttempted}</div>
-                <div className="percentage-bar"><div className="percentage-fill" style={{ width: `${stats.fieldGoalPercentage}%` }} /></div>
-                <span className="percentage-value">{stats.fieldGoalPercentage}%</span>
+                <div className={`percentage-label ${off('two')}`}>2PT {madeOf(stats.fieldGoalsMade, stats.fieldGoalsAttempted)}</div>
+                <div className="percentage-bar"><div className="percentage-fill" style={{ width: `${stats.fieldGoalPercentage ?? 0}%` }} /></div>
+                <span className="percentage-value">{showPct(stats.fieldGoalPercentage)}</span>
               </div>
               <div className="percentage-item">
-                <div className="percentage-label">3PT {stats.threePointersMade}/{stats.threePointersAttempted}</div>
-                <div className="percentage-bar"><div className="percentage-fill" style={{ width: `${stats.threePointPercentage}%` }} /></div>
-                <span className="percentage-value">{stats.threePointPercentage}%</span>
+                <div className={`percentage-label ${off('three')}`}>3PT {madeOf(stats.threePointersMade, stats.threePointersAttempted)}</div>
+                <div className="percentage-bar"><div className="percentage-fill" style={{ width: `${stats.threePointPercentage ?? 0}%` }} /></div>
+                <span className="percentage-value">{showPct(stats.threePointPercentage)}</span>
               </div>
               <div className="percentage-item">
-                <div className="percentage-label">FT {stats.freeThrowsMade}/{stats.freeThrowsAttempted}</div>
-                <div className="percentage-bar"><div className="percentage-fill" style={{ width: `${stats.freeThrowPercentage}%` }} /></div>
-                <span className="percentage-value">{stats.freeThrowPercentage}%</span>
+                <div className={`percentage-label ${off('ft')}`}>FT {madeOf(stats.freeThrowsMade, stats.freeThrowsAttempted)}</div>
+                <div className="percentage-bar"><div className="percentage-fill" style={{ width: `${stats.freeThrowPercentage ?? 0}%` }} /></div>
+                <span className="percentage-value">{showPct(stats.freeThrowPercentage)}</span>
               </div>
             </div>
           </div>
@@ -134,7 +147,8 @@ export default function GameDetailView({ game, headerActions }: GameDetailViewPr
             )}
           </div>
         </div>
-      ))}
+        )
+      })}
     </div>
   )
 }
@@ -157,6 +171,29 @@ function ScoreBoard({ game, won }: { game: GameDto; won?: boolean }) {
           {played && <b className="score-board-score">{r.score}</b>}
         </div>
       ))}
+    </div>
+  )
+}
+
+// Where the numbers came from, and the scoresheet's own line when the parent's
+// numbers are shown instead - the parent's win, the sheet's are kept beside them.
+function ScoresheetNote({ stats }: { stats: GameStatsDto }) {
+  const sheet = stats.scoresheet
+  if (!sheet && !stats.source) return null
+  const sheetLine = sheet && `#${sheet.number} · ${sheet.points} pts · ${sheet.twoPointers}×2 · ${sheet.threePointers}×3 · ${sheet.freeThrows} FT · ${sheet.fouls} foul${sheet.fouls === 1 ? '' : 's'}`
+  const mismatch = sheetMismatch(stats)
+  return (
+    <div className={`sheet-note${mismatch ? ' differs' : ''}`}>
+      {stats.source === 'scoresheet' && <p><b>From IBBA's scoresheet</b> · {sheetLine ?? 'made shots and fouls only'}. The rest wasn't recorded - edit the game to add it.</p>}
+      {stats.source === 'box' && <p><b>From IBBA's box score</b> - edit the game to correct anything, like the minutes.</p>}
+      {mismatch && (
+        <>
+          <p><span className="sheet-mismatch-icon static" aria-hidden="true">!</span> <b>IBBA's scoresheet doesn't match what was recorded</b> (#{sheet!.number})</p>
+          <SheetDiffTable rows={mismatch} />
+        </>
+      )}
+      {!stats.source && sheet && !mismatch && <p><b>IBBA's scoresheet agrees:</b> {sheetLine}</p>}
+      {sheet && !sheet.sheetValid && <p className="sheet-warning">The scoresheet doesn't add up, so its numbers may be off{sheet.sheetErrors ? `: ${sheet.sheetErrors}` : '.'}</p>}
     </div>
   )
 }

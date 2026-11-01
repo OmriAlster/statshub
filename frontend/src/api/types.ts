@@ -52,29 +52,48 @@ export interface GameStatsDto {
   gameId: string
   playerId: string
   playerName: string
+  // Where the numbers came from: null - the parent; 'box' - the league's box score;
+  // 'scoresheet' - the game's scoresheet. A null stat wasn't recorded (shown as "-").
+  source?: 'box' | 'scoresheet' | null
   fieldGoalsMade: number
-  fieldGoalsAttempted: number
-  fieldGoalPercentage: number
+  fieldGoalsAttempted: number | null
+  fieldGoalPercentage: number | null
   threePointersMade: number
-  threePointersAttempted: number
-  threePointPercentage: number
+  threePointersAttempted: number | null
+  threePointPercentage: number | null
   freeThrowsMade: number
-  freeThrowsAttempted: number
-  freeThrowPercentage: number
-  offensiveRebounds: number
-  defensiveRebounds: number
-  totalRebounds: number
-  assists: number
-  steals: number
-  blocks: number
-  turnovers: number
+  freeThrowsAttempted: number | null
+  freeThrowPercentage: number | null
+  offensiveRebounds: number | null
+  defensiveRebounds: number | null
+  totalRebounds: number | null
+  assists: number | null
+  steals: number | null
+  blocks: number | null
+  turnovers: number | null
   fouls: number
-  minutesPlayed: number
+  minutesPlayed: number | null
   // Live game: on the court right now (as the tracker set it); null = not tracked.
   onCourt?: boolean | null
   totalPoints: number
+  // The player's line on the game's scoresheet (a single game's view only).
+  scoresheet?: ScoresheetLineDto | null
   // Only populated where a caller specifically asks for it (e.g. a shared game view).
   shots?: ShotDto[]
+}
+
+export interface ScoresheetLineDto {
+  playerId: string
+  number: number
+  starter: boolean
+  points: number
+  freeThrows: number
+  twoPointers: number
+  threePointers: number
+  fouls: number
+  // The sheet failed its own cross-checks - its numbers may be off.
+  sheetValid: boolean
+  sheetErrors?: string | null
 }
 
 export type GameType = 'League' | 'Cup' | 'Friendly'
@@ -99,6 +118,8 @@ export interface GameDto {
   league?: string | null
   canRecordLive: boolean
   playerStats: GameStatsDto[]
+  // The players' lines on the game's scoresheet - there even when the stats were cleared.
+  scoresheets?: ScoresheetLineDto[]
 }
 
 export interface CreateGameStatsDto {
@@ -142,22 +163,24 @@ export interface PlayerTeamStatsDto {
   teamId: string
   teamName: string
   gamesPlayed: number
-  totalMinutes: number
+  // A stat not recorded in every game is averaged over the games that have it;
+  // null when none do.
+  totalMinutes: number | null
   totalPoints: number
-  pointsPerGame: number
-  totalRebounds: number
-  reboundsPerGame: number
-  totalAssists: number
-  assistsPerGame: number
-  totalSteals: number
-  stealsPerGame: number
-  totalBlocks: number
-  blocksPerGame: number
-  totalTurnovers: number
-  turnoversPerGame: number
-  fieldGoalPercentage: number
-  threePointPercentage: number
-  freeThrowPercentage: number
+  pointsPerGame: number | null
+  totalRebounds: number | null
+  reboundsPerGame: number | null
+  totalAssists: number | null
+  assistsPerGame: number | null
+  totalSteals: number | null
+  stealsPerGame: number | null
+  totalBlocks: number | null
+  blocksPerGame: number | null
+  totalTurnovers: number | null
+  turnoversPerGame: number | null
+  fieldGoalPercentage: number | null
+  threePointPercentage: number | null
+  freeThrowPercentage: number | null
 }
 
 export interface SharedTeamDto extends PlayerTeamStatsDto {

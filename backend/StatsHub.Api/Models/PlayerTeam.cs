@@ -10,6 +10,9 @@ namespace StatsHub.Api.Models
 
         // A player can wear a different number on each team roster.
         public int JerseyNumber { get; set; }
+        // Set from the team's latest scoresheet - kept up to date from them
+        // until the parent sets a number themselves.
+        public bool JerseyFromScoresheet { get; set; }
 
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 

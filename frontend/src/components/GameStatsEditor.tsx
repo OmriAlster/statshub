@@ -10,6 +10,7 @@ import {
   type GameEvent,
 } from '../live/gameEvents'
 import CourtShotChart, { type ChartShot } from './CourtShotChart'
+import ConfirmModal from './ConfirmModal'
 
 interface ActionLogEntry {
   kind: 'event' | 'shot'
@@ -17,16 +18,20 @@ interface ActionLogEntry {
   at: number
 }
 
+export type SaveState = 'saving' | 'saved' | 'error'
+
 interface GameStatsEditorProps {
   gameStatsId: string
   initialStats: GameStatsDto
+  // Told as each change is saved - the edit window shows it.
+  onSaveState?: (state: SaveState) => void
 }
 
 // The same tap-the-court-and-tap-a-stat recorder used for a live game,
 // reused here to edit a game's box score after the fact - the only real
 // difference is there's no "end game" step asking for a final score,
 // since a past game's score is edited separately as a game field.
-export default function GameStatsEditor({ gameStatsId, initialStats }: GameStatsEditorProps) {
+export default function GameStatsEditor({ gameStatsId, initialStats, onSaveState }: GameStatsEditorProps) {
   const [events, setEvents] = useState<GameEvent[]>(() => seedEventsFromStats(initialStats))
   const [shots, setShots] = useState<ShotDto[]>([])
   const [actionLog, setActionLog] = useState<ActionLogEntry[]>([])
@@ -43,10 +48,12 @@ export default function GameStatsEditor({ gameStatsId, initialStats }: GameStats
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gameStatsId])
 
-  const persistStats = (nextEvents: GameEvent[], nextMinutes: number) => {
+  const persistStats = (nextEvents: GameEvent[], nextMinutes: number | null) => {
     if (saveTimer.current) window.clearTimeout(saveTimer.current)
+    onSaveState?.('saving')
     saveTimer.current = window.setTimeout(() => {
-      api.put(`/gamestats/${gameStatsId}`, computeStatsFromEvents(nextEvents, nextMinutes)).catch(() => {
+      api.put(`/gamestats/${gameStatsId}`, computeStatsFromEvents(nextEvents, nextMinutes, initialStats)).then(() => onSaveState?.('saved')).catch(() => {
+        onSaveState?.('error')
         setError('Could not save the last stat - check your connection.')
       })
     }, 500)
@@ -106,6 +113,7 @@ export default function GameStatsEditor({ gameStatsId, initialStats }: GameStats
   const confirmShot = async (made: boolean) => {
     if (!pendingShot) return
     setLoggingShot(true)
+    onSaveState?.('saving')
     try {
       const { data } = await api.post<ShotDto>('/shots', {
         gameStatsId,
@@ -118,19 +126,27 @@ export default function GameStatsEditor({ gameStatsId, initialStats }: GameStats
       setShots((prev) => [...prev, data])
       setActionLog((prev) => [...prev, { kind: 'shot', id: data.id, at: Date.now() }])
       setPendingShot(null)
+      onSaveState?.('saved')
     } catch {
+      onSaveState?.('error')
       setError('Could not log that shot - check your connection.')
     } finally {
       setLoggingShot(false)
     }
   }
 
+  // A shot tapped on the chart - deleted only once confirmed.
+  const [shotToRemove, setShotToRemove] = useState<string | null>(null)
+
   const removeShot = async (id: string) => {
     try {
+      onSaveState?.('saving')
       await api.delete(`/shots/${id}`)
       setShots((prev) => prev.filter((s) => s.id !== id))
       setActionLog((prev) => prev.filter((a) => !(a.kind === 'shot' && a.id === id)))
+      onSaveState?.('saved')
     } catch {
+      onSaveState?.('error')
       setError('Could not remove that shot.')
     }
   }
@@ -165,7 +181,19 @@ export default function GameStatsEditor({ gameStatsId, initialStats }: GameStats
         <div className="live-game-left">
           <div className="stats-section court-section">
             <h3><svg className="icon"><use href="#i-target" /></svg> Shot Chart — tap the court</h3>
-            <CourtShotChart shots={chartShots} interactive pendingShot={pendingShot} onCourtTap={handleCourtTap} onRemoveShot={removeShot} />
+            <CourtShotChart shots={chartShots} interactive pendingShot={pendingShot} onCourtTap={handleCourtTap} onRemoveShot={setShotToRemove} />
+            {shotToRemove && (
+              <ConfirmModal
+                title="Delete this shot?"
+                message={(() => {
+                  const shot = shots.find((s) => s.id === shotToRemove)
+                  return shot ? `A ${shot.made ? 'made' : 'missed'} ${shot.value}-pointer in Q${shot.quarter} - it comes off the box score too.` : 'It comes off the box score too.'
+                })()}
+                confirmLabel="Delete shot"
+                onConfirm={() => { const id = shotToRemove; setShotToRemove(null); removeShot(id) }}
+                onCancel={() => setShotToRemove(null)}
+              />
+            )}
             {pendingShot && (
               <div className="shot-confirm-backdrop" onClick={() => setPendingShot(null)}>
                 <div className="shot-confirm-panel" onClick={(e) => e.stopPropagation()}>
@@ -308,7 +336,7 @@ export default function GameStatsEditor({ gameStatsId, initialStats }: GameStats
             type="number"
             min={0}
             max={48}
-            value={minutesPlayed}
+            value={minutesPlayed ?? ''}
             onChange={(e) => updateMinutesPlayed(Number(e.target.value))}
             aria-label="Minutes played"
           />

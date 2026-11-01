@@ -5,6 +5,7 @@ import { drawPlayerCard, drawWrapped, isolate, save, shareOrSave } from '../util
 import BouncingBall from './BouncingBall'
 import Modal from './Modal'
 import { playedGames } from '../utils/countedGames'
+import { average, show, total as totalOf } from '../utils/statLines'
 
 export interface CardTeam {
   name: string
@@ -56,7 +57,7 @@ export function PlayerCardModal({ player, teams, games, onClose }: { player: Pla
   const draw = useMemo(() => () => {
     const played = playedGames(games)
     const lines = played.map((g) => lineOf(g, player.id)).filter((l): l is GameStatsDto => !!l)
-    const per = (f: (l: GameStatsDto) => number) => (lines.reduce((s, l) => s + f(l), 0) / lines.length).toFixed(1)
+    const per = (f: (l: GameStatsDto) => number | null) => show(average(lines, f), 1)
     const wins = played.filter((g) => (g.teamScore ?? 0) > (g.opponentScore ?? 0)).length
     const team = teams.length === 1 ? teams[0] : null
     const jerseys = [...new Set(teams.map((t) => t.jerseyNumber).filter((n): n is number => !!n))]
@@ -126,8 +127,9 @@ export function WrappedModal({ player, games, onClose }: { player: PlayerDto; ga
       out.push({ label: 'Points', value: String(total), detail: `${(total / lines.length).toFixed(1)} a game` })
       const threes = lines.reduce((s, r) => s + r.l.threePointersMade, 0)
       if (threes) out.push({ label: '3-pointers', value: String(threes) })
-      const reb = lines.reduce((s, r) => s + r.l.totalRebounds, 0)
-      out.push({ label: 'Rebounds', value: String(reb), detail: `${(reb / lines.length).toFixed(1)} a game` })
+      const withRebounds = lines.filter((r) => r.l.totalRebounds !== null)
+      const reb = totalOf(withRebounds, (r) => r.l.totalRebounds)
+      if (reb !== null) out.push({ label: 'Rebounds', value: String(reb), detail: `${(reb / withRebounds.length).toFixed(1)} a game` })
     } else {
       const pf = list.reduce((s, g) => s + g.teamScore!, 0)
       const pa = list.reduce((s, g) => s + g.opponentScore!, 0)

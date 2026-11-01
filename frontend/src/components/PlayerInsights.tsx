@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { api } from '../api/client'
 import type { GameDto, GameStatsDto } from '../api/types'
 import { playedGames } from '../utils/countedGames'
+import { fieldGoalAttempts, shooting, total } from '../utils/statLines'
 
 // The player's profile at a glance - what's built from results alone (the
 // next game, the team's form, home and away) works for every player; the
@@ -125,13 +126,15 @@ export function HomeAwayCard({ games, playerId }: { games: GameDto[]; playerId: 
 
 // ---- Personal streaks ----------------------------------------------------------
 
-const STREAKS: { label: string; hit: (l: GameStatsDto) => boolean }[] = [
+// null - the stat wasn't recorded in that game, which then neither breaks a
+// streak nor adds to it.
+const STREAKS: { label: string; hit: (l: GameStatsDto) => boolean | null }[] = [
   { label: '20+ points', hit: (l) => l.totalPoints >= 20 },
   { label: '10+ points', hit: (l) => l.totalPoints >= 10 },
   { label: 'a 3-pointer', hit: (l) => l.threePointersMade > 0 },
-  { label: '5+ rebounds', hit: (l) => l.totalRebounds >= 5 },
-  { label: 'an assist', hit: (l) => l.assists > 0 },
-  { label: 'a steal', hit: (l) => l.steals > 0 },
+  { label: '5+ rebounds', hit: (l) => (l.totalRebounds === null ? null : l.totalRebounds >= 5) },
+  { label: 'an assist', hit: (l) => (l.assists === null ? null : l.assists > 0) },
+  { label: 'a steal', hit: (l) => (l.steals === null ? null : l.steals > 0) },
 ]
 
 export function StreaksCard({ games, playerId }: { games: GameDto[]; playerId: string }) {
@@ -139,11 +142,12 @@ export function StreaksCard({ games, playerId }: { games: GameDto[]; playerId: s
   if (lines.length < 2) return null
 
   const streaks = STREAKS.map((s) => {
+    const known = lines.filter((l) => s.hit(l) !== null)
     let now = 0
-    for (let i = lines.length - 1; i >= 0 && s.hit(lines[i]); i--) now++
+    for (let i = known.length - 1; i >= 0 && s.hit(known[i]); i--) now++
     let best = 0
     let run = 0
-    for (const l of lines) { run = s.hit(l) ? run + 1 : 0; best = Math.max(best, run) }
+    for (const l of known) { run = s.hit(l) ? run + 1 : 0; best = Math.max(best, run) }
     return { ...s, now, best }
   })
   // Going on now first (the longest), then the season's longest ones.
@@ -217,17 +221,22 @@ const GOALS: { stat: GoalStat; label: string; unit: string; max: number; step: n
 
 function current(stat: GoalStat, lines: GameStatsDto[]): { value: number; detail: string } | null {
   if (lines.length === 0) return null
-  const sum = (f: (l: GameStatsDto) => number) => lines.reduce((s, l) => s + f(l), 0)
-  const per = (n: number) => ({ value: n / lines.length, detail: `${n} in ${lines.length} game${lines.length === 1 ? '' : 's'}` })
-  const pct = (made: number, tried: number) => (tried === 0 ? null : { value: (made / tried) * 100, detail: `${made} of ${tried}` })
+  // Over the games that recorded the stat.
+  const per = (f: (l: GameStatsDto) => number | null) => {
+    const known = lines.filter((l) => f(l) !== null)
+    const n = total(known, f) ?? 0
+    return known.length === 0 ? null : { value: n / known.length, detail: `${n} in ${known.length} game${known.length === 1 ? '' : 's'}` }
+  }
+  const pct = (shots: { made: number; tried: number } | null) =>
+    (!shots || shots.tried === 0 ? null : { value: (shots.made / shots.tried) * 100, detail: `${shots.made} of ${shots.tried}` })
   switch (stat) {
-    case 'ppg': return per(sum((l) => l.totalPoints))
-    case 'rpg': return per(sum((l) => l.totalRebounds))
-    case 'apg': return per(sum((l) => l.assists))
-    case 'spg': return per(sum((l) => l.steals))
-    case 'fgPct': return pct(sum((l) => l.fieldGoalsMade + l.threePointersMade), sum((l) => l.fieldGoalsAttempted + l.threePointersAttempted))
-    case 'threePct': return pct(sum((l) => l.threePointersMade), sum((l) => l.threePointersAttempted))
-    case 'ftPct': return pct(sum((l) => l.freeThrowsMade), sum((l) => l.freeThrowsAttempted))
+    case 'ppg': return per((l) => l.totalPoints)
+    case 'rpg': return per((l) => l.totalRebounds)
+    case 'apg': return per((l) => l.assists)
+    case 'spg': return per((l) => l.steals)
+    case 'fgPct': return pct(shooting(lines, (l) => l.fieldGoalsMade + l.threePointersMade, fieldGoalAttempts))
+    case 'threePct': return pct(shooting(lines, (l) => l.threePointersMade, (l) => l.threePointersAttempted))
+    case 'ftPct': return pct(shooting(lines, (l) => l.freeThrowsMade, (l) => l.freeThrowsAttempted))
   }
 }
 

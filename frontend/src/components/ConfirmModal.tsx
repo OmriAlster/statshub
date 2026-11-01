@@ -18,7 +18,7 @@ export default function ConfirmModal({ title, message, confirmLabel = 'Delete', 
           <p style={{ margin: '0.75rem 0 1.25rem' }}>{message}</p>
           <div className="flex gap-1">
             <button className="end-game-btn" onClick={onConfirm} disabled={busy}>
-              {busy ? <Busy>Deleting…</Busy> : confirmLabel}
+              {busy ? <Busy>{confirmLabel === 'Delete' ? 'Deleting…' : 'Working…'}</Busy> : confirmLabel}
             </button>
             <button className="nav-btn" onClick={onCancel} disabled={busy}>
               Cancel

@@ -100,6 +100,10 @@ public class IbbaLeagueProvider : ILeagueProvider
         var report = new LeagueTeamReport { Team = team };
         var teamScraper = new IbbaTeamScraper(Http());
 
+        // The table is fetched alongside the games (IBBA's two slow requests at
+        // once), for the team's newest league - kept once the games confirm
+        // it's the league they're in.
+        var early = state.Info != null ? NewestLeagueStandingsAsync(OpenData(), state.Info.LeagueIds) : null;
         if (state.ExcelUrl != null)
             report.Games = await teamScraper.DownloadAndParseGamesAsync(state.ExcelUrl);
 
@@ -110,6 +114,13 @@ public class IbbaLeagueProvider : ILeagueProvider
         var leagueName = report.Games.FirstOrDefault(g => !g.IsCup)?.League;
         if (string.IsNullOrEmpty(leagueName)) return report;
         team.LeagueName = leagueName;
+
+        if (early != null && await early is { } guessed && guessed.League.Name == leagueName.Trim())
+        {
+            team.LeagueUrl = guessed.League.PageUrl;
+            report.Standings = guessed.Standings;
+            return report;
+        }
 
         // This season's league of that name, and its table, from the open data.
         if (state.Info != null)
@@ -132,6 +143,23 @@ public class IbbaLeagueProvider : ILeagueProvider
             report.Standings = await new IbbaLeagueScraper(Http()).GetStandingsAsync(team.LeagueUrl);
 
         return report;
+    }
+
+    // The newest league's table, or null - any failure is left to the
+    // ordinary lookup after the games, which reports it properly.
+    private static async Task<(IbbaOpenData.LeagueInfo League, List<LeagueStanding> Standings)?> NewestLeagueStandingsAsync(IbbaOpenData openData, IEnumerable<int> leagueIds)
+    {
+        try
+        {
+            var league = await openData.FindNewestLeagueAsync(leagueIds);
+            if (league == null) return null;
+            var standings = await openData.GetStandingsAsync(league.Id);
+            return standings == null ? null : (league, standings);
+        }
+        catch (Exception)
+        {
+            return null;
+        }
     }
 
     public async Task<List<LeagueGame>> LoadTeamGamesAsync(string teamUrl)

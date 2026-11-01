@@ -56,6 +56,27 @@ namespace StatsHub.Api.Controllers
             }
         }
 
+        [HttpPost("from-scoresheet")]
+        public async Task<ActionResult<GameStatsDto>> StatsFromScoresheet([FromBody] StatsFromScoresheetDto dto)
+        {
+            try
+            {
+                return Ok(await _gameStatsService.StatsFromScoresheetAsync(dto, _currentUser.UserId));
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                return StatusCode(StatusCodes.Status403Forbidden, new { message = ex.Message });
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new { message = ex.Message });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Conflict(new { message = ex.Message });
+            }
+        }
+
         [HttpPut("{id}")]
         public async Task<ActionResult<GameStatsDto>> UpdateGameStats(Guid id, [FromBody] UpdateGameStatsDto dto)
         {

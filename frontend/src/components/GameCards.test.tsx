@@ -51,4 +51,16 @@ describe('phone game cards', () => {
     expect(screen.getByText(/1 game$/)).toBeInTheDocument()
     expect(screen.getByText('17.0')).toBeInTheDocument()
   })
+
+  it("a game with no stats but a line on IBBA's scoresheet gets a \"!\" that brings it in", async () => {
+    const line = { playerId: 'p1', number: 3, starter: true, points: 2, freeThrows: 0, twoPointers: 1, threePointers: 0, fouls: 0, sheetValid: true }
+    const game = makeGame({ status: 'Completed', teamScore: 54, opponentScore: 70, playerStats: [], scoresheets: [line] })
+    const onUseSheet = vi.fn().mockResolvedValue(undefined)
+    inRouter(<StatsGameCards games={[game]} linkFor={() => '/x'} onUseSheet={onUseSheet} />)
+
+    fireEvent.click(screen.getByRole('button', { name: /No stats recorded - IBBA has them/ }))
+    expect(screen.getByText(/#3 · 2 pts/)).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: "Use IBBA's stats" }))
+    expect(onUseSheet).toHaveBeenCalledWith(game)
+  })
 })

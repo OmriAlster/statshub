@@ -93,6 +93,7 @@ namespace StatsHub.Api.Services
                     (g.IbbaGameCode != null && team.IbbaTeamId != null && (g.HomeTeamId == team.IbbaTeamId || g.AwayTeamId == team.IbbaTeamId)))
                 .Include(g => g.GameStats)
                 .ThenInclude(gs => gs.Player)
+                .Include(g => g.ScoresheetLines)
                 .OrderByDescending(g => g.GameDate)
                 .ToListAsync();
 
@@ -109,6 +110,7 @@ namespace StatsHub.Api.Services
                 .ThenInclude(gs => gs.Player)
                 .Include(g => g.GameStats)
                 .ThenInclude(gs => gs.Shots)
+                .Include(g => g.ScoresheetLines)
                 .FirstOrDefaultAsync(g => g.Id == id);
 
             if (game == null) return null;
@@ -179,6 +181,7 @@ namespace StatsHub.Api.Services
                     g.GameStats.Any(gs => gs.PlayerId == playerId))
                 .Include(g => g.GameStats.Where(gs => gs.PlayerId == playerId))
                 .ThenInclude(gs => gs.Player)
+                .Include(g => g.ScoresheetLines.Where(l => l.PlayerId == playerId))
                 .OrderByDescending(g => g.GameDate)
                 .ToListAsync();
 
@@ -366,17 +369,24 @@ namespace StatsHub.Api.Services
                     .Select(gs => new
                     {
                         Points = gs.FieldGoalsMade * 2 + gs.ThreePointersMade * 3 + gs.FreeThrowsMade,
-                        Rebounds = gs.OffensiveRebounds + gs.DefensiveRebounds,
+                        Rebounds = gs.OffensiveRebounds == null && gs.DefensiveRebounds == null ? (int?)null : (gs.OffensiveRebounds ?? 0) + (gs.DefensiveRebounds ?? 0),
                         gs.Assists,
                     })
                     .ToListAsync();
                 if (earlier.Count < GamesBeforeSeasonHighs) continue;
 
                 var highs = new List<string>();
-                void Check(int value, int best, string what) { if (value > best && value > 0) highs.Add($"{value} {what} (was {best})"); }
-                Check(line.TotalPoints, earlier.Max(e => e.Points), "points");
-                Check(line.TotalRebounds, earlier.Max(e => e.Rebounds), "rebounds");
-                Check(line.Assists, earlier.Max(e => e.Assists), "assists");
+                // A stat counts only where it was recorded - in this game and in
+                // at least GamesBeforeSeasonHighs earlier ones.
+                void Check(int? value, IEnumerable<int?> before, string what)
+                {
+                    var known = before.OfType<int>().ToList();
+                    if (value is not int v || known.Count < GamesBeforeSeasonHighs) return;
+                    if (v > known.Max() && v > 0) highs.Add($"{v} {what} (was {known.Max()})");
+                }
+                Check(line.TotalPoints, earlier.Select(e => (int?)e.Points), "points");
+                Check(line.TotalRebounds, earlier.Select(e => e.Rebounds), "rebounds");
+                Check(line.Assists, earlier.Select(e => e.Assists), "assists");
                 if (highs.Count == 0) continue;
 
                 var followers = line.Player.Parents.Select(p => p.UserId)
@@ -533,8 +543,26 @@ namespace StatsHub.Api.Services
         private async Task<List<GameDto>> MapGamesToDtoAsync(List<Game> games, Func<Game, Team?> resolveViewTeam, Guid requestingUserId)
         {
             var ibbaTeams = await _context.LoadIbbaTeamsAsync(games);
-            return games.Select(g => DtoMapping.ToGameDto(g, resolveViewTeam(g), ibbaTeams,
+            var dtos = games.Select(g => DtoMapping.ToGameDto(g, resolveViewTeam(g), ibbaTeams,
                 canRecordLive: !g.LiveTrackedByUserId.HasValue || g.LiveTrackedByUserId.Value == requestingUserId)).ToList();
+
+            // A game's scoresheet lines only for the players this user follows -
+            // a shared IBBA game has other families' kids on it too.
+            var linePlayers = dtos.SelectMany(d => d.Scoresheets).Select(l => l.PlayerId).Distinct().ToList();
+            if (linePlayers.Count > 0)
+            {
+                var readable = (await _context.Players
+                    .Where(p => linePlayers.Contains(p.Id) && (p.LinkedUserId == requestingUserId || p.Parents.Any(pp => pp.UserId == requestingUserId)))
+                    .Select(p => p.Id)
+                    .ToListAsync()).ToHashSet();
+                foreach (var dto in dtos)
+                {
+                    dto.Scoresheets = dto.Scoresheets.Where(l => readable.Contains(l.PlayerId)).ToList();
+                    foreach (var line in dto.PlayerStats.Where(s => s.Scoresheet != null && !readable.Contains(s.PlayerId)))
+                        line.Scoresheet = null;
+                }
+            }
+            return dtos;
         }
     }
 }

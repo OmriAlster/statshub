@@ -99,6 +99,7 @@ namespace StatsHub.Api.Services
                     .ThenInclude(gs => gs.Player)
                     .Include(g => g.GameStats.Where(gs => gs.PlayerId == link.PlayerId))
                     .ThenInclude(gs => gs.Shots)
+                    .Include(g => g.ScoresheetLines.Where(l => l.PlayerId == link.PlayerId))
                     .FirstOrDefaultAsync(g => g.Id == link.GameId.Value);
 
                 if (game != null)

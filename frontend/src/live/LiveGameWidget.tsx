@@ -10,6 +10,7 @@ import { courtSeconds, endOfGame, formatClock, formatClockInput, isOnCourt, minu
 import { useLiveGameOverlay } from './LiveGameContext'
 import BouncingBall, { Busy } from '../components/BouncingBall'
 import { useLiveGames } from './liveUpdates'
+import ConfirmModal from '../components/ConfirmModal'
 
 function isToday(iso: string) {
   const d = new Date(iso)
@@ -735,6 +736,9 @@ export default function LiveGameWidget() {
     }
   }
 
+  // A shot tapped on the chart - deleted only once confirmed.
+  const [shotToRemove, setShotToRemove] = useState<string | null>(null)
+
   const removeShot = async (id: string) => {
     if (!active) return
     try {
@@ -1165,7 +1169,19 @@ export default function LiveGameWidget() {
                 <div className="live-game-left">
                   <div className="stats-section court-section">
                     <h3><svg className="icon"><use href="#i-target" /></svg> Shot Chart — tap the court</h3>
-                    <CourtShotChart shots={chartShots} interactive pendingShot={pendingShot} onCourtTap={handleCourtTap} onRemoveShot={removeShot} />
+                    <CourtShotChart shots={chartShots} interactive pendingShot={pendingShot} onCourtTap={handleCourtTap} onRemoveShot={setShotToRemove} />
+                    {shotToRemove && (
+                      <ConfirmModal
+                        title="Delete this shot?"
+                        message={(() => {
+                          const shot = active.shots.find((s) => s.id === shotToRemove)
+                          return shot ? `A ${shot.made ? 'made' : 'missed'} ${shot.value}-pointer in Q${shot.quarter} - it comes off the box score too.` : 'It comes off the box score too.'
+                        })()}
+                        confirmLabel="Delete shot"
+                        onConfirm={() => { const id = shotToRemove; setShotToRemove(null); removeShot(id) }}
+                        onCancel={() => setShotToRemove(null)}
+                      />
+                    )}
                     {pendingShot && (
                       <div className="shot-confirm-backdrop" onClick={() => setPendingShot(null)}>
                         <div className="shot-confirm-panel" onClick={(e) => e.stopPropagation()}>

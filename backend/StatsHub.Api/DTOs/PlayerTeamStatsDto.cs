@@ -13,22 +13,25 @@ namespace StatsHub.Api.DTOs
         public string TeamName { get; set; } = string.Empty;
 
         public int GamesPlayed { get; set; }
-        public int TotalMinutes { get; set; }
+        // A stat not recorded in some games (a scoresheet has only the made
+        // shots and fouls) is averaged over the games that have it, and is
+        // null when none do.
+        public int? TotalMinutes { get; set; }
         public int TotalPoints { get; set; }
-        public double PointsPerGame { get; set; }
-        public int TotalRebounds { get; set; }
-        public double ReboundsPerGame { get; set; }
-        public int TotalAssists { get; set; }
-        public double AssistsPerGame { get; set; }
-        public int TotalSteals { get; set; }
-        public double StealsPerGame { get; set; }
-        public int TotalBlocks { get; set; }
-        public double BlocksPerGame { get; set; }
-        public int TotalTurnovers { get; set; }
-        public double TurnoversPerGame { get; set; }
+        public double? PointsPerGame { get; set; }
+        public int? TotalRebounds { get; set; }
+        public double? ReboundsPerGame { get; set; }
+        public int? TotalAssists { get; set; }
+        public double? AssistsPerGame { get; set; }
+        public int? TotalSteals { get; set; }
+        public double? StealsPerGame { get; set; }
+        public int? TotalBlocks { get; set; }
+        public double? BlocksPerGame { get; set; }
+        public int? TotalTurnovers { get; set; }
+        public double? TurnoversPerGame { get; set; }
 
-        public double FieldGoalPercentage { get; set; }
-        public double ThreePointPercentage { get; set; }
-        public double FreeThrowPercentage { get; set; }
+        public double? FieldGoalPercentage { get; set; }
+        public double? ThreePointPercentage { get; set; }
+        public double? FreeThrowPercentage { get; set; }
     }
 }

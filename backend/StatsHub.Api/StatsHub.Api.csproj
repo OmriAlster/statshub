@@ -36,6 +36,8 @@
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
     <PackageReference Include="HtmlAgilityPack" Version="1.11.61" />
     <PackageReference Include="ClosedXML" Version="0.104.1" />
+    <!-- Reads league scoresheet PDFs (text positions + vector marks) - see Scoresheets/ -->
+    <PackageReference Include="PdfPig" Version="0.1.16" />
     <PackageReference Include="WebPush" Version="1.0.13" />
     <!-- Patched versions of packages the ones above pull in (known high-severity advisories in the older ones). -->
     <PackageReference Include="Microsoft.OpenApi" Version="2.12.2" />

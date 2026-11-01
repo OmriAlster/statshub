@@ -20,6 +20,9 @@ public class StatsHubFactory : WebApplicationFactory<Program>
     // Stands in for ibasketball.co.il; offline (every page "not found") unless set.
     public Func<HttpMessageHandler>? IbbaSite { get; init; }
 
+    // Stands in for Swish (the scoresheets); without it Swish isn't set up at all.
+    public Func<HttpMessageHandler>? SwishSite { get; init; }
+
     private readonly string _dbPath = Path.Combine(Path.GetTempPath(), $"statshub-test-{Guid.NewGuid():N}.db");
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
@@ -32,6 +35,8 @@ public class StatsHubFactory : WebApplicationFactory<Program>
         // limits are tested on their own (SecurityTests) with a fresh factory.
         builder.UseSetting("RateLimits:SignInPerMinute", RateLimitOverride ?? "100000");
         builder.UseSetting("RateLimits:RequestsPerMinute", "100000");
+        // Never the machine's own SWISH_API_KEY - only a stand-in Swish gets a key.
+        builder.UseSetting("Swish:ApiKey", SwishSite == null ? "" : "test-key");
 
         builder.ConfigureTestServices(services =>
         {
@@ -39,6 +44,7 @@ public class StatsHubFactory : WebApplicationFactory<Program>
             // every IBBA request gets "not found" (a sync then just records a
             // sync error, like a real site outage).
             services.AddHttpClient("Ibba").ConfigurePrimaryHttpMessageHandler(IbbaSite ?? (() => new OfflineIbbaSite()));
+            services.AddHttpClient(StatsHub.Api.Scoresheets.SwishClient.HttpClientName).ConfigurePrimaryHttpMessageHandler(SwishSite ?? (() => new OfflineIbbaSite()));
 
             foreach (var jobType in new[] { typeof(GameReminderBackgroundService), typeof(IbbaNightlySyncBackgroundService), typeof(IbbaResultWatcherBackgroundService) })
             {

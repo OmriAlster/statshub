@@ -21,6 +21,7 @@ namespace StatsHub.Api.Data
         public DbSet<PlayerParent> PlayerParents { get; set; }
         public DbSet<Game> Games { get; set; }
         public DbSet<GameStats> GameStats { get; set; }
+        public DbSet<ScoresheetLine> ScoresheetLines { get; set; }
         public DbSet<Shot> Shots { get; set; }
         public DbSet<ShareLink> ShareLinks { get; set; }
         public DbSet<PlayerIbbaLink> PlayerIbbaLinks { get; set; }
@@ -213,6 +214,20 @@ namespace StatsHub.Api.Data
                 .HasIndex(gs => new { gs.GameId, gs.PlayerId })
                 .IsUnique();
 
+            modelBuilder.Entity<ScoresheetLine>()
+                .HasIndex(l => new { l.GameId, l.PlayerId })
+                .IsUnique();
+            modelBuilder.Entity<ScoresheetLine>()
+                .HasOne(l => l.Game)
+                .WithMany(g => g.ScoresheetLines)
+                .HasForeignKey(l => l.GameId)
+                .OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<ScoresheetLine>()
+                .HasOne(l => l.Player)
+                .WithMany()
+                .HasForeignKey(l => l.PlayerId)
+                .OnDelete(DeleteBehavior.Cascade);
+
             // Shot configuration
             modelBuilder.Entity<Shot>()
                 .HasKey(s => s.Id);
@@ -269,6 +284,8 @@ namespace StatsHub.Api.Data
             // Rows from before leagues were pluggable all came from IBBA.
             modelBuilder.Entity<IbbaTeam>().Property(t => t.Provider).HasDefaultValue("ibba");
             modelBuilder.Entity<PlayerIbbaLink>().Property(l => l.Provider).HasDefaultValue("ibba");
+            // Rows from before it existed were never set from a scoresheet.
+            modelBuilder.Entity<PlayerTeam>().Property(pt => pt.JerseyFromScoresheet).HasDefaultValue(false);
 
             // The link lives on Team, not IbbaTeam - many app Teams (one per
             // player/parent) can point at the same shared IbbaTeam row, so no

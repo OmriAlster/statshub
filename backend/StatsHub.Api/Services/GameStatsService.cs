@@ -11,6 +11,7 @@ namespace StatsHub.Api.Services
         Task<GameStatsDto> CreateGameStatsAsync(CreateGameStatsDto dto, Guid requestingUserId);
         Task<GameStatsDto?> UpdateGameStatsAsync(Guid id, UpdateGameStatsDto dto, Guid requestingUserId);
         Task<bool> DeleteGameStatsAsync(Guid id, Guid requestingUserId);
+        Task<GameStatsDto> StatsFromScoresheetAsync(StatsFromScoresheetDto dto, Guid requestingUserId);
         Task<List<PlayerTeamStatsDto>> GetStatsByPlayerAsync(Guid playerId, Guid requestingUserId, string? gameType = null);
         Task<PlayerTeamStatsDto?> GetTeamStatsForPlayerAsync(Guid playerId, Guid teamId, Guid requestingUserId);
         Task<List<PlayerTeamStatsDto>> GetStatsByPlayerUnrestrictedAsync(Guid playerId);
@@ -124,12 +125,49 @@ namespace StatsHub.Api.Services
             if (dto.Fouls.HasValue) gameStats.Fouls = dto.Fouls.Value;
             if (dto.MinutesPlayed.HasValue) gameStats.MinutesPlayed = dto.MinutesPlayed.Value;
             if (dto.OnCourt.HasValue) gameStats.OnCourt = dto.OnCourt.Value;
+            // Edited by the parent - theirs now; a sync never changes it again.
+            if (HasStatChange(dto)) gameStats.Source = null;
 
             gameStats.UpdatedAt = DateTime.UtcNow;
             await _context.SaveChangesAsync();
 
             return await GetGameStatsByIdAsync(id, requestingUserId);
         }
+
+        // Back to IBBA's numbers: the game's stats (and their shot chart, which
+        // the sheet's makes wouldn't match) replaced by the scoresheet's line -
+        // updated by the sync again from then on, like any line from a sheet.
+        public async Task<GameStatsDto> StatsFromScoresheetAsync(StatsFromScoresheetDto dto, Guid requestingUserId)
+        {
+            if (!await CanWritePlayerAsync(dto.PlayerId, requestingUserId))
+                throw new UnauthorizedAccessException("Player not found or not owned by user");
+            var game = await _context.Games.FindAsync(dto.GameId);
+            if (game == null || !await CanAccessGameAsync(game, requestingUserId))
+                throw new KeyNotFoundException("Game not found");
+            if (game.Status == "In Progress")
+                throw new InvalidOperationException("The game is being tracked live.");
+            var line = await _context.ScoresheetLines.FirstOrDefaultAsync(l => l.GameId == dto.GameId && l.PlayerId == dto.PlayerId)
+                ?? throw new KeyNotFoundException("This game has no scoresheet line for the player.");
+
+            var existing = await _context.GameStats.FirstOrDefaultAsync(gs => gs.GameId == dto.GameId && gs.PlayerId == dto.PlayerId);
+            if (existing != null)
+            {
+                _context.GameStats.Remove(existing);
+                await _context.SaveChangesAsync();
+            }
+            var stats = ScoresheetStatsService.FromSheet(new GameStats { GameId = dto.GameId, PlayerId = dto.PlayerId }, line);
+            _context.GameStats.Add(stats);
+            await _context.SaveChangesAsync();
+
+            var result = (await GetGameStatsByIdAsync(stats.Id, requestingUserId))!;
+            result.Scoresheet = line.ToDto();
+            return result;
+        }
+
+        private static bool HasStatChange(UpdateGameStatsDto dto) =>
+            new int?[] { dto.FieldGoalsMade, dto.FieldGoalsAttempted, dto.ThreePointersMade, dto.ThreePointersAttempted, dto.FreeThrowsMade,
+                dto.FreeThrowsAttempted, dto.OffensiveRebounds, dto.DefensiveRebounds, dto.Assists, dto.Steals, dto.Blocks, dto.Turnovers,
+                dto.Fouls, dto.MinutesPlayed }.Any(v => v.HasValue);
 
         public async Task<bool> DeleteGameStatsAsync(Guid id, Guid requestingUserId)
         {
@@ -226,19 +264,28 @@ namespace StatsHub.Api.Services
             // including a real 0-point outing - the alternative (silently
             // excluding it) understates games played and inflates the average.
             // A game the user never actually tracked has no GameStats row at
-            // all, so it was never in this list to begin with.
-            double PerGame(int total) => gamesPlayed > 0 ? Math.Round((double)total / gamesPlayed, 2) : 0;
+            // all, so it was never in this list to begin with. A stat that
+            // wasn't recorded in a game (null) is averaged over the games
+            // that have it instead.
+            static double? PerGame(int total, int games) => games == 0 ? null : Math.Round((double)total / games, 2);
+            (int? Total, double? PerGame) Stat(Func<GameStats, int?> stat)
+            {
+                var known = gameStats.Select(stat).OfType<int>().ToList();
+                return known.Count == 0 ? (null, null) : (known.Sum(), PerGame(known.Sum(), known.Count));
+            }
+            // Made shots out of attempts, from the games where the attempts were recorded.
+            double? Percentage(Func<GameStats, int> made, Func<GameStats, int?> attempted)
+            {
+                var known = gameStats.Where(gs => attempted(gs) is not null).ToList();
+                return known.Count == 0 ? null : GameStats.Percentage(known.Sum(made), known.Sum(gs => attempted(gs)!.Value));
+            }
 
             var totalPoints = gameStats.Sum(gs => gs.TotalPoints);
-            var totalRebounds = gameStats.Sum(gs => gs.TotalRebounds);
-            var totalAssists = gameStats.Sum(gs => gs.Assists);
-            var totalSteals = gameStats.Sum(gs => gs.Steals);
-            var totalBlocks = gameStats.Sum(gs => gs.Blocks);
-            var totalTurnovers = gameStats.Sum(gs => gs.Turnovers);
-
-            var totalFGA = gameStats.Sum(gs => gs.FieldGoalsAttempted);
-            var totalThreePA = gameStats.Sum(gs => gs.ThreePointersAttempted);
-            var totalFTA = gameStats.Sum(gs => gs.FreeThrowsAttempted);
+            var rebounds = Stat(gs => gs.TotalRebounds);
+            var assists = Stat(gs => gs.Assists);
+            var steals = Stat(gs => gs.Steals);
+            var blocks = Stat(gs => gs.Blocks);
+            var turnovers = Stat(gs => gs.Turnovers);
 
             return new PlayerTeamStatsDto
             {
@@ -249,22 +296,22 @@ namespace StatsHub.Api.Services
                 TeamId = team.Id,
                 TeamName = team.Name,
                 GamesPlayed = gamesPlayed,
-                TotalMinutes = gameStats.Sum(gs => gs.MinutesPlayed),
+                TotalMinutes = Stat(gs => gs.MinutesPlayed).Total,
                 TotalPoints = totalPoints,
-                PointsPerGame = PerGame(totalPoints),
-                TotalRebounds = totalRebounds,
-                ReboundsPerGame = PerGame(totalRebounds),
-                TotalAssists = totalAssists,
-                AssistsPerGame = PerGame(totalAssists),
-                TotalSteals = totalSteals,
-                StealsPerGame = PerGame(totalSteals),
-                TotalBlocks = totalBlocks,
-                BlocksPerGame = PerGame(totalBlocks),
-                TotalTurnovers = totalTurnovers,
-                TurnoversPerGame = PerGame(totalTurnovers),
-                FieldGoalPercentage = totalFGA > 0 ? Math.Round((double)gameStats.Sum(gs => gs.FieldGoalsMade) / totalFGA * 100, 2) : 0,
-                ThreePointPercentage = totalThreePA > 0 ? Math.Round((double)gameStats.Sum(gs => gs.ThreePointersMade) / totalThreePA * 100, 2) : 0,
-                FreeThrowPercentage = totalFTA > 0 ? Math.Round((double)gameStats.Sum(gs => gs.FreeThrowsMade) / totalFTA * 100, 2) : 0
+                PointsPerGame = PerGame(totalPoints, gamesPlayed),
+                TotalRebounds = rebounds.Total,
+                ReboundsPerGame = rebounds.PerGame,
+                TotalAssists = assists.Total,
+                AssistsPerGame = assists.PerGame,
+                TotalSteals = steals.Total,
+                StealsPerGame = steals.PerGame,
+                TotalBlocks = blocks.Total,
+                BlocksPerGame = blocks.PerGame,
+                TotalTurnovers = turnovers.Total,
+                TurnoversPerGame = turnovers.PerGame,
+                FieldGoalPercentage = Percentage(gs => gs.FieldGoalsMade, gs => gs.FieldGoalsAttempted),
+                ThreePointPercentage = Percentage(gs => gs.ThreePointersMade, gs => gs.ThreePointersAttempted),
+                FreeThrowPercentage = Percentage(gs => gs.FreeThrowsMade, gs => gs.FreeThrowsAttempted)
             };
         }
     }

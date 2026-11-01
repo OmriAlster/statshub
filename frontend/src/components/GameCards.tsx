@@ -5,6 +5,8 @@ import { countsTowardStats } from '../utils/countedGames'
 import { formatGameTime } from '../utils/formatGameDate'
 import GameStatusBadge, { onCourtIn } from './GameStatusBadge'
 import { GameTypeBadge, HomeAway } from './GameBadges'
+import { madeOf, sheetOff, show } from '../utils/statLines'
+import SheetMismatch from './SheetMismatch'
 
 // Phone layout for the Stats and Schedule tables: a 5-13 column table can't
 // fit a phone screen (only Opponent and Date were visible, everything else
@@ -69,18 +71,22 @@ export function StatsGameCards({
   games,
   linkFor,
   isCounted = countsTowardStats,
+  onUseSheet,
 }: {
   games: GameDto[]
   linkFor: (game: GameDto) => string
   // Which games count toward the numbers - friendlies don't, unless they're
   // what the game-type filter is showing.
   isCounted?: (game: GameDto) => boolean
+  // Brings IBBA's scoresheet in for a game with no stats (the "!").
+  onUseSheet?: (game: GameDto) => Promise<void>
 }) {
   return (
     <ul className="game-cards mobile-only">
       {games.map((game) => {
         const stats = game.playerStats[0]
         const counted = isCounted(game)
+        const off = sheetOff(stats)
         return (
           <li key={game.id}>
             <Link to={linkFor(game)} className={`game-card ${counted ? '' : 'not-counted'}`}>
@@ -89,22 +95,26 @@ export function StatsGameCards({
                 <div className="game-card-main">
                   <Matchup game={game} counted={counted} />
                 </div>
-                <Result game={game} />
+                <span className="game-card-end">
+                  <SheetMismatch game={game} stats={stats} onUseSheet={onUseSheet} />
+                  <Result game={game} />
+                </span>
               </div>
               {stats ? (
                 <>
                   <div className="game-card-stats">
-                    <div className="gcs-pts"><b>{stats.totalPoints}</b><span>PTS</span></div>
-                    <div><b>{stats.totalRebounds}</b><span>REB</span></div>
-                    <div><b>{stats.assists}</b><span>AST</span></div>
-                    <div><b>{stats.steals}</b><span>STL</span></div>
-                    <div><b>{stats.blocks}</b><span>BLK</span></div>
-                    <div><b>{stats.turnovers}</b><span>TO</span></div>
+                    <div className={`gcs-pts ${off('points')}`}><b>{stats.totalPoints}</b><span>PTS</span></div>
+                    <div><b>{show(stats.totalRebounds)}</b><span>REB</span></div>
+                    <div><b>{show(stats.assists)}</b><span>AST</span></div>
+                    <div><b>{show(stats.steals)}</b><span>STL</span></div>
+                    <div><b>{show(stats.blocks)}</b><span>BLK</span></div>
+                    <div><b>{show(stats.turnovers)}</b><span>TO</span></div>
                   </div>
                   <div className="game-card-shooting">
-                    <span>2PT <b>{stats.fieldGoalsMade}/{stats.fieldGoalsAttempted}</b></span>
-                    <span>3PT <b>{stats.threePointersMade}/{stats.threePointersAttempted}</b></span>
-                    <span>FT <b>{stats.freeThrowsMade}/{stats.freeThrowsAttempted}</b></span>
+                    <span className={off('two')}>2PT <b>{madeOf(stats.fieldGoalsMade, stats.fieldGoalsAttempted)}</b></span>
+                    <span className={off('three')}>3PT <b>{madeOf(stats.threePointersMade, stats.threePointersAttempted)}</b></span>
+                    <span className={off('ft')}>FT <b>{madeOf(stats.freeThrowsMade, stats.freeThrowsAttempted)}</b></span>
+                    {stats.source && <span className="stats-source">{stats.source === 'scoresheet' ? 'Scoresheet' : 'IBBA'}</span>}
                   </div>
                 </>
               ) : (

@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 import type { GameDto } from '../api/types'
+import { average, fieldGoalAttempts, shooting, show } from '../utils/statLines'
 
 // The season so far, game by game (games with the player's line, oldest
 // first): points per game as a line, how the shooting changed, and the
@@ -16,13 +17,13 @@ export default function SeasonTrend({ games, playerId, showTypes = false }: { ga
   const points = played.map((g) => line(g).totalPoints)
 
   // Shooting (field goals, 2s and 3s): the first half of the games against the second.
-  const shooting = (list: GameDto[]) => {
-    const made = list.reduce((s, g) => s + line(g).fieldGoalsMade + line(g).threePointersMade, 0)
-    const tried = list.reduce((s, g) => s + line(g).fieldGoalsAttempted + line(g).threePointersAttempted, 0)
-    return tried > 0 ? Math.round((made / tried) * 100) : null
+  // Only the games whose attempts were recorded.
+  const shootingPct = (list: GameDto[]) => {
+    const shots = shooting(list.map(line), (l) => l.fieldGoalsMade + l.threePointersMade, fieldGoalAttempts)
+    return shots && shots.tried > 0 ? Math.round((shots.made / shots.tried) * 100) : null
   }
   const half = Math.floor(played.length / 2)
-  const [before, after] = [shooting(played.slice(0, half)), shooting(played.slice(half))]
+  const [before, after] = [shootingPct(played.slice(0, half)), shootingPct(played.slice(half))]
 
   const recent = points.slice(-3)
   const earlier = points.slice(0, -3)
@@ -41,10 +42,10 @@ export default function SeasonTrend({ games, playerId, showTypes = false }: { ga
 
   const bests = [
     { label: 'Points', value: (g: GameDto) => line(g).totalPoints },
-    { label: 'Rebounds', value: (g: GameDto) => line(g).totalRebounds },
-    { label: 'Assists', value: (g: GameDto) => line(g).assists },
+    { label: 'Rebounds', value: (g: GameDto) => line(g).totalRebounds ?? 0 },
+    { label: 'Assists', value: (g: GameDto) => line(g).assists ?? 0 },
     { label: '3-pointers', value: (g: GameDto) => line(g).threePointersMade },
-    { label: 'Steals', value: (g: GameDto) => line(g).steals },
+    { label: 'Steals', value: (g: GameDto) => line(g).steals ?? 0 },
   ].map((b) => {
     const top = played.reduce((t, g) => (b.value(g) >= b.value(t) ? g : t), played[0])
     return { ...b, game: top, n: b.value(top), latest: top.id === played[played.length - 1].id }
@@ -112,19 +113,19 @@ export function CompetitionSplit({ games, onPick }: { games: GameDto[]; onPick: 
   const rows = (['League', 'Cup', 'Friendly'] as const)
     .map((type) => {
       const list = played.filter((g) => g.gameType === type)
+      const lines = list.map((g) => g.playerStats[0])
       const sum = (f: (s: GameDto['playerStats'][number]) => number) => list.reduce((t, g) => t + f(g.playerStats[0]), 0)
       const per = (n: number) => (n / list.length).toFixed(1)
-      const shots = sum((s) => s.fieldGoalsAttempted + s.threePointersAttempted)
-      const made = sum((s) => s.fieldGoalsMade + s.threePointersMade)
+      const fg = shooting(lines, (s) => s.fieldGoalsMade + s.threePointersMade, fieldGoalAttempts)
       const wins = list.filter((g) => (g.teamScore ?? 0) > (g.opponentScore ?? 0)).length
       return {
         type,
         games: list.length,
         record: `${wins}-${list.length - wins}`,
         ppg: list.length ? per(sum((s) => s.totalPoints)) : '-',
-        rpg: list.length ? per(sum((s) => s.totalRebounds)) : '-',
-        apg: list.length ? per(sum((s) => s.assists)) : '-',
-        fg: shots ? `${Math.round((made / shots) * 100)}%` : '-',
+        rpg: show(average(lines, (s) => s.totalRebounds), 1),
+        apg: show(average(lines, (s) => s.assists), 1),
+        fg: fg?.tried ? `${Math.round((fg.made / fg.tried) * 100)}%` : '-',
       }
     })
     .filter((r) => r.games > 0)
