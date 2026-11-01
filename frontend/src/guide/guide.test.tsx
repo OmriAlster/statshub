@@ -19,7 +19,7 @@ describe('getting started', () => {
   it('ticks off what is already done and counts it', () => {
     withGuide(<GettingStarted hasPlayer hasIbba={false} hasTrackedGame={false} />)
 
-    expect(screen.getByRole('heading', { name: /Getting started · 1 of 3/ })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: /Getting started · 1 of 4/ })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Find them on IBBA' })).toHaveAttribute('href', '/players')
   })
 
@@ -28,11 +28,20 @@ describe('getting started', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Not on IBBA' }))
 
-    expect(screen.getByRole('heading', { name: /2 of 3/ })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: /2 of 4/ })).toBeInTheDocument()
   })
 
-  it('is gone once all three are done, or when closed', () => {
-    const { unmount } = withGuide(<GettingStarted hasPlayer hasIbba hasTrackedGame />)
+  it('a parent on their own can skip bringing the family', () => {
+    withGuide(<GettingStarted hasPlayer hasIbba={false} hasTrackedGame={false} />)
+
+    expect(screen.getByRole('link', { name: 'Send an invite' })).toHaveAttribute('href', '/players?invite=1')
+    fireEvent.click(screen.getByRole('button', { name: 'Just me' }))
+
+    expect(screen.getByRole('heading', { name: /2 of 4/ })).toBeInTheDocument()
+  })
+
+  it('is gone once all are done, or when closed', () => {
+    const { unmount } = withGuide(<GettingStarted hasPlayer hasIbba hasTrackedGame hasFamily />)
     expect(screen.queryByText(/Getting started/)).not.toBeInTheDocument()
     unmount()
 

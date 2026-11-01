@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { useGuide } from './GuideContext'
 
-// The first thing a new parent sees: what StatsHub does, and three steps.
+// The first thing a new parent sees: what StatsHub does, and the first steps.
 export default function WelcomeSheet() {
   const guide = useGuide()
   const startRef = useRef<HTMLButtonElement>(null)
@@ -12,11 +12,12 @@ export default function WelcomeSheet() {
       <div className="guide-welcome" role="dialog" aria-modal="true" aria-labelledby="guide-welcome-title" onClick={(e) => e.stopPropagation()}
         onKeyDown={(e) => { if (e.key === 'Escape') guide.closeWelcome() }}>
         <h2 id="guide-welcome-title">Welcome to StatsHub</h2>
-        <p>Your child's games, stats and league table - in one place. Three quick steps:</p>
+        <p>Your child's games, stats and league table - in one place. Four quick steps:</p>
         <ol className="guide-steps">
           <li><span>1</span>Add your player</li>
           <li><span>2</span>Connect to IBBA - it happens as you add them</li>
           <li><span>3</span>Track a game live</li>
+          <li><span>4</span>Bring the family - one link on WhatsApp</li>
         </ol>
         <button ref={startRef} type="button" className="guide-start" onClick={guide.startTour}>Let's start</button>
         <button type="button" className="guide-later" onClick={guide.closeWelcome}>Skip for now</button>

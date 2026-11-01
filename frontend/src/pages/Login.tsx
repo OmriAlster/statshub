@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { GoogleLogin } from '@react-oauth/google'
 import { Navigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
+import { pendingInvite } from '../utils/familyInvite'
 import { Busy } from '../components/BouncingBall'
 
 const devLoginEnabled = import.meta.env.DEV
@@ -14,7 +15,9 @@ export default function Login() {
   const [searchParams] = useSearchParams()
   const [error, setError] = useState<string | null>(searchParams.get('ended') ? 'You were signed out - please sign in again.' : null)
 
-  const [mode, setMode] = useState<'signin' | 'register'>('signin')
+  // Came from an invite link: back to it once signed in, where it's taken.
+  const invite = searchParams.get('invite') ?? pendingInvite.get()
+  const [mode, setMode] = useState<'signin' | 'register'>(searchParams.get('mode') === 'register' ? 'register' : 'signin')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [firstName, setFirstName] = useState('')
@@ -26,7 +29,7 @@ export default function Login() {
   const [devBusy, setDevBusy] = useState(false)
 
   if (!loading && user) {
-    return <Navigate to="/" replace />
+    return <Navigate to={invite ? `/i/${invite}` : '/'} replace />
   }
 
   const handleSubmit = async () => {

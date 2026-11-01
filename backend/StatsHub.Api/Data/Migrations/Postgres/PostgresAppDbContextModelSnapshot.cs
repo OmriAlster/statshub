@@ -22,6 +22,90 @@ namespace StatsHub.Api.Data.Migrations.Postgres
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("StatsHub.Api.Models.FamilyInvite", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("CreatedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("RevokedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("UsedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Code")
+                        .IsUnique();
+
+                    b.HasIndex("CreatedByUserId");
+
+                    b.ToTable("FamilyInvites");
+                });
+
+            modelBuilder.Entity("StatsHub.Api.Models.FamilyInviteJoin", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("InviteId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("JoinedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("InviteId");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("FamilyInviteJoins");
+                });
+
+            modelBuilder.Entity("StatsHub.Api.Models.FamilyInvitePlayer", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("InviteId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("PlayerId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("InviteId");
+
+                    b.HasIndex("PlayerId");
+
+                    b.ToTable("FamilyInvitePlayers");
+                });
+
             modelBuilder.Entity("StatsHub.Api.Models.Game", b =>
                 {
                     b.Property<Guid>("Id")
@@ -684,6 +768,55 @@ namespace StatsHub.Api.Data.Migrations.Postgres
                     b.ToTable("Users");
                 });
 
+            modelBuilder.Entity("StatsHub.Api.Models.FamilyInvite", b =>
+                {
+                    b.HasOne("StatsHub.Api.Models.User", "CreatedBy")
+                        .WithMany()
+                        .HasForeignKey("CreatedByUserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("CreatedBy");
+                });
+
+            modelBuilder.Entity("StatsHub.Api.Models.FamilyInviteJoin", b =>
+                {
+                    b.HasOne("StatsHub.Api.Models.FamilyInvite", "Invite")
+                        .WithMany("Joins")
+                        .HasForeignKey("InviteId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("StatsHub.Api.Models.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Invite");
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("StatsHub.Api.Models.FamilyInvitePlayer", b =>
+                {
+                    b.HasOne("StatsHub.Api.Models.FamilyInvite", "Invite")
+                        .WithMany("Players")
+                        .HasForeignKey("InviteId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("StatsHub.Api.Models.Player", "Player")
+                        .WithMany()
+                        .HasForeignKey("PlayerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Invite");
+
+                    b.Navigation("Player");
+                });
+
             modelBuilder.Entity("StatsHub.Api.Models.GameStats", b =>
                 {
                     b.HasOne("StatsHub.Api.Models.Game", "Game")
@@ -867,6 +1000,13 @@ namespace StatsHub.Api.Data.Migrations.Postgres
                     b.Navigation("IbbaTeam");
 
                     b.Navigation("Season");
+                });
+
+            modelBuilder.Entity("StatsHub.Api.Models.FamilyInvite", b =>
+                {
+                    b.Navigation("Joins");
+
+                    b.Navigation("Players");
                 });
 
             modelBuilder.Entity("StatsHub.Api.Models.Game", b =>

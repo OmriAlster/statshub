@@ -51,7 +51,7 @@ namespace StatsHub.Api.Data
 
         // Tables added after the conversion: no numeric-id database has them,
         // so there's nothing to carry over - they're made empty with the rest.
-        private static readonly string[] AddedSince = { "PlayerGoals" };
+        private static readonly string[] AddedSince = { "PlayerGoals", "FamilyInvites", "FamilyInvitePlayers", "FamilyInviteJoins" };
 
         // Tables from older versions that nothing uses any more.
         private static readonly string[] Leftovers = { "IbbaTeamLinks", "IbbaStandings", "IbbaTeamCrests" };

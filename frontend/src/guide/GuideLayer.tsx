@@ -17,7 +17,7 @@ const STEPS: Record<TourStep, { target: string; last?: boolean; title: string; b
 const TIPS = [
   { key: 'tip-type-filter', path: '/stats', target: 'type-filter', title: 'League, Cup or Friendly', body: 'See the numbers for just those games. The Season tab has the shot chart.' },
   { key: 'tip-live', path: '/', target: 'start-live', title: 'At the game? Track it live', body: 'Tap what happens - points, rebounds, assists. The other parent sees it live.' },
-  { key: 'tip-family', path: '/players', target: 'family-actions', title: 'Bring the family', body: 'Invite the other parent, share stats, or give your child their own login.' },
+  { key: 'tip-family', path: '/players', target: 'family-actions', title: 'Bring the family', body: 'Send one link on WhatsApp: the other parent, grandparents, or your child with their own login.' },
 ]
 
 const present = (target: string) => !!document.querySelector(`[data-guide="${target}"]`)

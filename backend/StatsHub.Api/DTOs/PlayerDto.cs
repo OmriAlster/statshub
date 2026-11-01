@@ -12,6 +12,8 @@ namespace StatsHub.Api.DTOs
         public string? ProfilePictureUrl { get; set; }
         public List<TeamDto> Teams { get; set; } = new List<TeamDto>();
         public List<ParentDto> Parents { get; set; } = new List<ParentDto>();
+        // The player's own login, once they've joined.
+        public ParentDto? LinkedUser { get; set; }
     }
 
     public class ParentDto

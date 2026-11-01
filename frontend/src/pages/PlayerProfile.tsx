@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { api } from '../api/client'
-import type { CreatePlayerFromIbbaResultDto, GameDto, IbbaLinkStatusDto, IbbaPreviewDto, InviteDto, PlayerDto, TeamDto } from '../api/types'
+import type { CreatePlayerFromIbbaResultDto, GameDto, FamilyInviteDto, IbbaLinkStatusDto, IbbaPreviewDto, PlayerDto, TeamDto } from '../api/types'
 import { useAuth } from '../auth/AuthContext'
 import ConfirmModal from '../components/ConfirmModal'
+import InviteFamilyModal from '../components/InviteFamilyModal'
+import { inviteUrl } from '../utils/familyInvite'
 import { OnCourtChip, onCourtIn } from '../components/GameStatusBadge'
 import { useLiveRefresh } from '../hooks/useLiveRefresh'
 import StandingsModal from '../components/StandingsModal'
@@ -47,8 +49,12 @@ export default function PlayerProfile() {
   const [ibbaNewBusy, setIbbaNewBusy] = useState(false)
   const [ibbaNewError, setIbbaNewError] = useState<string | null>(null)
 
-  const [invites, setInvites] = useState<Record<string, InviteDto>>({})
-  const [parentInvites, setParentInvites] = useState<Record<string, InviteDto>>({})
+  // Family invites this parent sent that can still be used, and who to take off.
+  const [openInvites, setOpenInvites] = useState<FamilyInviteDto[]>([])
+  const [inviting, setInviting] = useState(false)
+  const [removing, setRemoving] = useState<{ player: PlayerDto; userId: string | null; name: string } | null>(null)
+  const [removingBusy, setRemovingBusy] = useState(false)
+  const [copiedInvite, setCopiedInvite] = useState<string | null>(null)
   const [shareLinks, setShareLinks] = useState<Record<string, string>>({})
   const [busyPlayerId, setBusyPlayerId] = useState<string | null>(null)
 
@@ -75,6 +81,57 @@ export default function PlayerProfile() {
     load()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  const loadInvites = () => {
+    api.get<FamilyInviteDto[]>('/invites').then(({ data }) => setOpenInvites(data)).catch(() => {})
+  }
+  useEffect(() => {
+    if (!isPlayerRole) loadInvites()
+  }, [isPlayerRole])
+
+  // "Send an invite" from the getting-started steps opens the invite window.
+  const [searchParams, setSearchParams] = useSearchParams()
+  useEffect(() => {
+    if (loading || searchParams.get('invite') !== '1') return
+    if (!isPlayerRole && players.length > 0) setInviting(true)
+    setSearchParams((prev) => { prev.delete('invite'); return prev }, { replace: true })
+  }, [loading, searchParams, isPlayerRole, players.length, setSearchParams])
+
+  const cancelInvite = async (id: string) => {
+    try {
+      await api.delete(`/invites/${id}`)
+      setOpenInvites((prev) => prev.filter((i) => i.id !== id))
+    } catch {
+      setError('Could not cancel this invite.')
+    }
+  }
+
+  const copyInvite = async (invite: FamilyInviteDto) => {
+    try {
+      await navigator.clipboard.writeText(inviteUrl(invite.code))
+      setCopiedInvite(invite.id)
+      setTimeout(() => setCopiedInvite(null), 2000)
+    } catch {
+      setError(`Copy the link by hand: ${inviteUrl(invite.code)}`)
+    }
+  }
+
+  // A parent (userId) or the kid's own login (null) taken off this player.
+  const confirmRemove = async () => {
+    if (!removing) return
+    setRemovingBusy(true)
+    try {
+      const { data } = removing.userId
+        ? await api.delete<PlayerDto>(`/players/${removing.player.id}/parents/${removing.userId}`)
+        : await api.delete<PlayerDto>(`/players/${removing.player.id}/linked-user`)
+      setPlayers((prev) => prev.map((p) => (p.id === data.id ? { ...p, parents: data.parents, linkedUser: data.linkedUser } : p)))
+      setRemoving(null)
+    } catch {
+      setError(`Could not remove ${removing.name}.`)
+    } finally {
+      setRemovingBusy(false)
+    }
+  }
 
   // Each player's game being played right now, if any - shown on their card
   // (with on court / on bench) and kept current while it's live.
@@ -197,30 +254,6 @@ export default function PlayerProfile() {
       setIbbaNewError(`Could not create this player from ${leagues}.`)
     } finally {
       setIbbaNewBusy(false)
-    }
-  }
-
-  const generateInvite = async (playerId: string) => {
-    setBusyPlayerId(playerId)
-    try {
-      const { data } = await api.post<InviteDto>(`/players/${playerId}/invite`, {})
-      setInvites((prev) => ({ ...prev, [playerId]: data }))
-    } catch {
-      setError('Could not generate an invite code.')
-    } finally {
-      setBusyPlayerId(null)
-    }
-  }
-
-  const generateParentInvite = async (playerId: string) => {
-    setBusyPlayerId(playerId)
-    try {
-      const { data } = await api.post<InviteDto>(`/players/${playerId}/parent-invite`, {})
-      setParentInvites((prev) => ({ ...prev, [playerId]: data }))
-    } catch {
-      setError('Could not generate a parent invite code.')
-    } finally {
-      setBusyPlayerId(null)
     }
   }
 
@@ -481,8 +514,36 @@ export default function PlayerProfile() {
 
   return (
     <div className="page-container">
-      <h2>👤 {isPlayerRole ? 'My Profile' : 'Player Profiles'}</h2>
+      <div className="players-head">
+        <h2>👤 {isPlayerRole ? 'My Profile' : 'Player Profiles'}</h2>
+        {!isPlayerRole && players.length > 0 && (
+          <button type="button" className="invite-family-btn" data-guide="family-actions" onClick={() => setInviting(true)}>👪 Invite family</button>
+        )}
+      </div>
       {error && <p className="error">{error}</p>}
+
+      {!isPlayerRole && openInvites.length > 0 && (
+        <div className="open-invites">
+          <p className="profile-section-label">Open invites</p>
+          {openInvites.map((invite) => {
+            const days = Math.max(1, Math.ceil((new Date(invite.expiresAt).getTime() - Date.now()) / 86400000))
+            const kids = invite.players.map((p) => p.firstName).join(', ')
+            return (
+              <div className="open-invite" key={invite.id}>
+                <div className="open-invite-text">
+                  <b>{invite.kind === 'Parent' ? `Family link · ${kids}` : `${kids}'s login`}</b>
+                  <span>
+                    {invite.joined.length > 0 ? `${invite.joined.join(', ')} joined · ` : 'No one joined yet · '}
+                    {days === 1 ? '1 day left' : `${days} days left`}
+                  </span>
+                </div>
+                <button type="button" className="open-invite-btn" onClick={() => copyInvite(invite)}>{copiedInvite === invite.id ? 'Copied ✓' : 'Copy link'}</button>
+                <button type="button" className="open-invite-btn" onClick={() => cancelInvite(invite.id)}>Cancel</button>
+              </div>
+            )
+          })}
+        </div>
+      )}
 
       <div className="profiles-grid">
         {players.map((player) => (
@@ -738,39 +799,40 @@ export default function PlayerProfile() {
             )}
 
             <div className="team-section">
-              <p className="profile-section-label">Connected Parents</p>
+              <p className="profile-section-label">Family</p>
               <div className="parent-row">
                 {(player.parents ?? []).map((p) => (
                   <span className="parent-chip" key={p.userId}>
                     <span className="parent-avatar">{p.firstName[0]}</span>
                     {p.firstName}
-                    {p.userId === user?.id && <span className="you-tag">You</span>}
+                    {p.userId === user?.id ? <span className="you-tag">You</span> : <span className="family-role">Parent</span>}
+                    {!isPlayerRole && p.userId !== user?.id && (
+                      <button type="button" className="family-remove" aria-label={`Remove ${p.firstName}`} title={`Remove ${p.firstName}`}
+                        onClick={() => setRemoving({ player, userId: p.userId, name: p.firstName })}>✕</button>
+                    )}
                   </span>
                 ))}
-                {!isPlayerRole && (
-                  <button onClick={() => generateParentInvite(player.id)} disabled={busyPlayerId === player.id}>
-                    + Invite Parent
-                  </button>
+                {player.linkedUser && (
+                  <span className="parent-chip player-chip">
+                    <span className="parent-avatar">{player.linkedUser.firstName[0]}</span>
+                    {player.linkedUser.firstName}
+                    {player.linkedUser.userId === user?.id ? <span className="you-tag">You</span> : <span className="family-role">Player</span>}
+                    {!isPlayerRole && (
+                      <button type="button" className="family-remove" aria-label={`Remove ${player.linkedUser.firstName}'s login`} title={`Remove ${player.linkedUser.firstName}'s login`}
+                        onClick={() => setRemoving({ player, userId: null, name: player.linkedUser!.firstName })}>✕</button>
+                    )}
+                  </span>
+                )}
+                {!isPlayerRole && !player.linkedUser && openInvites.some((i) => i.kind === 'Player' && i.players.some((p) => p.id === player.id)) && (
+                  <span className="family-pending">Invite sent</span>
                 )}
               </div>
-              {parentInvites[player.id] && (
-                <div className="invite-box">
-                  <p>Give this code to the other parent. They sign in, then enter it as "Join as a second parent":</p>
-                  <code className="invite-code">{parentInvites[player.id].inviteCode}</code>
-                  <p className="invite-expiry">Expires {new Date(parentInvites[player.id].expiresAt).toLocaleDateString()}</p>
-                </div>
-              )}
             </div>
 
-            <div className="profile-actions" data-guide="family-actions">
+            <div className="profile-actions">
               <button onClick={() => shareProfile(player.id)} disabled={busyPlayerId === player.id}>
                 🔗 Share Stats
               </button>
-              {!isPlayerRole && (
-                <button onClick={() => generateInvite(player.id)} disabled={busyPlayerId === player.id}>
-                  🔑 Player Login Code
-                </button>
-              )}
               {!isPlayerRole && (
                 <button onClick={() => setDeletingPlayer(player)} style={{ color: 'var(--color-danger)' }}>
                   🗑️ Delete Player
@@ -781,13 +843,6 @@ export default function PlayerProfile() {
               <div className="invite-box">
                 <p>Share link (copied to clipboard):</p>
                 <code>{shareLinks[player.id]}</code>
-              </div>
-            )}
-            {invites[player.id] && (
-              <div className="invite-box">
-                <p>Give this code to your player. They sign in, then enter it on the "Join" page:</p>
-                <code className="invite-code">{invites[player.id].inviteCode}</code>
-                <p className="invite-expiry">Expires {new Date(invites[player.id].expiresAt).toLocaleDateString()}</p>
               </div>
             )}
           </div>
@@ -915,6 +970,27 @@ export default function PlayerProfile() {
           highlightTeamUrl={standingsFor.teamUrl}
           highlightTeamName={standingsFor.teamName}
           onClose={() => setStandingsFor(null)}
+        />
+      )}
+
+      {inviting && (
+        <InviteFamilyModal
+          players={players}
+          onClose={() => setInviting(false)}
+          onCreated={(invite) => setOpenInvites((prev) => [invite, ...prev.filter((i) => i.id !== invite.id)])}
+        />
+      )}
+
+      {removing && (
+        <ConfirmModal
+          title={removing.userId ? 'Remove from the family' : "Remove the player's login"}
+          message={removing.userId
+            ? <><b>{removing.name}</b> will no longer see or edit {removing.player.firstName}'s games and stats.</>
+            : <><b>{removing.name}</b> will no longer be signed in to {removing.player.firstName}'s page. You can send a new invite any time.</>}
+          confirmLabel="Remove"
+          busy={removingBusy}
+          onConfirm={confirmRemove}
+          onCancel={() => setRemoving(null)}
         />
       )}
 

@@ -158,6 +158,7 @@ export default function Dashboard() {
           hasPlayer={players.length > 0}
           hasIbba={players.some((p) => !!p.ibba)}
           hasTrackedGame={players.some((p) => Object.values(p.gamesByTeam).some((games) => games.some((g) => g.playerStats.length > 0)))}
+          hasFamily={players.some((p) => p.player.parents.length > 1 || !!p.player.linkedUser)}
         />
       )}
 
@@ -300,7 +301,7 @@ export default function Dashboard() {
                           </span>
                         </div>
                       </div>
-                      <div className="dash-upcoming-when">
+                      <div className={`dash-upcoming-when ${today ? 'dash-today-when' : ''}`}>
                         {isLive ? (
                           <span className="dash-upcoming-live-wrap">
                             <span className="dash-upcoming-live"><span className="fab-live-dot" /> Live</span>
@@ -314,13 +315,19 @@ export default function Dashboard() {
                         )}
                       </div>
                     </Link>
-                    {today && <NavigateButtons location={game.location} compact />}
-                    {today && !isPlayerRole && (
-                      <button type="button" className="dash-upcoming-start" onClick={() => requestLiveStart(game.id, gamePlayers[0].id)}>
-                        <svg className="icon" aria-hidden="true"><use href="#i-live" /></svg>
-                        Start live
-                        {gamePlayers.length > 1 && <span className="dash-upcoming-start-who">· {gamePlayers[0].firstName}</span>}
-                      </button>
+                    {today && (
+                      <div className="dash-today-actions">
+                        <div className="dash-today-buttons">
+                        <NavigateButtons location={game.location} compact iconOnly />
+                        {!isPlayerRole && (
+                          <button type="button" className="dash-upcoming-start" title={`Start live${gamePlayers.length > 1 ? ` · ${gamePlayers[0].firstName}` : ''}`} onClick={() => requestLiveStart(game.id, gamePlayers[0].id)}>
+                            <svg className="icon" aria-hidden="true"><use href="#i-live" /></svg>
+                            <span className="dash-start-word">Start </span><span className="dash-live-word">live</span>
+                          </button>
+                        )}
+                        </div>
+                        <span className="dash-upcoming-time dash-today-time">{formatGameTime(game.gameDate)}</span>
+                      </div>
                     )}
                   </li>
                 )
